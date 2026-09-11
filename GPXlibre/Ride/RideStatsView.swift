@@ -32,7 +32,9 @@ struct RideStatsPanel: View {
     let distanceRemainingMeters: Double?
     let percentComplete: Double?
     let estimatedArrivalDate: Date?
+    let recordedPointsCount: Int
     let onCollapse: () -> Void
+    let onEndRide: () -> Void
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -62,6 +64,12 @@ struct RideStatsPanel: View {
                 stat("Parcouru", percentComplete.map { "\(Int($0.rounded()))" } ?? "—", unit: percentComplete != nil ? "%" : "")
                 stat("Arrivée", estimatedArrivalDate.map(Self.timeFormatter.string) ?? "—", unit: "")
             }
+            Button(action: onEndRide) {
+                Label("Terminer la sortie (\(recordedPointsCount) pts enregistrés)", systemImage: "flag.checkered")
+                    .font(.caption.bold())
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
         }
         .padding(16)
         .background(.black.opacity(0.7))

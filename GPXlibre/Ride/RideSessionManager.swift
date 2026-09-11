@@ -37,6 +37,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var percentComplete: Double?
     @Published private(set) var estimatedArrivalDate: Date?
 
+    // MARK: - Enregistrement automatique de la sortie (persiste across tab switches, voir start())
+    @Published private(set) var recordedPointsCount = 0
+    private(set) var recordedPoints: [GPXPoint] = []
+    private var recordingTrackID: UUID?
+    private var lastRecordedLocation: CLLocation?
+    private var lastRecordedDate: Date?
+
     private let manager = CLLocationManager()
     private let settings: RideSettingsStore
     private let networkMonitor: NetworkMonitor
@@ -110,6 +117,17 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         distanceRemainingMeters = track.totalDistanceMeters
         percentComplete = 0
         estimatedArrivalDate = nil
+
+        // L'enregistrement de la sortie persiste tant que c'est la même trace (ne redémarre
+        // pas à chaque va-et-vient vers un autre onglet) ; seule une trace différente ou
+        // resetRecording() (après export) le réinitialise.
+        if recordingTrackID != track.id {
+            recordedPoints = []
+            recordedPointsCount = 0
+            recordingTrackID = track.id
+            lastRecordedLocation = nil
+            lastRecordedDate = nil
+        }
 
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
@@ -207,6 +225,40 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         updateRoadbookProgress(from: location)
         let projection = updateBlockedPathTracking(from: location)
         updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
+        recordRideTrack(location: location)
+    }
+
+    /// Enregistre un point dès que l'un des deux seuils est atteint (5 s OU 15 m, le plus
+    /// fréquent des deux) — tourne automatiquement pendant tout le Ride, aucune action requise.
+    private func recordRideTrack(location: CLLocation) {
+        let shouldRecord: Bool
+        if let lastDate = lastRecordedDate, let lastLocation = lastRecordedLocation {
+            let elapsed = location.timestamp.timeIntervalSince(lastDate)
+            let distance = location.distance(from: lastLocation)
+            shouldRecord = elapsed >= RecordingConstants.minIntervalSeconds || distance >= RecordingConstants.minDistanceMeters
+        } else {
+            shouldRecord = true
+        }
+        guard shouldRecord else { return }
+
+        lastRecordedDate = location.timestamp
+        lastRecordedLocation = location
+        recordedPoints.append(GPXPoint(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            elevation: location.verticalAccuracy >= 0 ? location.altitude : nil,
+            time: location.timestamp
+        ))
+        recordedPointsCount = recordedPoints.count
+    }
+
+    /// À appeler après un export réussi (voir EndRideView) pour repartir d'un enregistrement vide.
+    func resetRecording() {
+        recordedPoints = []
+        recordedPointsCount = 0
+        recordingTrackID = nil
+        lastRecordedLocation = nil
+        lastRecordedDate = nil
     }
 
     private func updateRideStats(from location: CLLocation, projection: TrackProjector.Projection?, etaSpeedKmh: Double) {

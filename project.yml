@@ -30,6 +30,7 @@ targets:
       - path: GPXlibre/Map
       - path: GPXlibre/Offline
       - path: GPXlibre/Waypoints
+      - path: GPXlibre/Recording
       - path: GPXlibre/Settings
       - path: GPXlibre/Onboarding
       - path: GPXlibre/Resources

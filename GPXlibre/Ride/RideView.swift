@@ -8,6 +8,7 @@ struct RideView: View {
     @EnvironmentObject private var waypointStore: RollingWaypointStore
     @State private var showDetourConfirmation = false
     @State private var showStatsPanel = false
+    @State private var showEndRideSheet = false
 
     var body: some View {
         Group {
@@ -88,7 +89,9 @@ struct RideView: View {
                             distanceRemainingMeters: session.distanceRemainingMeters,
                             percentComplete: session.percentComplete,
                             estimatedArrivalDate: session.estimatedArrivalDate,
-                            onCollapse: { withAnimation { showStatsPanel = false } }
+                            recordedPointsCount: session.recordedPointsCount,
+                            onCollapse: { withAnimation { showStatsPanel = false } },
+                            onEndRide: { showEndRideSheet = true }
                         )
                         .frame(width: 230)
                     } else {
@@ -111,6 +114,14 @@ struct RideView: View {
             Button("Annuler", role: .cancel) { session.dismissBlockedPathBanner() }
         } message: {
             Text("La trace d'origine reste affichée telle quelle. Le détour est temporaire.")
+        }
+        .sheet(isPresented: $showEndRideSheet) {
+            EndRideView(
+                trackName: track.name,
+                points: session.recordedPoints,
+                waypoints: waypointStore.waypoints(near: track),
+                onFinished: { showEndRideSheet = false }
+            )
         }
         .onAppear { session.start(track: track) }
         .onDisappear { session.stop() }
