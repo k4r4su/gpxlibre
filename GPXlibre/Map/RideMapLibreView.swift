@@ -3,8 +3,9 @@ import MapLibre
 import CoreLocation
 
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
-/// raster OSM, trace + détour en sources vectorielles stylées localement, checkpoints en
-/// annotations. Même contrat que RideMapView (MapKit), qui reste intact à côté.
+/// raster OSM, trace + détour + route Nav en sources vectorielles stylées localement,
+/// checkpoints/waypoints en annotations. Même contrat que RideMapView (MapKit), conservé
+/// à côté.
 ///
 /// Robustesse fond de carte : le style principal est construit via JSONSerialization
 /// (jamais par interpolation de string — un ancien bug produisait du JSON invalide et le
@@ -13,9 +14,11 @@ import CoreLocation
 /// style de secours embarqué (fallback-style.json) et on remonte un état d'erreur visible
 /// via `onStatusChange`.
 struct RideMapLibreView: UIViewRepresentable, MapProvider {
-    let track: GPXTrack
+    let track: GPXTrack?
     let checkpoints: [Checkpoint]
     let waypoints: [RollingWaypoint]
+    let navRoute: NavRoute?
+    let traceAppearance: TraceAppearance
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -24,6 +27,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
+    let onLongPress: (CLLocationCoordinate2D) -> Void
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
@@ -38,10 +42,15 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.track = track
         context.coordinator.checkpoints = checkpoints
         context.coordinator.waypoints = waypoints
+        context.coordinator.traceAppearance = traceAppearance
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
+        context.coordinator.onLongPress = onLongPress
         context.coordinator.armLoadWatchdog(for: mapView)
         onStatusChange(.loading)
+
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPressDetected))
+        mapView.addGestureRecognizer(longPress)
 
         return mapView
     }
@@ -49,7 +58,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     func updateUIView(_ mapView: MLNMapView, context: Context) {
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
+        context.coordinator.onLongPress = onLongPress
+        context.coordinator.updateTraceAppearance(traceAppearance)
         updateDetourShape(on: mapView, context: context)
+        updateNavRouteShape(on: mapView, context: context)
 
         guard let currentLocation, !isManualOverrideActive else { return }
 
@@ -83,14 +95,32 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
     }
 
+    private func updateNavRouteShape(on mapView: MLNMapView, context: Context) {
+        guard let style = mapView.style,
+              let source = style.source(withIdentifier: MapEngineConstants.navRouteSourceIdentifier) as? MLNShapeSource
+        else { return }
+
+        guard let navRoute, navRoute.coordinates.count > 1 else {
+            source.shape = nil
+            return
+        }
+        let coordinates = navRoute.coordinates
+        source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator: NSObject, MLNMapViewDelegate {
         var track: GPXTrack?
         var checkpoints: [Checkpoint] = []
         var waypoints: [RollingWaypoint] = []
+        var traceAppearance = TraceAppearance()
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
+        var onLongPress: ((CLLocationCoordinate2D) -> Void)?
+
+        private weak var trackCasingLayer: MLNLineStyleLayer?
+        private weak var trackColorLayer: MLNLineStyleLayer?
 
         private var loadWatchdog: Timer?
         private var didAttemptFallback = false
@@ -99,6 +129,25 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private static let gestureReasonMask: MLNCameraChangeReason = [
             .gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn, .gestureZoomOut, .gestureOneFingerZoom, .gestureTilt,
         ]
+
+        @objc func longPressDetected(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let mapView = gesture.view as? MLNMapView else { return }
+            let point = gesture.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            onLongPress?(coordinate)
+        }
+
+        /// Les propriétés de style MapLibre sont mutables en direct (contrairement aux
+        /// MKOverlayRenderer de MapKit, mis en cache) : pas besoin de retirer/recréer la
+        /// couche pour appliquer un nouveau réglage — Bloc 3, "appliqué en direct".
+        func updateTraceAppearance(_ appearance: TraceAppearance) {
+            guard appearance != traceAppearance else { return }
+            traceAppearance = appearance
+            trackCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
+            trackCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
+            trackColorLayer?.lineColor = NSExpression(forConstantValue: appearance.color)
+            trackColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+        }
 
         /// Si le style n'a pas fini de charger en `styleLoadTimeoutSeconds`, on n'attend pas
         /// un écran noir muet : on bascule sur le secours et on prévient l'utilisateur.
@@ -133,24 +182,44 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             print("[MapLibre] Style chargé avec succès (\(style.sources.count) source(s)).")
             onStatusChange?(.loaded)
 
-            guard let track else { return }
-
-            let trackCoordinates = track.points.map(\.coordinate)
-            let trackShape = MLNPolyline(coordinates: trackCoordinates, count: UInt(trackCoordinates.count))
-            let trackSource = MLNShapeSource(identifier: MapEngineConstants.trackSourceIdentifier, shape: trackShape, options: nil)
-            style.addSource(trackSource)
-            let trackLayer = MLNLineStyleLayer(identifier: MapEngineConstants.trackLayerIdentifier, source: trackSource)
-            trackLayer.lineColor = NSExpression(forConstantValue: UIColor.systemOrange)
-            trackLayer.lineWidth = NSExpression(forConstantValue: 5)
-            style.addLayer(trackLayer)
-
             let detourSource = MLNShapeSource(identifier: MapEngineConstants.detourSourceIdentifier, shape: nil, options: nil)
             style.addSource(detourSource)
             let detourLayer = MLNLineStyleLayer(identifier: MapEngineConstants.detourLayerIdentifier, source: detourSource)
             detourLayer.lineColor = NSExpression(forConstantValue: UIColor.systemRed)
-            detourLayer.lineWidth = NSExpression(forConstantValue: 5)
+            // Le détour DOIT être plus visible que la trace : 50% plus épais, toujours en
+            // pointillés rouges, jamais confondu avec elle.
+            detourLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.detourLineWidth)
             detourLayer.lineDashPattern = NSExpression(forConstantValue: [10, 8])
+
+            let navRouteSource = MLNShapeSource(identifier: MapEngineConstants.navRouteSourceIdentifier, shape: nil, options: nil)
+            style.addSource(navRouteSource)
+            let navRouteLayer = MLNLineStyleLayer(identifier: MapEngineConstants.navRouteLayerIdentifier, source: navRouteSource)
+            navRouteLayer.lineColor = NSExpression(forConstantValue: UIColor.systemBlue)
+            navRouteLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+
+            if let track, track.points.count > 1 {
+                let trackCoordinates = track.points.map(\.coordinate)
+                let trackShape = MLNPolyline(coordinates: trackCoordinates, count: UInt(trackCoordinates.count))
+                let trackSource = MLNShapeSource(identifier: MapEngineConstants.trackSourceIdentifier, shape: trackShape, options: nil)
+                style.addSource(trackSource)
+
+                // Casing d'abord (dessous), couleur ensuite (dessus) — lisibilité par contraste.
+                let casingLayer = MLNLineStyleLayer(identifier: "\(MapEngineConstants.trackLayerIdentifier)-casing", source: trackSource)
+                casingLayer.lineColor = NSExpression(forConstantValue: traceAppearance.casingColor)
+                casingLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.casingWidth)
+                style.addLayer(casingLayer)
+                trackCasingLayer = casingLayer
+
+                let colorLayer = MLNLineStyleLayer(identifier: MapEngineConstants.trackLayerIdentifier, source: trackSource)
+                colorLayer.lineColor = NSExpression(forConstantValue: traceAppearance.color)
+                colorLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+                style.addLayer(colorLayer)
+                trackColorLayer = colorLayer
+            }
+
+            // Détour et route Nav ajoutés après la trace : ils doivent rester visibles au-dessus.
             style.addLayer(detourLayer)
+            style.addLayer(navRouteLayer)
 
             mapView.addAnnotations(checkpoints.map(CheckpointMLNAnnotation.init))
             mapView.addAnnotations(waypoints.map(RollingWaypointMLNAnnotation.init))

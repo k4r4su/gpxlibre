@@ -13,6 +13,8 @@ final class RideSettingsStore: ObservableObject {
         static let northUp = "settings.mapOrientationNorthUp"
         static let keepAwake = "settings.keepScreenAwakeInRide"
         static let hasSeenOnboarding = "settings.hasSeenOnboarding"
+        static let voiceGuidanceEnabled = "settings.voiceGuidanceEnabled"
+        static let voiceGuidanceVolume = "settings.voiceGuidanceVolume"
     }
 
     private let defaults: UserDefaults
@@ -37,6 +39,13 @@ final class RideSettingsStore: ObservableObject {
     }
     @Published var hasSeenOnboarding: Bool {
         didSet { defaults.set(hasSeenOnboarding, forKey: Keys.hasSeenOnboarding) }
+    }
+    /// Guidage vocal Mode Nav (item Réglages #9). Volume 0...1.
+    @Published var voiceGuidanceEnabled: Bool {
+        didSet { defaults.set(voiceGuidanceEnabled, forKey: Keys.voiceGuidanceEnabled) }
+    }
+    @Published var voiceGuidanceVolume: Double {
+        didSet { defaults.set(voiceGuidanceVolume, forKey: Keys.voiceGuidanceVolume) }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -64,5 +73,10 @@ final class RideSettingsStore: ObservableObject {
         keepScreenAwakeInRide = defaults.object(forKey: Keys.keepAwake) == nil
             ? true : defaults.bool(forKey: Keys.keepAwake)
         hasSeenOnboarding = defaults.bool(forKey: Keys.hasSeenOnboarding)
+
+        voiceGuidanceEnabled = defaults.object(forKey: Keys.voiceGuidanceEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.voiceGuidanceEnabled)
+        let storedVolume = defaults.object(forKey: Keys.voiceGuidanceVolume) as? Double
+        voiceGuidanceVolume = storedVolume ?? 1.0
     }
 }

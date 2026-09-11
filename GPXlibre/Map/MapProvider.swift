@@ -7,9 +7,11 @@ import CoreLocation
 /// juste non sélectionné (voir `MapEngineConstants.active`).
 protocol MapProvider: View {
     init(
-        track: GPXTrack,
+        track: GPXTrack?,
         checkpoints: [Checkpoint],
         waypoints: [RollingWaypoint],
+        navRoute: NavRoute?,
+        traceAppearance: TraceAppearance,
         currentLocation: CLLocation?,
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,
@@ -17,7 +19,8 @@ protocol MapProvider: View {
         isManualOverrideActive: Bool,
         detourRoute: DetourRoute?,
         onManualGesture: @escaping () -> Void,
-        onStatusChange: @escaping (MapLoadStatus) -> Void
+        onStatusChange: @escaping (MapLoadStatus) -> Void,
+        onLongPress: @escaping (CLLocationCoordinate2D) -> Void
     )
 }
 

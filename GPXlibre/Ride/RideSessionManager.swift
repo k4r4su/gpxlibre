@@ -44,9 +44,32 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var lastRecordedLocation: CLLocation?
     private var lastRecordedDate: Date?
 
+    // MARK: - Mode Nav (guidage A→B, recalcul automatique — jamais en Mode Trace)
+    @Published private(set) var navRoute: NavRoute?
+    @Published private(set) var isRoutingInProgress = false
+    @Published private(set) var navRoutingError: String?
+    @Published private(set) var currentManeuverIndex = 0
+    @Published private(set) var distanceToCurrentManeuverMeters: Double?
+    @Published private(set) var isRecalculatingRoute = false
+
+    private var navDestinationCoordinate: CLLocationCoordinate2D?
+    private var navDestinationLabel = ""
+    private var navRoutePoints: [GPXPoint] = []
+    private var navRouteCumulativeDistances: [Double] = []
+    private var announcedManeuverThresholds: [Int: Set<Double>] = [:]
+    private var navOffRouteSinceDate: Date?
+    private var navRoutingTask: Task<Void, Never>?
+    private let voiceAnnouncer = NavVoiceAnnouncer()
+
+    var currentManeuver: NavManeuver? {
+        guard let navRoute, navRoute.maneuvers.indices.contains(currentManeuverIndex) else { return nil }
+        return navRoute.maneuvers[currentManeuverIndex]
+    }
+
     private let manager = CLLocationManager()
     private let settings: RideSettingsStore
     private let networkMonitor: NetworkMonitor
+    private let modeStore: RideModeStore
     private let blockageLog = BlockageLogStore()
     private var track: GPXTrack?
     private var trackCumulativeDistances: [Double] = []
@@ -83,9 +106,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         max(checkpoints.count - currentCheckpointIndex, 0)
     }
 
-    init(settings: RideSettingsStore, networkMonitor: NetworkMonitor) {
+    init(settings: RideSettingsStore, networkMonitor: NetworkMonitor, modeStore: RideModeStore) {
         self.settings = settings
         self.networkMonitor = networkMonitor
+        self.modeStore = modeStore
         self.cameraDistanceMeters = ZoomPreset.normal.buckets.first?.cameraDistanceMeters ?? 300
         super.init()
         manager.delegate = self
@@ -96,37 +120,45 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     private(set) var isActive = false
 
-    func start(track: GPXTrack) {
+    /// `track` est optionnel : en Mode Nav, aucune trace GPX n'est nécessaire pour naviguer
+    /// A→B. En Mode Trace, une trace est requise (voir RideView, qui gère l'état vide).
+    func start(track: GPXTrack?) {
         self.track = track
-        trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
         isActive = true
-        rebuildCheckpoints()
         speedSamples.removeAll()
         fastSpeedSustainedSince = nil
         currentBucketIndex = 0
         rideContext = .normal
         hapticGenerator.prepare()
         detourClearedHapticGenerator.prepare()
-        resetBlockedPathState()
 
-        rideStartDate = Date()
-        totalDistanceTraveledMeters = 0
-        lastLocationForDistance = nil
-        averageSpeedKmh = 0
-        maxSpeedKmh = 0
-        distanceRemainingMeters = track.totalDistanceMeters
-        percentComplete = 0
-        estimatedArrivalDate = nil
+        if let track {
+            trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+            rebuildCheckpoints()
+            resetBlockedPathState()
 
-        // L'enregistrement de la sortie persiste tant que c'est la même trace (ne redémarre
-        // pas à chaque va-et-vient vers un autre onglet) ; seule une trace différente ou
-        // resetRecording() (après export) le réinitialise.
-        if recordingTrackID != track.id {
-            recordedPoints = []
-            recordedPointsCount = 0
-            recordingTrackID = track.id
-            lastRecordedLocation = nil
-            lastRecordedDate = nil
+            rideStartDate = Date()
+            totalDistanceTraveledMeters = 0
+            lastLocationForDistance = nil
+            averageSpeedKmh = 0
+            maxSpeedKmh = 0
+            distanceRemainingMeters = track.totalDistanceMeters
+            percentComplete = 0
+            estimatedArrivalDate = nil
+
+            // L'enregistrement de la sortie persiste tant que c'est la même trace (ne
+            // redémarre pas à chaque va-et-vient vers un autre onglet) ; seule une trace
+            // différente ou resetRecording() (après export) le réinitialise.
+            if recordingTrackID != track.id {
+                recordedPoints = []
+                recordedPointsCount = 0
+                recordingTrackID = track.id
+                lastRecordedLocation = nil
+                lastRecordedDate = nil
+            }
+        } else {
+            trackCumulativeDistances = []
+            checkpoints = []
         }
 
         manager.requestWhenInUseAuthorization()
@@ -222,9 +254,16 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         updateRideContext()
         updateZoomBucket()
-        updateRoadbookProgress(from: location)
-        let projection = updateBlockedPathTracking(from: location)
-        updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
+
+        switch modeStore.mode {
+        case .trace:
+            updateRoadbookProgress(from: location)
+            let projection = updateBlockedPathTracking(from: location)
+            updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
+        case .nav:
+            updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
+        }
+
         recordRideTrack(location: location)
     }
 
@@ -494,6 +533,122 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         lastOffTrackLocation = nil
         if haptic {
             detourClearedHapticGenerator.notificationOccurred(.success)
+        }
+    }
+
+    // MARK: - Mode Nav (guidage A→B)
+
+    /// Démarre un guidage vers `destination`. Recalcule automatiquement en cas d'écart —
+    /// c'est le principe même du Mode Nav, à l'opposé du Mode Trace.
+    func startNav(to destination: CLLocationCoordinate2D, label: String) {
+        navDestinationCoordinate = destination
+        navDestinationLabel = label
+        currentManeuverIndex = 0
+        announcedManeuverThresholds = [:]
+        navOffRouteSinceDate = nil
+        navRoutingError = nil
+        voiceAnnouncer.stop()
+        requestNavRoute()
+    }
+
+    func stopNav() {
+        navRoutingTask?.cancel()
+        navRoute = nil
+        navDestinationCoordinate = nil
+        navRoutePoints = []
+        navRouteCumulativeDistances = []
+        distanceToCurrentManeuverMeters = nil
+        distanceRemainingMeters = nil
+        percentComplete = nil
+        estimatedArrivalDate = nil
+        voiceAnnouncer.stop()
+    }
+
+    private func requestNavRoute() {
+        guard let destination = navDestinationCoordinate, let origin = currentLocation?.coordinate else {
+            navRoutingError = "Position GPS indisponible pour l'instant."
+            return
+        }
+        navRoutingTask?.cancel()
+        isRoutingInProgress = true
+        navRoutingError = nil
+
+        navRoutingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let route = try await NavRoutingService.route(
+                    from: origin, to: destination, destinationLabel: self.navDestinationLabel, networkMonitor: self.networkMonitor
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.navRoute = route
+                    self.navRoutePoints = route.coordinates.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) }
+                    self.navRouteCumulativeDistances = TrackProjector.cumulativeDistances(for: self.navRoutePoints)
+                    self.currentManeuverIndex = 0
+                    self.announcedManeuverThresholds = [:]
+                    self.navOffRouteSinceDate = nil
+                    self.isRoutingInProgress = false
+                    self.isRecalculatingRoute = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.isRoutingInProgress = false
+                    self.isRecalculatingRoute = false
+                    self.navRoutingError = (error as? LocalizedError)?.errorDescription ?? "Calcul d'itinéraire impossible."
+                }
+            }
+        }
+    }
+
+    private func updateNavProgress(from location: CLLocation, etaSpeedKmh: Double) {
+        guard let route = navRoute else { return }
+
+        if currentManeuverIndex < route.maneuvers.count {
+            let maneuver = route.maneuvers[currentManeuverIndex]
+            let distance = RoadbookAnalyzer.distanceMeters(location.coordinate, maneuver.coordinate)
+            distanceToCurrentManeuverMeters = distance
+
+            if settings.voiceGuidanceEnabled {
+                var thresholds = announcedManeuverThresholds[currentManeuverIndex] ?? []
+                for threshold in NavConstants.voiceAnnounceDistancesMeters where distance <= threshold && !thresholds.contains(threshold) {
+                    thresholds.insert(threshold)
+                    voiceAnnouncer.announce(maneuver.instructionText, volume: Float(settings.voiceGuidanceVolume))
+                }
+                announcedManeuverThresholds[currentManeuverIndex] = thresholds
+            }
+
+            if distance <= NavConstants.maneuverPassedRadiusMeters {
+                currentManeuverIndex += 1
+            }
+        } else {
+            distanceToCurrentManeuverMeters = nil
+        }
+
+        guard !navRouteCumulativeDistances.isEmpty,
+              let projection = TrackProjector.project(location.coordinate, onto: navRoutePoints, cumulativeDistances: navRouteCumulativeDistances)
+        else { return }
+
+        let remaining = max(route.totalDistanceMeters - projection.cumulativeDistanceMeters, 0)
+        distanceRemainingMeters = remaining
+        percentComplete = route.totalDistanceMeters > 0
+            ? min(100, max(0, projection.cumulativeDistanceMeters / route.totalDistanceMeters * 100))
+            : 0
+        estimatedArrivalDate = etaSpeedKmh >= RideConstants.etaSilenceSpeedThresholdKmh
+            ? Date().addingTimeInterval(((remaining / 1000) / etaSpeedKmh) * 3600)
+            : nil
+
+        // Recalcul automatique et silencieux si écart > 30 m pendant > 30 s — UNIQUEMENT en
+        // Mode Nav. En Mode Trace ceci n'existe pas : la trace ne se recalcule jamais.
+        if projection.distanceToTrackMeters > NavConstants.offRouteDistanceThresholdMeters {
+            if navOffRouteSinceDate == nil { navOffRouteSinceDate = location.timestamp }
+            let elapsed = location.timestamp.timeIntervalSince(navOffRouteSinceDate ?? location.timestamp)
+            if elapsed >= NavConstants.offRouteToleranceSeconds, !isRecalculatingRoute, !isRoutingInProgress {
+                isRecalculatingRoute = true
+                requestNavRoute()
+            }
+        } else {
+            navOffRouteSinceDate = nil
         }
     }
 }

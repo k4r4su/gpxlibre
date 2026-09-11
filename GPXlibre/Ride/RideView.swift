@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 struct RideView: View {
     @EnvironmentObject private var library: LibraryStore
@@ -6,55 +7,69 @@ struct RideView: View {
     @EnvironmentObject private var session: RideSessionManager
     @EnvironmentObject private var navigationState: AppNavigationState
     @EnvironmentObject private var waypointStore: RollingWaypointStore
+    @EnvironmentObject private var modeStore: RideModeStore
     @State private var showDetourConfirmation = false
     @State private var showStatsPanel = false
     @State private var showEndRideSheet = false
+    @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
 
     var body: some View {
         Group {
-            if let track = library.selectedTrack {
-                rideContent(for: track)
-            } else {
-                emptyState
+            switch modeStore.mode {
+            case .trace:
+                if let track = library.selectedTrack {
+                    rideContent(track: track)
+                } else {
+                    emptyState
+                }
+            case .nav:
+                rideContent(track: nil)
             }
         }
     }
 
-    private func rideContent(for track: GPXTrack) -> some View {
+    private func rideContent(track: GPXTrack?) -> some View {
         ZStack(alignment: .bottom) {
-            mapLayer(for: track)
+            mapLayer(track: track)
                 .ignoresSafeArea()
 
             VStack {
+                RideModeSegmentedControl(mode: $modeStore.mode)
+                    .padding(.top, 8)
+
                 HStack {
                     OSMAttributionView()
                     Spacer()
                 }
-                Spacer()
-            }
-            .padding(8)
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
 
-            VStack {
                 if case .failed(let message) = mapLoadStatus {
                     MapLoadWarningBannerView(message: message)
                         .padding(.top, 8)
                 }
-                if session.isBlockedBannerVisible {
-                    BlockedPathBannerView(
-                        onContourner: { showDetourConfirmation = true },
-                        onIgnorer: { session.dismissBlockedPathBanner() }
-                    )
-                    .padding(.top, 8)
+
+                if modeStore.mode == .trace {
+                    if session.isBlockedBannerVisible {
+                        BlockedPathBannerView(
+                            onContourner: { showDetourConfirmation = true },
+                            onIgnorer: { session.dismissBlockedPathBanner() }
+                        )
+                        .padding(.top, 8)
+                    }
+                    if let detour = session.detourRoute {
+                        DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
+                    }
+                } else {
+                    navStatusBanner
                 }
-                if let detour = session.detourRoute {
-                    DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
-                }
+
                 Spacer()
             }
             .animation(.easeInOut(duration: 0.25), value: session.isBlockedBannerVisible)
 
-            if session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
+            if modeStore.mode == .trace, session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
                 RoadbookPanelView(
                     checkpoint: session.currentCheckpoint,
                     totalCount: session.checkpoints.count,
@@ -63,24 +78,35 @@ struct RideView: View {
                 )
             }
 
-            HStack {
-                Spacer()
-                VStack {
-                    Spacer()
-                    BlockedPathButton { showDetourConfirmation = true }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
-                }
+            if modeStore.mode == .nav, session.navRoute != nil {
+                NavGuidancePanelView(
+                    maneuver: session.currentManeuver,
+                    distanceMeters: session.distanceToCurrentManeuverMeters,
+                    destinationLabel: session.navRoute?.destinationLabel ?? "",
+                    isRecalculating: session.isRecalculatingRoute
+                )
             }
 
-            HStack {
-                VStack {
+            if modeStore.mode == .trace {
+                HStack {
                     Spacer()
-                    WaypointQuickAddButton()
-                        .padding(.leading, 20)
-                        .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
+                    VStack {
+                        Spacer()
+                        BlockedPathButton { showDetourConfirmation = true }
+                            .padding(.trailing, 20)
+                            .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
+                    }
                 }
-                Spacer()
+
+                HStack {
+                    VStack {
+                        Spacer()
+                        WaypointQuickAddButton()
+                            .padding(.leading, 20)
+                            .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
+                    }
+                    Spacer()
+                }
             }
 
             HStack {
@@ -107,7 +133,7 @@ struct RideView: View {
                     Spacer()
                 }
             }
-            .padding(.top, 44)
+            .padding(.top, 90)
             .padding(.trailing, 12)
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
@@ -122,20 +148,37 @@ struct RideView: View {
         }
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
-                trackName: track.name,
+                trackName: track?.name ?? "Sortie Nav",
                 points: session.recordedPoints,
-                waypoints: waypointStore.waypoints(near: track),
+                waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 onFinished: { showEndRideSheet = false }
             )
         }
+        .sheet(isPresented: $showDestinationSearch) {
+            NavDestinationSearchView { coordinate, label in
+                session.startNav(to: coordinate, label: label)
+            }
+        }
         .onAppear { session.start(track: track) }
         .onDisappear { session.stop() }
-        .onChange(of: track.id) { _ in session.start(track: track) }
+        .onChange(of: track?.id) { _ in
+            guard modeStore.mode == .trace else { return }
+            session.start(track: track)
+        }
         .onChange(of: navigationState.selectedTab) { tab in
             if tab == .ride {
-                session.start(track: track)
+                session.start(track: modeStore.mode == .trace ? track : nil)
             } else {
                 session.stop()
+            }
+        }
+        .onChange(of: modeStore.mode) { newMode in
+            switch newMode {
+            case .trace:
+                session.stopNav()
+                session.start(track: track)
+            case .nav:
+                session.start(track: nil)
             }
         }
         .onChange(of: settings.turnThresholdDegrees) { _ in
@@ -146,17 +189,64 @@ struct RideView: View {
         }
     }
 
+    private var navStatusBanner: some View {
+        Group {
+            if session.navRoute == nil {
+                Button {
+                    showDestinationSearch = true
+                } label: {
+                    Label("Choisir une destination", systemImage: "magnifyingglass")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.blue.opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .padding(.top, 8)
+            } else if let error = session.navRoutingError {
+                HStack {
+                    Text(error)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button("Fermer") { session.stopNav() }
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.red.opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal)
+                .padding(.top, 8)
+            } else if session.isRoutingInProgress {
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Calcul de l'itinéraire…").foregroundStyle(.white).font(.subheadline.bold())
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.blue.opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.top, 8)
+            }
+        }
+    }
+
     /// Bascule entre les deux implémentations conformes à MapProvider — MapLibre est le
     /// moteur actif par défaut (MapEngineConstants.active), MapKit reste intact pour
     /// comparaison sans être instancié.
     @ViewBuilder
-    private func mapLayer(for track: GPXTrack) -> some View {
+    private func mapLayer(track: GPXTrack?) -> some View {
         switch MapEngineConstants.active {
         case .mapLibre:
             RideMapLibreView(
                 track: track,
                 checkpoints: session.checkpoints,
-                waypoints: waypointStore.waypoints(near: track),
+                waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
+                navRoute: session.navRoute,
+                traceAppearance: TraceAppearance(),
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,
@@ -164,13 +254,19 @@ struct RideView: View {
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },
-                onStatusChange: { mapLoadStatus = $0 }
+                onStatusChange: { mapLoadStatus = $0 },
+                onLongPress: { coordinate in
+                    guard modeStore.mode == .nav else { return }
+                    session.startNav(to: coordinate, label: "Point sur la carte")
+                }
             )
         case .mapKit:
             RideMapView(
                 track: track,
                 checkpoints: session.checkpoints,
-                waypoints: waypointStore.waypoints(near: track),
+                waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
+                navRoute: session.navRoute,
+                traceAppearance: TraceAppearance(),
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,
@@ -178,13 +274,19 @@ struct RideView: View {
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },
-                onStatusChange: { mapLoadStatus = $0 }
+                onStatusChange: { mapLoadStatus = $0 },
+                onLongPress: { coordinate in
+                    guard modeStore.mode == .nav else { return }
+                    session.startNav(to: coordinate, label: "Point sur la carte")
+                }
             )
         }
     }
 
     private var emptyState: some View {
         VStack(spacing: 16) {
+            RideModeSegmentedControl(mode: $modeStore.mode)
+                .padding(.bottom, 8)
             Image(systemName: "location.slash")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
