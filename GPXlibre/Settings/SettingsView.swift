@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Page unique, 7 réglages max, aucune navigation en sous-menu — conforme à la
-/// philosophie "simplicité radicale" de l'app (guidon, gants, soleil).
+/// Page unique, liste plate, aucune navigation en sous-menu — conforme à la philosophie
+/// "simplicité radicale" de l'app (guidon, gants, soleil). 14 réglages max au complet
+/// (itération Nav, Bloc 5) ; épaisseur/couleur de trace ajoutés ici (Bloc 3, #13/#14).
 struct SettingsView: View {
     @EnvironmentObject private var settings: RideSettingsStore
     @State private var showOnboarding = false
@@ -40,6 +41,26 @@ struct SettingsView: View {
                     Picker("Orientation", selection: $settings.mapOrientationNorthUp) {
                         Text("Cap en haut").tag(false)
                         Text("Nord en haut").tag(true)
+                    }
+                }
+
+                Section("Trace") {
+                    Picker("Épaisseur", selection: $settings.traceWidthPreset) {
+                        ForEach(TraceWidthPreset.allCases) { preset in
+                            Text(preset.label).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Couleur", selection: $settings.traceColorPreset) {
+                        ForEach(TraceColorPreset.allCases) { preset in
+                            Label {
+                                Text(preset.label)
+                            } icon: {
+                                Circle().fill(Color(preset.color)).frame(width: 14, height: 14)
+                            }
+                            .tag(preset)
+                        }
                     }
                 }
 

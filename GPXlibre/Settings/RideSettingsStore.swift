@@ -16,6 +16,8 @@ final class RideSettingsStore: ObservableObject {
         static let voiceGuidanceEnabled = "settings.voiceGuidanceEnabled"
         static let voiceGuidanceVolume = "settings.voiceGuidanceVolume"
         static let speedLimitAlertThreshold = "settings.speedLimitAlertThresholdKmh"
+        static let traceWidthPreset = "settings.traceWidthPreset"
+        static let traceColorPreset = "settings.traceColorPreset"
     }
 
     private let defaults: UserDefaults
@@ -52,6 +54,13 @@ final class RideSettingsStore: ObservableObject {
     @Published var speedLimitAlertThresholdKmh: Int {
         didSet { defaults.set(speedLimitAlertThresholdKmh, forKey: Keys.speedLimitAlertThreshold) }
     }
+    /// Rendu de la trace (items Réglages #13/14) — appliqué en direct partout (Ride, Biblio).
+    @Published var traceWidthPreset: TraceWidthPreset {
+        didSet { defaults.set(traceWidthPreset.rawValue, forKey: Keys.traceWidthPreset) }
+    }
+    @Published var traceColorPreset: TraceColorPreset {
+        didSet { defaults.set(traceColorPreset.rawValue, forKey: Keys.traceColorPreset) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -87,5 +96,16 @@ final class RideSettingsStore: ObservableObject {
         let storedThresholdKmh = defaults.integer(forKey: Keys.speedLimitAlertThreshold)
         speedLimitAlertThresholdKmh = NavConstants.speedLimitAlertThresholdOptionsKmh.contains(storedThresholdKmh)
             ? storedThresholdKmh : NavConstants.speedLimitAlertThresholdDefaultKmh
+
+        if let rawWidth = defaults.string(forKey: Keys.traceWidthPreset), let preset = TraceWidthPreset(rawValue: rawWidth) {
+            traceWidthPreset = preset
+        } else {
+            traceWidthPreset = .gantsEpais
+        }
+        if let rawColor = defaults.string(forKey: Keys.traceColorPreset), let preset = TraceColorPreset(rawValue: rawColor) {
+            traceColorPreset = preset
+        } else {
+            traceColorPreset = .orange
+        }
     }
 }

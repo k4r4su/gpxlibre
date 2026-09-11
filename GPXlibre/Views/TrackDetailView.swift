@@ -5,11 +5,21 @@ struct TrackDetailView: View {
     @StateObject private var locationManager = LocationManager()
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var navigationState: AppNavigationState
+    @EnvironmentObject private var settings: RideSettingsStore
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showPrecacheSheet = false
+
+    private var traceAppearance: TraceAppearance {
+        TraceAppearance(
+            widthPreset: settings.traceWidthPreset,
+            colorPreset: settings.traceColorPreset,
+            isNightMode: colorScheme == .dark
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TrackMapView(track: track, currentLocation: locationManager.currentLocation)
+            TrackMapView(track: track, currentLocation: locationManager.currentLocation, traceAppearance: traceAppearance)
                 .ignoresSafeArea(edges: .horizontal)
             statsBar
         }

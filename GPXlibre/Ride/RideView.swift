@@ -18,10 +18,14 @@ struct RideView: View {
 
     /// Mode nuit automatique : suit le mode sombre système (lui-même basé sur l'horaire/la
     /// luminosité ambiante quand l'utilisateur a choisi "Automatique" dans Réglages iOS).
-    /// Épaisseur/couleur par défaut ici (Gants-épais, orange) ; branchées sur les Réglages
-    /// utilisateur (items 13/14) au Bloc 3.
+    /// Épaisseur/couleur lues en direct depuis les Réglages (items #13/14) — un changement
+    /// s'applique immédiatement, partout, sans recharger la trace.
     private var currentTraceAppearance: TraceAppearance {
-        TraceAppearance(isNightMode: colorScheme == .dark)
+        TraceAppearance(
+            widthPreset: settings.traceWidthPreset,
+            colorPreset: settings.traceColorPreset,
+            isNightMode: colorScheme == .dark
+        )
     }
 
     var body: some View {
