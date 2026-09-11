@@ -90,7 +90,7 @@
 		5EDDB19DD8FF6B201D24DD5C /* MapProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapProvider.swift; sourceTree = "<group>"; };
 		66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMapView.swift; sourceTree = "<group>"; };
 		6B395D30C56F450B0CA73BA8 /* TileDownloadQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileDownloadQueue.swift; sourceTree = "<group>"; };
-		6FC060BA50AA207728B92C3A /* GPXlibre.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GPXlibre.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6FC060BA50AA207728B92C3A /* GPXlibre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GPXlibre.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B9096A18F5E400501B3D925 /* TrackProjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackProjector.swift; sourceTree = "<group>"; };
 		7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedRegion.swift; sourceTree = "<group>"; };
 		7EBC2E5A5E3A9151D4632F8A /* RegionPickerMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionPickerMapView.swift; sourceTree = "<group>"; };
@@ -340,7 +340,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					8AB88ED91444122DA333A2B2 = {
-						DevelopmentTeam = V9Q4V3W2RZ;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -450,7 +449,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V9Q4V3W2RZ;
+				DEVELOPMENT_TEAM = 5X72C94C94;
 				INFOPLIST_FILE = Generated/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -528,7 +527,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V9Q4V3W2RZ;
+				DEVELOPMENT_TEAM = 5X72C94C94;
 				INFOPLIST_FILE = Generated/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
