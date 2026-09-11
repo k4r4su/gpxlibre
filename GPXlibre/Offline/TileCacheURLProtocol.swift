@@ -23,6 +23,7 @@ final class TileCacheURLProtocol: URLProtocol {
 
     override func startLoading() {
         guard let url = request.url, let tile = Self.parseTile(from: url) else {
+            print("[TileCache] ERREUR : URL de tuile non reconnue : \(request.url?.absoluteString ?? "nil")")
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
         }
@@ -32,13 +33,22 @@ final class TileCacheURLProtocol: URLProtocol {
             return
         }
 
-        activeTask = Self.fetchSession.dataTask(with: request) { [weak self] data, response, error in
+        // User-Agent explicite plutôt que de dépendre de l'ordre d'application des headers
+        // de MLNNetworkConfiguration.sessionConfiguration (l'interception URLProtocol peut
+        // intervenir avant que httpAdditionalHeaders ne soit fusionné à la requête réelle).
+        var outgoingRequest = request
+        outgoingRequest.setValue(MapEngineConstants.userAgent, forHTTPHeaderField: "User-Agent")
+
+        activeTask = Self.fetchSession.dataTask(with: outgoingRequest) { [weak self] data, response, error in
             guard let self else { return }
             if let error {
+                print("[TileCache] ERREUR réseau tuile \(tile.path) : \(error.localizedDescription)")
                 self.client?.urlProtocol(self, didFailWithError: error)
                 return
             }
-            guard let data, let response else {
+            guard let data, let response = response as? HTTPURLResponse, response.statusCode == 200 else {
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                print("[TileCache] ERREUR tuile \(tile.path) : statut HTTP \(status)")
                 self.client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
                 return
             }

@@ -9,6 +9,7 @@ struct RideView: View {
     @State private var showDetourConfirmation = false
     @State private var showStatsPanel = false
     @State private var showEndRideSheet = false
+    @State private var mapLoadStatus: MapLoadStatus = .loading
 
     var body: some View {
         Group {
@@ -35,6 +36,10 @@ struct RideView: View {
             .padding(8)
 
             VStack {
+                if case .failed(let message) = mapLoadStatus {
+                    MapLoadWarningBannerView(message: message)
+                        .padding(.top, 8)
+                }
                 if session.isBlockedBannerVisible {
                     BlockedPathBannerView(
                         onContourner: { showDetourConfirmation = true },
@@ -158,7 +163,8 @@ struct RideView: View {
                 northUp: settings.mapOrientationNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
-                onManualGesture: { session.registerManualGesture() }
+                onManualGesture: { session.registerManualGesture() },
+                onStatusChange: { mapLoadStatus = $0 }
             )
         case .mapKit:
             RideMapView(
@@ -171,7 +177,8 @@ struct RideView: View {
                 northUp: settings.mapOrientationNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
-                onManualGesture: { session.registerManualGesture() }
+                onManualGesture: { session.registerManualGesture() },
+                onStatusChange: { mapLoadStatus = $0 }
             )
         }
     }

@@ -5,6 +5,13 @@ import CoreLocation
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
 /// raster OSM, trace + détour en sources vectorielles stylées localement, checkpoints en
 /// annotations. Même contrat que RideMapView (MapKit), qui reste intact à côté.
+///
+/// Robustesse fond de carte : le style principal est construit via JSONSerialization
+/// (jamais par interpolation de string — un ancien bug produisait du JSON invalide et le
+/// style échouait à charger silencieusement, écran noir sans aucune erreur visible). Si le
+/// style principal échoue à charger OU n'a pas fini de charger en 5 s, on bascule sur le
+/// style de secours embarqué (fallback-style.json) et on remonte un état d'erreur visible
+/// via `onStatusChange`.
 struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let track: GPXTrack
     let checkpoints: [Checkpoint]
@@ -16,9 +23,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let isManualOverrideActive: Bool
     let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
+    let onStatusChange: (MapLoadStatus) -> Void
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.initialStyleJSON)
+        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .none
@@ -31,12 +39,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.checkpoints = checkpoints
         context.coordinator.waypoints = waypoints
         context.coordinator.onManualGesture = onManualGesture
+        context.coordinator.onStatusChange = onStatusChange
+        context.coordinator.armLoadWatchdog(for: mapView)
+        onStatusChange(.loading)
 
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
         context.coordinator.onManualGesture = onManualGesture
+        context.coordinator.onStatusChange = onStatusChange
         updateDetourShape(on: mapView, context: context)
 
         guard let currentLocation, !isManualOverrideActive else { return }
@@ -78,15 +90,49 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var checkpoints: [Checkpoint] = []
         var waypoints: [RollingWaypoint] = []
         var onManualGesture: (() -> Void)?
+        var onStatusChange: ((MapLoadStatus) -> Void)?
+
+        private var loadWatchdog: Timer?
+        private var didAttemptFallback = false
+        private var didFinishLoadingOnce = false
 
         private static let gestureReasonMask: MLNCameraChangeReason = [
             .gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn, .gestureZoomOut, .gestureOneFingerZoom, .gestureTilt,
         ]
 
+        /// Si le style n'a pas fini de charger en `styleLoadTimeoutSeconds`, on n'attend pas
+        /// un écran noir muet : on bascule sur le secours et on prévient l'utilisateur.
+        func armLoadWatchdog(for mapView: MLNMapView) {
+            loadWatchdog?.invalidate()
+            didFinishLoadingOnce = false
+            loadWatchdog = Timer.scheduledTimer(withTimeInterval: MapEngineConstants.styleLoadTimeoutSeconds, repeats: false) { [weak self, weak mapView] _ in
+                guard let self, let mapView, !self.didFinishLoadingOnce else { return }
+                print("[MapLibre] Timeout : le style n'a pas fini de charger en \(MapEngineConstants.styleLoadTimeoutSeconds)s.")
+                self.onStatusChange?(.failed("Carte non chargée — vérifie ta connexion"))
+                self.switchToFallbackStyle(on: mapView)
+            }
+        }
+
+        private func switchToFallbackStyle(on mapView: MLNMapView) {
+            guard !didAttemptFallback else {
+                print("[MapLibre] Le style de secours a lui aussi échoué à charger.")
+                return
+            }
+            didAttemptFallback = true
+            guard let url = Bundle.main.url(forResource: MapEngineConstants.fallbackStyleResourceName, withExtension: "json") else {
+                print("[MapLibre] ERREUR : fallback-style.json introuvable dans le bundle.")
+                return
+            }
+            print("[MapLibre] Bascule sur le style de secours embarqué : \(url.lastPathComponent)")
+            mapView.styleURL = url
+        }
+
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
-            // Le fond raster OSM (source + couche) est déjà défini dans le style JSON initial
-            // (MapEngineConstants.initialStyleJSON) — tileSize 256 non pilotable depuis l'API
-            // Swift MLNRasterTileSource(tileURLTemplates:options:), d'où ce choix.
+            didFinishLoadingOnce = true
+            loadWatchdog?.invalidate()
+            print("[MapLibre] Style chargé avec succès (\(style.sources.count) source(s)).")
+            onStatusChange?(.loaded)
+
             guard let track else { return }
 
             let trackCoordinates = track.points.map(\.coordinate)
@@ -108,6 +154,14 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
             mapView.addAnnotations(checkpoints.map(CheckpointMLNAnnotation.init))
             mapView.addAnnotations(waypoints.map(RollingWaypointMLNAnnotation.init))
+        }
+
+        /// Erreur de chargement du style (JSON invalide, réseau, etc.) — toujours loguée et
+        /// toujours remontée à l'UI, jamais avalée silencieusement.
+        func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
+            print("[MapLibre] ERREUR de chargement du style : \(error.localizedDescription)")
+            onStatusChange?(.failed("Carte non chargée — vérifie ta connexion"))
+            switchToFallbackStyle(on: mapView)
         }
 
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {

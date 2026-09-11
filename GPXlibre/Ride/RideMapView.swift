@@ -19,6 +19,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
     let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
+    let onStatusChange: (MapLoadStatus) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -34,6 +35,10 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         }
         mapView.addAnnotations(checkpoints.map(CheckpointAnnotation.init))
         mapView.addAnnotations(waypoints.map(RollingWaypointAnnotation.init))
+
+        // Les tuiles Apple Plans sont gérées nativement par MapKit, pas de style JSON
+        // maison ici : la classe de bug corrigée côté MapLibre ne s'applique pas.
+        onStatusChange(.loaded)
 
         context.coordinator.onManualGesture = onManualGesture
         let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.gestureDetected))

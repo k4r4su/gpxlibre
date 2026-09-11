@@ -15,7 +15,7 @@ struct RegionPickerMapView: UIViewRepresentable {
     @Binding var bounds: SimpleBounds?
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.initialStyleJSON)
+        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.showsAttributionButton = true

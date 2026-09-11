@@ -16,7 +16,8 @@ protocol MapProvider: View {
         northUp: Bool,
         isManualOverrideActive: Bool,
         detourRoute: DetourRoute?,
-        onManualGesture: @escaping () -> Void
+        onManualGesture: @escaping () -> Void,
+        onStatusChange: @escaping (MapLoadStatus) -> Void
     )
 }
 
