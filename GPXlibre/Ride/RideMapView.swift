@@ -4,7 +4,9 @@ import MapKit
 /// Caméra Ride en perspective : pitch fixe, la position est décalée vers le bas de l'écran
 /// (regard vers l'avant), cap en haut par défaut. Le pinch manuel est détecté et remonté
 /// via `onManualGesture` pour suspendre temporairement le zoom auto (voir RideSessionManager).
-struct RideMapView: UIViewRepresentable {
+/// Implémentation MapKit — conservée intacte pour comparaison (voir MapProvider).
+/// MapLibre (RideMapLibreView) est le moteur actif par défaut depuis l'axe maplibre-migration.
+struct RideMapView: UIViewRepresentable, MapProvider {
     let track: GPXTrack
     let checkpoints: [Checkpoint]
     let currentLocation: CLLocation?

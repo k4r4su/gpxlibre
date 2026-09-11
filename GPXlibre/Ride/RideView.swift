@@ -19,18 +19,17 @@ struct RideView: View {
 
     private func rideContent(for track: GPXTrack) -> some View {
         ZStack(alignment: .bottom) {
-            RideMapView(
-                track: track,
-                checkpoints: session.checkpoints,
-                currentLocation: session.currentLocation,
-                headingDegrees: session.headingDegrees,
-                cameraDistanceMeters: session.cameraDistanceMeters,
-                northUp: settings.mapOrientationNorthUp,
-                isManualOverrideActive: session.isManualOverrideActive,
-                detourRoute: session.detourRoute,
-                onManualGesture: { session.registerManualGesture() }
-            )
-            .ignoresSafeArea()
+            mapLayer(for: track)
+                .ignoresSafeArea()
+
+            VStack {
+                HStack {
+                    OSMAttributionView()
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(8)
 
             VStack {
                 if session.isBlockedBannerVisible {
@@ -91,6 +90,39 @@ struct RideView: View {
         }
         .onChange(of: settings.keepScreenAwakeInRide) { _ in
             session.applyIdleTimerSetting()
+        }
+    }
+
+    /// Bascule entre les deux implémentations conformes à MapProvider — MapLibre est le
+    /// moteur actif par défaut (MapEngineConstants.active), MapKit reste intact pour
+    /// comparaison sans être instancié.
+    @ViewBuilder
+    private func mapLayer(for track: GPXTrack) -> some View {
+        switch MapEngineConstants.active {
+        case .mapLibre:
+            RideMapLibreView(
+                track: track,
+                checkpoints: session.checkpoints,
+                currentLocation: session.currentLocation,
+                headingDegrees: session.headingDegrees,
+                cameraDistanceMeters: session.cameraDistanceMeters,
+                northUp: settings.mapOrientationNorthUp,
+                isManualOverrideActive: session.isManualOverrideActive,
+                detourRoute: session.detourRoute,
+                onManualGesture: { session.registerManualGesture() }
+            )
+        case .mapKit:
+            RideMapView(
+                track: track,
+                checkpoints: session.checkpoints,
+                currentLocation: session.currentLocation,
+                headingDegrees: session.headingDegrees,
+                cameraDistanceMeters: session.cameraDistanceMeters,
+                northUp: settings.mapOrientationNorthUp,
+                isManualOverrideActive: session.isManualOverrideActive,
+                detourRoute: session.detourRoute,
+                onManualGesture: { session.registerManualGesture() }
+            )
         }
     }
 

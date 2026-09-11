@@ -9,6 +9,7 @@ struct GPXlibreApp: App {
     @StateObject private var navigationState = AppNavigationState()
 
     init() {
+        MapLibreBootstrap.configure()
         let settingsStore = RideSettingsStore()
         let monitor = NetworkMonitor()
         _settings = StateObject(wrappedValue: settingsStore)

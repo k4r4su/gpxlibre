@@ -10,6 +10,12 @@ configs:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+# MapLibre est la SEULE dépendance tierce autorisée du projet (cf. spec itération 3) —
+# distribution officielle XCFramework prébuilt, pas de build source nécessaire.
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: 6.31.0
 targets:
   GPXlibre:
     type: application
@@ -21,10 +27,14 @@ targets:
       - path: GPXlibre/Services
       - path: GPXlibre/Views
       - path: GPXlibre/Ride
+      - path: GPXlibre/Map
       - path: GPXlibre/Settings
       - path: GPXlibre/Onboarding
       - path: GPXlibre/Resources
         buildPhase: resources
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
     info:
       path: Generated/Info.plist
       properties:
