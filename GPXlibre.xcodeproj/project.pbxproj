@@ -1,0 +1,466 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		07215900E4D166483B5F7D81 /* Checkpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B74ED338BF91B332800AAB /* Checkpoint.swift */; };
+		08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */; };
+		11919957C972AB067F2A09C1 /* RideSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */; };
+		15D827A154219817EECEBA02 /* sample-trail.gpx in Resources */ = {isa = PBXBuildFile; fileRef = 349E83BF5DDA839A660335E0 /* sample-trail.gpx */; };
+		272C29E47921F1289B633B34 /* AppNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */; };
+		2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */; };
+		2F059C71ECD7B3EBFFD8BFD3 /* ZoomPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */; };
+		49920FEA43D184809FBEDFC4 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F6B4CC1371445701229DA1 /* SettingsView.swift */; };
+		4B18FEABC4D49D787A52FA7F /* GPXTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2319D3A331C723DEDBD6249D /* GPXTrack.swift */; };
+		529BEC651A662138BDE3DC6A /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3770827C4F6309E842D1ECE7 /* LibraryStore.swift */; };
+		52EC67B7833280EF322910C7 /* TrackDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */; };
+		5837477CC1A63950072B5D8C /* RideSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */; };
+		5B19B65A57ED92B278F4D135 /* RideConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */; };
+		5E57530D16A95DC2A8A5E048 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4522C8B8D6C94F45CA721316 /* Assets.xcassets */; };
+		63F1641057903E4FAA48F0DF /* GPXlibreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C764785477A8517BB18083FE /* GPXlibreApp.swift */; };
+		70E872A1581371D76A198904 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */; };
+		B3DEDE8A607F12449A3F18CD /* RoadbookAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1D1D75D61F282667EAB2F1 /* RoadbookAnalyzer.swift */; };
+		B94CAA9252791F1D208B3C36 /* RideMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3850C3C410BAB86CA35E1B21 /* RideMapView.swift */; };
+		BF94CABF47A3E842EFABFC95 /* GPXPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */; };
+		D1FF3BB286CEEC1DDB499C57 /* FlashOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07085FFDE42708E45905658C /* FlashOverlayView.swift */; };
+		D7868CEFDCF45630417F791D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377D7D96D91B4019D5F0517 /* RootView.swift */; };
+		E4C60077323F06A1B1902070 /* GPXParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3443FA691B1A989E7E05A8AD /* GPXParser.swift */; };
+		E5A500AA9CF53E8DA446808F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BE32586E35B557CFF482FA /* OnboardingView.swift */; };
+		F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */; };
+		FAA066824132C41AD020F6A8 /* RideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5204AEC04322271B21AADF /* RideView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07085FFDE42708E45905658C /* FlashOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashOverlayView.swift; sourceTree = "<group>"; };
+		2319D3A331C723DEDBD6249D /* GPXTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXTrack.swift; sourceTree = "<group>"; };
+		2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackDetailView.swift; sourceTree = "<group>"; };
+		3443FA691B1A989E7E05A8AD /* GPXParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXParser.swift; sourceTree = "<group>"; };
+		349E83BF5DDA839A660335E0 /* sample-trail.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "sample-trail.gpx"; sourceTree = "<group>"; };
+		3770827C4F6309E842D1ECE7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		3850C3C410BAB86CA35E1B21 /* RideMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideMapView.swift; sourceTree = "<group>"; };
+		4522C8B8D6C94F45CA721316 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		45B74ED338BF91B332800AAB /* Checkpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkpoint.swift; sourceTree = "<group>"; };
+		47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXPoint.swift; sourceTree = "<group>"; };
+		4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSettingsStore.swift; sourceTree = "<group>"; };
+		50F6B4CC1371445701229DA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		5377D7D96D91B4019D5F0517 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookPanelView.swift; sourceTree = "<group>"; };
+		66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMapView.swift; sourceTree = "<group>"; };
+		6FC060BA50AA207728B92C3A /* GPXlibre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GPXlibre.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationState.swift; sourceTree = "<group>"; };
+		9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomPreset.swift; sourceTree = "<group>"; };
+		9F5204AEC04322271B21AADF /* RideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideView.swift; sourceTree = "<group>"; };
+		ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
+		C764785477A8517BB18083FE /* GPXlibreApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXlibreApp.swift; sourceTree = "<group>"; };
+		DB1D1D75D61F282667EAB2F1 /* RoadbookAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookAnalyzer.swift; sourceTree = "<group>"; };
+		E5BE32586E35B557CFF482FA /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideConstants.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0EB0167BED9468D321D95C3C /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */,
+				2319D3A331C723DEDBD6249D /* GPXTrack.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		0ED9205E842140D00CEB8FD6 = {
+			isa = PBXGroup;
+			children = (
+				84F3D23A85ABF0B7CF4EC140 /* GPXlibre */,
+				E9B2E00D5596745A51EC2954 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		11424CD84AF27840843815BC /* Ride */ = {
+			isa = PBXGroup;
+			children = (
+				45B74ED338BF91B332800AAB /* Checkpoint.swift */,
+				07085FFDE42708E45905658C /* FlashOverlayView.swift */,
+				FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */,
+				3850C3C410BAB86CA35E1B21 /* RideMapView.swift */,
+				AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */,
+				9F5204AEC04322271B21AADF /* RideView.swift */,
+				DB1D1D75D61F282667EAB2F1 /* RoadbookAnalyzer.swift */,
+				5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */,
+				9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */,
+			);
+			path = Ride;
+			sourceTree = "<group>";
+		};
+		410845AE80C8D816F3A94763 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				3443FA691B1A989E7E05A8AD /* GPXParser.swift */,
+				3770827C4F6309E842D1ECE7 /* LibraryStore.swift */,
+				ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		45C4F1E33403054172350E42 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				E5BE32586E35B557CFF482FA /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		57C8D14C470C3E1E12B070EB /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4522C8B8D6C94F45CA721316 /* Assets.xcassets */,
+				349E83BF5DDA839A660335E0 /* sample-trail.gpx */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		808D67578E792894B9F3890E /* App */ = {
+			isa = PBXGroup;
+			children = (
+				954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */,
+				C764785477A8517BB18083FE /* GPXlibreApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		83CB93900886601C33591F81 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */,
+				5377D7D96D91B4019D5F0517 /* RootView.swift */,
+				2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */,
+				66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		84F3D23A85ABF0B7CF4EC140 /* GPXlibre */ = {
+			isa = PBXGroup;
+			children = (
+				808D67578E792894B9F3890E /* App */,
+				0EB0167BED9468D321D95C3C /* Models */,
+				45C4F1E33403054172350E42 /* Onboarding */,
+				57C8D14C470C3E1E12B070EB /* Resources */,
+				11424CD84AF27840843815BC /* Ride */,
+				410845AE80C8D816F3A94763 /* Services */,
+				E56C90F25464862ADA82366D /* Settings */,
+				83CB93900886601C33591F81 /* Views */,
+			);
+			path = GPXlibre;
+			sourceTree = "<group>";
+		};
+		E56C90F25464862ADA82366D /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */,
+				50F6B4CC1371445701229DA1 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		E9B2E00D5596745A51EC2954 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6FC060BA50AA207728B92C3A /* GPXlibre.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8AB88ED91444122DA333A2B2 /* GPXlibre */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1BDFE282DFE46103AE2B4E8F /* Build configuration list for PBXNativeTarget "GPXlibre" */;
+			buildPhases = (
+				F9AD3A3D7FAEAC7283543F01 /* Sources */,
+				62A8CA305DC8C62CCDC9B725 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GPXlibre;
+			packageProductDependencies = (
+			);
+			productName = GPXlibre;
+			productReference = 6FC060BA50AA207728B92C3A /* GPXlibre.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7D8C0DDCB449700D5343F815 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					8AB88ED91444122DA333A2B2 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 1DE04228C3BDC2540EA03FC3 /* Build configuration list for PBXProject "GPXlibre" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0ED9205E842140D00CEB8FD6;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E9B2E00D5596745A51EC2954 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8AB88ED91444122DA333A2B2 /* GPXlibre */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		62A8CA305DC8C62CCDC9B725 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E57530D16A95DC2A8A5E048 /* Assets.xcassets in Resources */,
+				15D827A154219817EECEBA02 /* sample-trail.gpx in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F9AD3A3D7FAEAC7283543F01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				272C29E47921F1289B633B34 /* AppNavigationState.swift in Sources */,
+				07215900E4D166483B5F7D81 /* Checkpoint.swift in Sources */,
+				D1FF3BB286CEEC1DDB499C57 /* FlashOverlayView.swift in Sources */,
+				E4C60077323F06A1B1902070 /* GPXParser.swift in Sources */,
+				BF94CABF47A3E842EFABFC95 /* GPXPoint.swift in Sources */,
+				4B18FEABC4D49D787A52FA7F /* GPXTrack.swift in Sources */,
+				63F1641057903E4FAA48F0DF /* GPXlibreApp.swift in Sources */,
+				529BEC651A662138BDE3DC6A /* LibraryStore.swift in Sources */,
+				08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */,
+				70E872A1581371D76A198904 /* LocationManager.swift in Sources */,
+				E5A500AA9CF53E8DA446808F /* OnboardingView.swift in Sources */,
+				5B19B65A57ED92B278F4D135 /* RideConstants.swift in Sources */,
+				B94CAA9252791F1D208B3C36 /* RideMapView.swift in Sources */,
+				5837477CC1A63950072B5D8C /* RideSessionManager.swift in Sources */,
+				11919957C972AB067F2A09C1 /* RideSettingsStore.swift in Sources */,
+				FAA066824132C41AD020F6A8 /* RideView.swift in Sources */,
+				B3DEDE8A607F12449A3F18CD /* RoadbookAnalyzer.swift in Sources */,
+				F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */,
+				D7868CEFDCF45630417F791D /* RootView.swift in Sources */,
+				49920FEA43D184809FBEDFC4 /* SettingsView.swift in Sources */,
+				52EC67B7833280EF322910C7 /* TrackDetailView.swift in Sources */,
+				2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */,
+				2F059C71ECD7B3EBFFD8BFD3 /* ZoomPreset.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		23842B267F0C340310046260 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5X72C94C94;
+				INFOPLIST_FILE = Generated/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.olivier.gpxlibre;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		2733323C7AB402D80DCC2ABA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		87B52164CAE915387778C843 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5X72C94C94;
+				INFOPLIST_FILE = Generated/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.olivier.gpxlibre;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		D94CE2A72B903025C58D78DE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1BDFE282DFE46103AE2B4E8F /* Build configuration list for PBXNativeTarget "GPXlibre" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				23842B267F0C340310046260 /* Debug */,
+				87B52164CAE915387778C843 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1DE04228C3BDC2540EA03FC3 /* Build configuration list for PBXProject "GPXlibre" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D94CE2A72B903025C58D78DE /* Debug */,
+				2733323C7AB402D80DCC2ABA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7D8C0DDCB449700D5343F815 /* Project object */;
+}
