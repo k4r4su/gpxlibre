@@ -30,6 +30,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var isRequestingDetour = false
     @Published private(set) var detourRequestFailed = false
 
+    // MARK: - Mesures en cours
+    @Published private(set) var averageSpeedKmh: Double = 0
+    @Published private(set) var maxSpeedKmh: Double = 0
+    @Published private(set) var distanceRemainingMeters: Double?
+    @Published private(set) var percentComplete: Double?
+    @Published private(set) var estimatedArrivalDate: Date?
+
     private let manager = CLLocationManager()
     private let settings: RideSettingsStore
     private let networkMonitor: NetworkMonitor
@@ -49,6 +56,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var offTrackAccumulatedDistance: Double = 0
     private var lastOffTrackLocation: CLLocation?
     private var detourTask: Task<Void, Never>?
+
+    private var rideStartDate: Date?
+    private var totalDistanceTraveledMeters: Double = 0
+    private var lastLocationForDistance: CLLocation?
 
     var lastManualGestureDate: Date?
 
@@ -90,6 +101,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         hapticGenerator.prepare()
         detourClearedHapticGenerator.prepare()
         resetBlockedPathState()
+
+        rideStartDate = Date()
+        totalDistanceTraveledMeters = 0
+        lastLocationForDistance = nil
+        averageSpeedKmh = 0
+        maxSpeedKmh = 0
+        distanceRemainingMeters = track.totalDistanceMeters
+        percentComplete = 0
+        estimatedArrivalDate = nil
 
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
@@ -152,19 +172,57 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         let speedMps = max(location.speed, 0)
         speedSamples.append((location.timestamp, speedMps))
-        let cutoff = location.timestamp.addingTimeInterval(-RideConstants.speedSmoothingWindowSeconds)
-        speedSamples.removeAll { $0.date < cutoff }
-        let avgMps = speedSamples.map(\.speedMps).reduce(0, +) / Double(max(speedSamples.count, 1))
-        smoothedSpeedKmh = avgMps * 3.6
+        // Fenêtre la plus large des deux besoins (zoom auto 10 s, ETA 5 min) ; chacune
+        // re-filtre ensuite ce même buffer sur sa propre durée.
+        let retentionWindow = max(RideConstants.speedSmoothingWindowSeconds, RideConstants.etaSpeedWindowSeconds)
+        let retentionCutoff = location.timestamp.addingTimeInterval(-retentionWindow)
+        speedSamples.removeAll { $0.date < retentionCutoff }
+
+        let shortWindowCutoff = location.timestamp.addingTimeInterval(-RideConstants.speedSmoothingWindowSeconds)
+        let shortSamples = speedSamples.filter { $0.date >= shortWindowCutoff }
+        let shortAvgMps = shortSamples.map(\.speedMps).reduce(0, +) / Double(max(shortSamples.count, 1))
+        smoothedSpeedKmh = shortAvgMps * 3.6
+
+        let etaWindowCutoff = location.timestamp.addingTimeInterval(-RideConstants.etaSpeedWindowSeconds)
+        let etaSamples = speedSamples.filter { $0.date >= etaWindowCutoff }
+        let etaAvgMps = etaSamples.map(\.speedMps).reduce(0, +) / Double(max(etaSamples.count, 1))
+        let etaSpeedKmh = etaAvgMps * 3.6
 
         if location.course >= 0, speedMps > 0.5 {
             headingDegrees = location.course
         }
 
+        maxSpeedKmh = max(maxSpeedKmh, speedMps * 3.6)
+        if let last = lastLocationForDistance {
+            totalDistanceTraveledMeters += location.distance(from: last)
+        }
+        lastLocationForDistance = location
+        if let rideStartDate {
+            let elapsedHours = Date().timeIntervalSince(rideStartDate) / 3600
+            averageSpeedKmh = elapsedHours > 0 ? (totalDistanceTraveledMeters / 1000) / elapsedHours : 0
+        }
+
         updateRideContext()
         updateZoomBucket()
         updateRoadbookProgress(from: location)
-        updateBlockedPathTracking(from: location)
+        let projection = updateBlockedPathTracking(from: location)
+        updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
+    }
+
+    private func updateRideStats(from location: CLLocation, projection: TrackProjector.Projection?, etaSpeedKmh: Double) {
+        guard let track, let projection else { return }
+        let remaining = max(track.totalDistanceMeters - projection.cumulativeDistanceMeters, 0)
+        distanceRemainingMeters = remaining
+        percentComplete = track.totalDistanceMeters > 0
+            ? min(100, max(0, projection.cumulativeDistanceMeters / track.totalDistanceMeters * 100))
+            : 0
+
+        guard etaSpeedKmh >= RideConstants.etaSilenceSpeedThresholdKmh else {
+            estimatedArrivalDate = nil
+            return
+        }
+        let remainingHours = (remaining / 1000) / etaSpeedKmh
+        estimatedArrivalDate = Date().addingTimeInterval(remainingHours * 3600)
     }
 
     private func updateRideContext() {
@@ -249,10 +307,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     // MARK: - Chemin bloqué / détour
 
-    private func updateBlockedPathTracking(from location: CLLocation) {
+    @discardableResult
+    private func updateBlockedPathTracking(from location: CLLocation) -> TrackProjector.Projection? {
         guard let track, !trackCumulativeDistances.isEmpty,
               let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
-        else { return }
+        else { return nil }
 
         distanceOffTrackMeters = projection.distanceToTrackMeters
 
@@ -264,7 +323,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             }
         }
 
-        guard detourRoute == nil else { return }
+        guard detourRoute == nil else { return projection }
 
         if projection.distanceToTrackMeters > RideConstants.offTrackDistanceThresholdMeters {
             if offTrackSinceDate == nil {
@@ -287,6 +346,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             lastOffTrackLocation = nil
             isBlockedBannerVisible = false
         }
+
+        return projection
     }
 
     /// Déclenché par le bouton manuel "Chemin bloqué", toujours visible en Ride — même flow

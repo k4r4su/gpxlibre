@@ -131,4 +131,11 @@ enum RideConstants {
     /// API publique gratuite de démonstration OSRM — pas de clé, usage raisonnable uniquement.
     /// À remplacer par une instance auto-hébergée si le volume d'usage grandit (cf. doc OSRM).
     static let osrmPublicBaseURL = "https://router.project-osrm.org"
+
+    // MARK: - Mesures en cours (panneau data)
+
+    /// Fenêtre de moyenne glissante utilisée pour l'heure d'arrivée estimée.
+    static let etaSpeedWindowSeconds: Double = 300
+    /// En dessous de cette vitesse (km/h), l'ETA est masquée (silencieuse à l'arrêt).
+    static let etaSilenceSpeedThresholdKmh: Double = 2
 }

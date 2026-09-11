@@ -41,6 +41,7 @@
 		BC03814FD9F5D4E0DF28E9B7 /* BlockageLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E7A97540684CC96DCBEE99 /* BlockageLogStore.swift */; };
 		BF94CABF47A3E842EFABFC95 /* GPXPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */; };
 		C33F2E8C919D2CACAB15A433 /* MapProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EDDB19DD8FF6B201D24DD5C /* MapProvider.swift */; };
+		C725513EBF028CD538ACCD7C /* RideStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */; };
 		D1FF3BB286CEEC1DDB499C57 /* FlashOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07085FFDE42708E45905658C /* FlashOverlayView.swift */; };
 		D7868CEFDCF45630417F791D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377D7D96D91B4019D5F0517 /* RootView.swift */; };
 		E4C60077323F06A1B1902070 /* GPXParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3443FA691B1A989E7E05A8AD /* GPXParser.swift */; };
@@ -91,6 +92,7 @@
 		ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
 		B474A0CD23D4910F89D3D0F7 /* CorridorPrecacheEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorPrecacheEstimator.swift; sourceTree = "<group>"; };
+		C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStatsView.swift; sourceTree = "<group>"; };
 		C5FE91CFBDF5BB2AF127AF9A /* RegionDownloadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionDownloadView.swift; sourceTree = "<group>"; };
 		C764785477A8517BB18083FE /* GPXlibreApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXlibreApp.swift; sourceTree = "<group>"; };
 		D1AC2200EACFC3436860271A /* BlockedPathBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedPathBannerView.swift; sourceTree = "<group>"; };
@@ -144,6 +146,7 @@
 				FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */,
 				3850C3C410BAB86CA35E1B21 /* RideMapView.swift */,
 				AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */,
+				C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */,
 				9F5204AEC04322271B21AADF /* RideView.swift */,
 				DB1D1D75D61F282667EAB2F1 /* RoadbookAnalyzer.swift */,
 				5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */,
@@ -371,6 +374,7 @@
 				B94CAA9252791F1D208B3C36 /* RideMapView.swift in Sources */,
 				5837477CC1A63950072B5D8C /* RideSessionManager.swift in Sources */,
 				11919957C972AB067F2A09C1 /* RideSettingsStore.swift in Sources */,
+				C725513EBF028CD538ACCD7C /* RideStatsView.swift in Sources */,
 				FAA066824132C41AD020F6A8 /* RideView.swift in Sources */,
 				B3DEDE8A607F12449A3F18CD /* RoadbookAnalyzer.swift in Sources */,
 				F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */,

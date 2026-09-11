@@ -6,6 +6,7 @@ struct RideView: View {
     @EnvironmentObject private var session: RideSessionManager
     @EnvironmentObject private var navigationState: AppNavigationState
     @State private var showDetourConfirmation = false
+    @State private var showStatsPanel = false
 
     var body: some View {
         Group {
@@ -64,6 +65,31 @@ struct RideView: View {
                         .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
                 }
             }
+
+            HStack {
+                Spacer()
+                VStack {
+                    if showStatsPanel {
+                        RideStatsPanel(
+                            currentSpeedKmh: session.smoothedSpeedKmh,
+                            averageSpeedKmh: session.averageSpeedKmh,
+                            maxSpeedKmh: session.maxSpeedKmh,
+                            distanceRemainingMeters: session.distanceRemainingMeters,
+                            percentComplete: session.percentComplete,
+                            estimatedArrivalDate: session.estimatedArrivalDate,
+                            onCollapse: { withAnimation { showStatsPanel = false } }
+                        )
+                        .frame(width: 230)
+                    } else {
+                        RideStatsBadge(currentSpeedKmh: session.smoothedSpeedKmh) {
+                            withAnimation { showStatsPanel = true }
+                        }
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.top, 44)
+            .padding(.trailing, 12)
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
