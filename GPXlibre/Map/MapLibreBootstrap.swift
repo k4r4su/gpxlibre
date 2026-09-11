@@ -7,6 +7,8 @@ enum MapLibreBootstrap {
     static func configure() {
         let configuration = URLSessionConfiguration.default
         configuration.httpAdditionalHeaders = ["User-Agent": MapEngineConstants.userAgent]
+        // Intercepte les tuiles OSM pour servir depuis le cache disque hors-ligne (axe offline-cache).
+        configuration.protocolClasses = [TileCacheURLProtocol.self] + (configuration.protocolClasses ?? [])
         MLNNetworkConfiguration.sharedManager.sessionConfiguration = configuration
     }
 }

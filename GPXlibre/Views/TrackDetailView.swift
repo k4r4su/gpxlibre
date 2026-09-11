@@ -5,6 +5,7 @@ struct TrackDetailView: View {
     @StateObject private var locationManager = LocationManager()
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var navigationState: AppNavigationState
+    @State private var showPrecacheSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,11 +18,17 @@ struct TrackDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    library.selectedTrackID = track.id
-                    navigationState.selectedTab = .ride
+                    showPrecacheSheet = true
                 } label: {
                     Label("Utiliser pour le Ride", systemImage: "location.north.line.fill")
                 }
+            }
+        }
+        .sheet(isPresented: $showPrecacheSheet) {
+            PrecacheConfirmationView(track: track) {
+                showPrecacheSheet = false
+                library.selectedTrackID = track.id
+                navigationState.selectedTab = .ride
             }
         }
         .onAppear {

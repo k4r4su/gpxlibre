@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
     @State private var isImporting = false
     @State private var renamingTrack: GPXTrack?
     @State private var renameText = ""
@@ -20,6 +21,14 @@ struct LibraryView: View {
             }
             .navigationTitle("Bibliothèque")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    NavigationLink {
+                        RegionDownloadView()
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                    }
+                    .accessibilityLabel("Cartes hors-ligne")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
@@ -103,7 +112,7 @@ struct LibraryView: View {
         List {
             ForEach(library.tracks) { track in
                 NavigationLink(value: track) {
-                    TrackRow(track: track)
+                    TrackRow(track: track, isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id))
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
@@ -129,11 +138,20 @@ struct LibraryView: View {
 
 private struct TrackRow: View {
     let track: GPXTrack
+    let isFullyOffline: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(track.name)
-                .font(.headline)
+            HStack(spacing: 6) {
+                Text(track.name)
+                    .font(.headline)
+                if isFullyOffline {
+                    Label("100% hors-ligne", systemImage: "checkmark.seal.fill")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.green)
+                        .accessibilityLabel("Carte 100% hors-ligne")
+                }
+            }
             HStack(spacing: 12) {
                 Label(String(format: "%.1f km", track.totalDistanceKm), systemImage: "ruler")
                 Label("\(track.pointCount) pts", systemImage: "point.topleft.down.curvedto.point.bottomright.up")

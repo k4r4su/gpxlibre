@@ -7,6 +7,7 @@ struct GPXlibreApp: App {
     @StateObject private var networkMonitor = NetworkMonitor()
     @StateObject private var rideSession: RideSessionManager
     @StateObject private var navigationState = AppNavigationState()
+    @StateObject private var downloadedRegions = DownloadedRegionStore()
 
     init() {
         MapLibreBootstrap.configure()
@@ -25,6 +26,7 @@ struct GPXlibreApp: App {
                 .environmentObject(rideSession)
                 .environmentObject(navigationState)
                 .environmentObject(networkMonitor)
+                .environmentObject(downloadedRegions)
                 .onOpenURL { url in
                     library.importTrack(from: url)
                 }

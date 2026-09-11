@@ -28,6 +28,7 @@ targets:
       - path: GPXlibre/Views
       - path: GPXlibre/Ride
       - path: GPXlibre/Map
+      - path: GPXlibre/Offline
       - path: GPXlibre/Settings
       - path: GPXlibre/Onboarding
       - path: GPXlibre/Resources
