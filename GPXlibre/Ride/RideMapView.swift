@@ -12,6 +12,9 @@ struct RideMapView: UIViewRepresentable {
     let cameraDistanceMeters: Double
     let northUp: Bool
     let isManualOverrideActive: Bool
+    /// Détour temporaire (contournement en ligne ou guidage direct) superposé à la trace
+    /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
+    let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
 
     func makeUIView(context: Context) -> MKMapView {
@@ -41,6 +44,7 @@ struct RideMapView: UIViewRepresentable {
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         context.coordinator.onManualGesture = onManualGesture
+        updateDetourOverlay(on: mapView, context: context)
         guard let currentLocation, !isManualOverrideActive else { return }
 
         let heading = northUp ? 0 : headingDegrees
@@ -60,6 +64,17 @@ struct RideMapView: UIViewRepresentable {
         UIView.animate(withDuration: RideConstants.cameraAnimationDurationSeconds, delay: 0, options: [.allowUserInteraction, .curveEaseInOut]) {
             mapView.camera = camera
         }
+    }
+
+    private func updateDetourOverlay(on mapView: MKMapView, context: Context) {
+        if let existing = context.coordinator.detourOverlay {
+            mapView.removeOverlay(existing)
+            context.coordinator.detourOverlay = nil
+        }
+        guard let detourRoute, detourRoute.coordinates.count > 1 else { return }
+        let overlay = DetourPolyline(coordinates: detourRoute.coordinates, count: detourRoute.coordinates.count)
+        context.coordinator.detourOverlay = overlay
+        mapView.addOverlay(overlay)
     }
 
     /// Point projeté à `forwardDistance` mètres dans la direction `headingDegrees`,
@@ -88,6 +103,7 @@ struct RideMapView: UIViewRepresentable {
 
     final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var onManualGesture: (() -> Void)?
+        var detourOverlay: DetourPolyline?
 
         @objc func gestureDetected(_ gesture: UIGestureRecognizer) {
             guard gesture.state == .began || gesture.state == .changed else { return }
@@ -100,6 +116,13 @@ struct RideMapView: UIViewRepresentable {
         ) -> Bool { true }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let detour = overlay as? DetourPolyline {
+                let renderer = MKPolylineRenderer(polyline: detour)
+                renderer.strokeColor = UIColor.systemRed
+                renderer.lineWidth = 5
+                renderer.lineDashPattern = [10, 8]
+                return renderer
+            }
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor.systemOrange
@@ -123,6 +146,10 @@ struct RideMapView: UIViewRepresentable {
         }
     }
 }
+
+/// Sous-classe distincte pour styler le détour différemment de la trace d'origine
+/// (pointillés rouges) sans jamais toucher à l'overlay de la trace elle-même.
+final class DetourPolyline: MKPolyline {}
 
 final class CheckpointAnnotation: NSObject, MKAnnotation {
     let checkpoint: Checkpoint

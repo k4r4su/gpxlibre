@@ -106,4 +106,29 @@ enum RideConstants {
     // MARK: - Localisation Ride
 
     static let rideDistanceFilterMeters: Double = 5
+
+    // MARK: - Chemin bloqué / détour temporaire (la trace originale n'est JAMAIS modifiée)
+
+    /// Distance perpendiculaire à la trace (m) au-delà de laquelle on est considéré "hors trace".
+    static let offTrackDistanceThresholdMeters: Double = 50
+
+    /// Temps continu hors trace avant proposition de contournement.
+    static let offTrackStagnantDurationSeconds: Double = 30
+    /// OU distance cumulée parcourue hors trace avant proposition de contournement.
+    static let offTrackStagnantDistanceMeters: Double = 200
+
+    /// Fenêtre de recherche du point de ralliement sur la trace, après la zone bloquée.
+    static let detourAheadMinMeters: Double = 500
+    static let detourAheadMaxMeters: Double = 2000
+    /// Pas d'essai entre candidats de ralliement dans la fenêtre ci-dessus.
+    static let detourAheadStepMeters: Double = 500
+
+    /// Distance de retour sur la trace (m) qui efface automatiquement le détour (+ haptique).
+    static let detourRejoinClearRadiusMeters: Double = 20
+
+    static let detourRoutingTimeoutSeconds: Double = 12
+
+    /// API publique gratuite de démonstration OSRM — pas de clé, usage raisonnable uniquement.
+    /// À remplacer par une instance auto-hébergée si le volume d'usage grandit (cf. doc OSRM).
+    static let osrmPublicBaseURL = "https://router.project-osrm.org"
 }

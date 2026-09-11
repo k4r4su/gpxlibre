@@ -23,9 +23,19 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// Change de valeur à chaque déclenchement d'alerte : FlashOverlayView observe ce token.
     @Published var flashSequenceToken: UUID?
 
+    // MARK: - Chemin bloqué / détour (la trace originale reste affichée et n'est jamais modifiée)
+    @Published private(set) var distanceOffTrackMeters: Double = 0
+    @Published private(set) var isBlockedBannerVisible = false
+    @Published private(set) var detourRoute: DetourRoute?
+    @Published private(set) var isRequestingDetour = false
+    @Published private(set) var detourRequestFailed = false
+
     private let manager = CLLocationManager()
     private let settings: RideSettingsStore
+    private let networkMonitor: NetworkMonitor
+    private let blockageLog = BlockageLogStore()
     private var track: GPXTrack?
+    private var trackCumulativeDistances: [Double] = []
 
     private var speedSamples: [(date: Date, speedMps: Double)] = []
     private var currentBucketIndex: Int = 0
@@ -33,6 +43,12 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var flashedCheckpointIDs: Set<UUID> = []
     private var hapticCheckpointIDs: Set<UUID> = []
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    private let detourClearedHapticGenerator = UINotificationFeedbackGenerator()
+
+    private var offTrackSinceDate: Date?
+    private var offTrackAccumulatedDistance: Double = 0
+    private var lastOffTrackLocation: CLLocation?
+    private var detourTask: Task<Void, Never>?
 
     var lastManualGestureDate: Date?
 
@@ -49,8 +65,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         max(checkpoints.count - currentCheckpointIndex, 0)
     }
 
-    init(settings: RideSettingsStore) {
+    init(settings: RideSettingsStore, networkMonitor: NetworkMonitor) {
         self.settings = settings
+        self.networkMonitor = networkMonitor
         self.cameraDistanceMeters = ZoomPreset.normal.buckets.first?.cameraDistanceMeters ?? 300
         super.init()
         manager.delegate = self
@@ -63,6 +80,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     func start(track: GPXTrack) {
         self.track = track
+        trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
         isActive = true
         rebuildCheckpoints()
         speedSamples.removeAll()
@@ -70,6 +88,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         currentBucketIndex = 0
         rideContext = .normal
         hapticGenerator.prepare()
+        detourClearedHapticGenerator.prepare()
+        resetBlockedPathState()
 
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
@@ -80,6 +100,19 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isActive = false
         manager.stopUpdatingLocation()
         UIApplication.shared.isIdleTimerDisabled = false
+        detourTask?.cancel()
+    }
+
+    private func resetBlockedPathState() {
+        distanceOffTrackMeters = 0
+        isBlockedBannerVisible = false
+        detourRoute = nil
+        isRequestingDetour = false
+        detourRequestFailed = false
+        offTrackSinceDate = nil
+        offTrackAccumulatedDistance = 0
+        lastOffTrackLocation = nil
+        detourTask?.cancel()
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
@@ -131,6 +164,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         updateRideContext()
         updateZoomBucket()
         updateRoadbookProgress(from: location)
+        updateBlockedPathTracking(from: location)
     }
 
     private func updateRideContext() {
@@ -210,6 +244,143 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             }
         } else {
             isCloseToCheckpoint = false
+        }
+    }
+
+    // MARK: - Chemin bloqué / détour
+
+    private func updateBlockedPathTracking(from location: CLLocation) {
+        guard let track, !trackCumulativeDistances.isEmpty,
+              let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
+        else { return }
+
+        distanceOffTrackMeters = projection.distanceToTrackMeters
+
+        if let detour = detourRoute {
+            let distanceToTarget = RoadbookAnalyzer.distanceMeters(location.coordinate, detour.targetCoordinate)
+            if projection.distanceToTrackMeters <= RideConstants.detourRejoinClearRadiusMeters
+                || distanceToTarget <= RideConstants.detourRejoinClearRadiusMeters {
+                clearDetour(haptic: true)
+            }
+        }
+
+        guard detourRoute == nil else { return }
+
+        if projection.distanceToTrackMeters > RideConstants.offTrackDistanceThresholdMeters {
+            if offTrackSinceDate == nil {
+                offTrackSinceDate = location.timestamp
+                offTrackAccumulatedDistance = 0
+            } else if let last = lastOffTrackLocation {
+                offTrackAccumulatedDistance += location.distance(from: last)
+            }
+            lastOffTrackLocation = location
+
+            let elapsed = location.timestamp.timeIntervalSince(offTrackSinceDate ?? location.timestamp)
+            if !isBlockedBannerVisible,
+               elapsed >= RideConstants.offTrackStagnantDurationSeconds
+                || offTrackAccumulatedDistance >= RideConstants.offTrackStagnantDistanceMeters {
+                isBlockedBannerVisible = true
+            }
+        } else {
+            offTrackSinceDate = nil
+            offTrackAccumulatedDistance = 0
+            lastOffTrackLocation = nil
+            isBlockedBannerVisible = false
+        }
+    }
+
+    /// Déclenché par le bouton manuel "Chemin bloqué", toujours visible en Ride — même flow
+    /// que la détection automatique.
+    func userReportedBlockedPath() {
+        isBlockedBannerVisible = true
+    }
+
+    func dismissBlockedPathBanner() {
+        isBlockedBannerVisible = false
+    }
+
+    /// Lance un contournement en ligne (OSRM public) vers un point de la trace situé
+    /// 500 m–2 km plus loin. La trace originale reste affichée et intacte.
+    func requestDetour(profile: DetourProfile) {
+        guard let track, let location = currentLocation, !trackCumulativeDistances.isEmpty else { return }
+        detourTask?.cancel()
+        isBlockedBannerVisible = false
+        detourRequestFailed = false
+
+        guard networkMonitor.isReachable else {
+            requestDirectDetour()
+            return
+        }
+
+        let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
+        let baseCumulative = projection?.cumulativeDistanceMeters ?? 0
+        let candidates = TrackProjector.rejoinCandidates(
+            in: track.points,
+            cumulativeDistances: trackCumulativeDistances,
+            afterCumulativeDistance: baseCumulative,
+            minAhead: RideConstants.detourAheadMinMeters,
+            maxAhead: RideConstants.detourAheadMaxMeters,
+            step: RideConstants.detourAheadStepMeters
+        )
+        guard !candidates.isEmpty else {
+            requestDirectDetour()
+            return
+        }
+
+        isRequestingDetour = true
+        detourTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await DetourRoutingService.requestRoute(from: location.coordinate, candidates: candidates, profile: profile)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.detourRoute = result
+                    self.isRequestingDetour = false
+                    self.blockageLog.append(BlockageEvent(coordinate: location.coordinate, resolvedOnline: true), for: track.id)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.isRequestingDetour = false
+                    self.detourRequestFailed = true
+                    self.requestDirectDetour()
+                }
+            }
+        }
+    }
+
+    /// Guidage minimum sans réseau : flèche directe + distance jusqu'au point de la trace
+    /// le plus proche au-delà de la zone bloquée. Aucune prétention de recalcul d'itinéraire.
+    func requestDirectDetour() {
+        guard let track, let location = currentLocation, !trackCumulativeDistances.isEmpty else { return }
+        isBlockedBannerVisible = false
+
+        let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
+        let baseCumulative = projection?.cumulativeDistanceMeters ?? 0
+        guard let target = TrackProjector.coordinate(
+            in: track.points,
+            cumulativeDistances: trackCumulativeDistances,
+            atCumulativeDistance: baseCumulative + RideConstants.detourAheadMinMeters
+        ) else { return }
+
+        detourRoute = DetourRoute(coordinates: [location.coordinate, target], mode: .direct, targetCoordinate: target, startedAt: Date())
+        blockageLog.append(BlockageEvent(coordinate: location.coordinate, resolvedOnline: false), for: track.id)
+    }
+
+    func cancelDetour() {
+        clearDetour(haptic: false)
+    }
+
+    private func clearDetour(haptic: Bool) {
+        detourTask?.cancel()
+        detourRoute = nil
+        isRequestingDetour = false
+        detourRequestFailed = false
+        offTrackSinceDate = nil
+        offTrackAccumulatedDistance = 0
+        lastOffTrackLocation = nil
+        if haptic {
+            detourClearedHapticGenerator.notificationOccurred(.success)
         }
     }
 }
