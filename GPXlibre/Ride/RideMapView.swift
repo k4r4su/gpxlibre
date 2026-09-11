@@ -9,6 +9,7 @@ import MapKit
 struct RideMapView: UIViewRepresentable, MapProvider {
     let track: GPXTrack
     let checkpoints: [Checkpoint]
+    let waypoints: [RollingWaypoint]
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -32,6 +33,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
             mapView.addOverlay(polyline)
         }
         mapView.addAnnotations(checkpoints.map(CheckpointAnnotation.init))
+        mapView.addAnnotations(waypoints.map(RollingWaypointAnnotation.init))
 
         context.coordinator.onManualGesture = onManualGesture
         let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.gestureDetected))
@@ -135,16 +137,29 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            guard let checkpointAnnotation = annotation as? CheckpointAnnotation else { return nil }
-            let identifier = "checkpoint"
-            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
-                ?? MKMarkerAnnotationView(annotation: checkpointAnnotation, reuseIdentifier: identifier)
-            view.annotation = checkpointAnnotation
-            view.markerTintColor = .systemRed
-            view.glyphImage = UIImage(systemName: checkpointAnnotation.checkpoint.direction.systemImageName)
-            view.displayPriority = .required
-            view.canShowCallout = false
-            return view
+            if let checkpointAnnotation = annotation as? CheckpointAnnotation {
+                let identifier = "checkpoint"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: checkpointAnnotation, reuseIdentifier: identifier)
+                view.annotation = checkpointAnnotation
+                view.markerTintColor = .systemRed
+                view.glyphImage = UIImage(systemName: checkpointAnnotation.checkpoint.direction.systemImageName)
+                view.displayPriority = .required
+                view.canShowCallout = false
+                return view
+            }
+            if let waypointAnnotation = annotation as? RollingWaypointAnnotation {
+                let identifier = "waypoint"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: waypointAnnotation, reuseIdentifier: identifier)
+                view.annotation = waypointAnnotation
+                view.markerTintColor = .systemBlue
+                view.glyphImage = UIImage(systemName: waypointAnnotation.waypoint.category.systemImageName)
+                view.displayPriority = .defaultLow
+                view.canShowCallout = true
+                return view
+            }
+            return nil
         }
     }
 }
@@ -159,5 +174,15 @@ final class CheckpointAnnotation: NSObject, MKAnnotation {
 
     init(checkpoint: Checkpoint) {
         self.checkpoint = checkpoint
+    }
+}
+
+final class RollingWaypointAnnotation: NSObject, MKAnnotation {
+    let waypoint: RollingWaypoint
+    var coordinate: CLLocationCoordinate2D { waypoint.coordinate.coordinate }
+    var title: String? { waypoint.category.label }
+
+    init(waypoint: RollingWaypoint) {
+        self.waypoint = waypoint
     }
 }

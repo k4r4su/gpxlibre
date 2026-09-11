@@ -5,6 +5,7 @@ struct RideView: View {
     @EnvironmentObject private var settings: RideSettingsStore
     @EnvironmentObject private var session: RideSessionManager
     @EnvironmentObject private var navigationState: AppNavigationState
+    @EnvironmentObject private var waypointStore: RollingWaypointStore
     @State private var showDetourConfirmation = false
     @State private var showStatsPanel = false
 
@@ -64,6 +65,16 @@ struct RideView: View {
                         .padding(.trailing, 20)
                         .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
                 }
+            }
+
+            HStack {
+                VStack {
+                    Spacer()
+                    WaypointQuickAddButton()
+                        .padding(.leading, 20)
+                        .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
+                }
+                Spacer()
             }
 
             HStack {
@@ -129,6 +140,7 @@ struct RideView: View {
             RideMapLibreView(
                 track: track,
                 checkpoints: session.checkpoints,
+                waypoints: waypointStore.waypoints(near: track),
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,
@@ -141,6 +153,7 @@ struct RideView: View {
             RideMapView(
                 track: track,
                 checkpoints: session.checkpoints,
+                waypoints: waypointStore.waypoints(near: track),
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,

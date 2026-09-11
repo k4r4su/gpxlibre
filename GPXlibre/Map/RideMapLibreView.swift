@@ -8,6 +8,7 @@ import CoreLocation
 struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let track: GPXTrack
     let checkpoints: [Checkpoint]
+    let waypoints: [RollingWaypoint]
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -28,6 +29,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         context.coordinator.track = track
         context.coordinator.checkpoints = checkpoints
+        context.coordinator.waypoints = waypoints
         context.coordinator.onManualGesture = onManualGesture
 
         return mapView
@@ -74,6 +76,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     final class Coordinator: NSObject, MLNMapViewDelegate {
         var track: GPXTrack?
         var checkpoints: [Checkpoint] = []
+        var waypoints: [RollingWaypoint] = []
         var onManualGesture: (() -> Void)?
 
         private static let gestureReasonMask: MLNCameraChangeReason = [
@@ -104,6 +107,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             style.addLayer(detourLayer)
 
             mapView.addAnnotations(checkpoints.map(CheckpointMLNAnnotation.init))
+            mapView.addAnnotations(waypoints.map(RollingWaypointMLNAnnotation.init))
         }
 
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
@@ -112,19 +116,34 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         }
 
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
-            guard let checkpointAnnotation = annotation as? CheckpointMLNAnnotation else { return nil }
-            let identifier = "checkpoint"
+            if let checkpointAnnotation = annotation as? CheckpointMLNAnnotation {
+                return annotationView(on: mapView, identifier: "checkpoint", annotation: checkpointAnnotation, tint: .systemRed, systemImageName: checkpointAnnotation.checkpoint.direction.systemImageName, size: 34)
+            }
+            if let waypointAnnotation = annotation as? RollingWaypointMLNAnnotation {
+                return annotationView(on: mapView, identifier: "waypoint", annotation: waypointAnnotation, tint: .systemBlue, systemImageName: waypointAnnotation.waypoint.category.systemImageName, size: 28)
+            }
+            return nil
+        }
+
+        private func annotationView(
+            on mapView: MLNMapView,
+            identifier: String,
+            annotation: MLNAnnotation,
+            tint: UIColor,
+            systemImageName: String,
+            size: CGFloat
+        ) -> MLNAnnotationView {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MLNAnnotationView(reuseIdentifier: identifier)
-            view.frame = CGRect(x: 0, y: 0, width: 34, height: 34)
+            view.frame = CGRect(x: 0, y: 0, width: size, height: size)
             view.subviews.forEach { $0.removeFromSuperview() }
 
             let background = UIView(frame: view.bounds)
-            background.backgroundColor = .systemRed
+            background.backgroundColor = tint
             background.layer.cornerRadius = view.bounds.width / 2
             view.addSubview(background)
 
-            let imageView = UIImageView(frame: view.bounds.insetBy(dx: 7, dy: 7))
-            imageView.image = UIImage(systemName: checkpointAnnotation.checkpoint.direction.systemImageName)
+            let imageView = UIImageView(frame: view.bounds.insetBy(dx: size * 0.2, dy: size * 0.2))
+            imageView.image = UIImage(systemName: systemImageName)
             imageView.contentMode = .scaleAspectFit
             imageView.tintColor = .white
             view.addSubview(imageView)
@@ -140,5 +159,15 @@ final class CheckpointMLNAnnotation: NSObject, MLNAnnotation {
 
     init(checkpoint: Checkpoint) {
         self.checkpoint = checkpoint
+    }
+}
+
+final class RollingWaypointMLNAnnotation: NSObject, MLNAnnotation {
+    let waypoint: RollingWaypoint
+    var coordinate: CLLocationCoordinate2D { waypoint.coordinate.coordinate }
+    var title: String? { waypoint.category.label }
+
+    init(waypoint: RollingWaypoint) {
+        self.waypoint = waypoint
     }
 }

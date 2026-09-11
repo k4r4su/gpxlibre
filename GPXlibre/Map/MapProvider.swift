@@ -9,6 +9,7 @@ protocol MapProvider: View {
     init(
         track: GPXTrack,
         checkpoints: [Checkpoint],
+        waypoints: [RollingWaypoint],
         currentLocation: CLLocation?,
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,

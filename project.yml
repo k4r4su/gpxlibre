@@ -29,6 +29,7 @@ targets:
       - path: GPXlibre/Ride
       - path: GPXlibre/Map
       - path: GPXlibre/Offline
+      - path: GPXlibre/Waypoints
       - path: GPXlibre/Settings
       - path: GPXlibre/Onboarding
       - path: GPXlibre/Resources
@@ -46,6 +47,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSLocationWhenInUseUsageDescription: "GPXlibre affiche votre position en temps réel sur la trace pendant le suivi."
+        NSMicrophoneUsageDescription: "GPXlibre utilise le micro pour enregistrer une courte note audio optionnelle sur un point d'intérêt."
         ITSAppUsesNonExemptEncryption: false
         LSSupportsOpeningDocumentsInPlace: true
         UISupportsDocumentBrowser: false

@@ -8,6 +8,7 @@ struct GPXlibreApp: App {
     @StateObject private var rideSession: RideSessionManager
     @StateObject private var navigationState = AppNavigationState()
     @StateObject private var downloadedRegions = DownloadedRegionStore()
+    @StateObject private var waypointStore = RollingWaypointStore()
 
     init() {
         MapLibreBootstrap.configure()
@@ -27,6 +28,7 @@ struct GPXlibreApp: App {
                 .environmentObject(navigationState)
                 .environmentObject(networkMonitor)
                 .environmentObject(downloadedRegions)
+                .environmentObject(waypointStore)
                 .onOpenURL { url in
                     library.importTrack(from: url)
                 }
