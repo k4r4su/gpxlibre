@@ -11,6 +11,7 @@
 		08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */; };
 		09EA72BBF9B9CB58D56AFF62 /* NavConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13F2CBAF4F299149AB9A806 /* NavConstants.swift */; };
 		0F09A0328DBFDA0A51B784F4 /* RegionDownloadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FE91CFBDF5BB2AF127AF9A /* RegionDownloadView.swift */; };
+		10D7F0BBEF0BF955D189BA13 /* SpeedUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66DD42BC430B45DCFFCBCA5C /* SpeedUnit.swift */; };
 		11919957C972AB067F2A09C1 /* RideSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */; };
 		15D827A154219817EECEBA02 /* sample-trail.gpx in Resources */ = {isa = PBXBuildFile; fileRef = 349E83BF5DDA839A660335E0 /* sample-trail.gpx */; };
 		16318DE3CF7601A2C1F64148 /* MapLibreBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9672B6260BAAEE66466B0E69 /* MapLibreBootstrap.swift */; };
@@ -52,6 +53,7 @@
 		9186CC65C11B9307FA2EE5E1 /* GPXExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BAC69A3811CBFC850CF11EC /* GPXExporter.swift */; };
 		9D3F41FDAB5DBBF96D3A0357 /* RollingWaypoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80F0D27D6D77CD532EF2F94 /* RollingWaypoint.swift */; };
 		9E455F6B99F7D30CD1F45158 /* RideMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A6444548973E3785D1BF242 /* RideMode.swift */; };
+		9FB49F793CD05F24C2340F52 /* MapThemePreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83ABB0A48BB466F2958FEC61 /* MapThemePreset.swift */; };
 		A6A7BA1FB4E8A4D41C6F4769 /* PrecacheConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6F6ACEFE13A55FAA120D3D /* PrecacheConfirmationView.swift */; };
 		A72E159D4959780D1CB213BD /* RecordingConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A16BA2FC693F05256D5815 /* RecordingConstants.swift */; };
 		AC0BCB4E77891E51752D8988 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1D70BEA3BF0F58D230A031 /* NetworkMonitor.swift */; };
@@ -109,6 +111,7 @@
 		5C9095EDB9630DEBD3ED18DF /* MapEngineConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapEngineConstants.swift; sourceTree = "<group>"; };
 		5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookPanelView.swift; sourceTree = "<group>"; };
 		5EDDB19DD8FF6B201D24DD5C /* MapProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapProvider.swift; sourceTree = "<group>"; };
+		66DD42BC430B45DCFFCBCA5C /* SpeedUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedUnit.swift; sourceTree = "<group>"; };
 		66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMapView.swift; sourceTree = "<group>"; };
 		6B395D30C56F450B0CA73BA8 /* TileDownloadQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileDownloadQueue.swift; sourceTree = "<group>"; };
 		6BAE6181F2ABB7381FCB23B8 /* MapLoadStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLoadStatus.swift; sourceTree = "<group>"; };
@@ -116,6 +119,7 @@
 		7B9096A18F5E400501B3D925 /* TrackProjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackProjector.swift; sourceTree = "<group>"; };
 		7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedRegion.swift; sourceTree = "<group>"; };
 		7EBC2E5A5E3A9151D4632F8A /* RegionPickerMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionPickerMapView.swift; sourceTree = "<group>"; };
+		83ABB0A48BB466F2958FEC61 /* MapThemePreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapThemePreset.swift; sourceTree = "<group>"; };
 		880511AA5A6E5C4609F0B188 /* TileCacheStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCacheStore.swift; sourceTree = "<group>"; };
 		8B25E55ECA586D2964E86E1F /* RideMapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideMapLibreView.swift; sourceTree = "<group>"; };
 		8CBCA1F649C55214BD91D698 /* NominatimGeocodingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NominatimGeocodingService.swift; sourceTree = "<group>"; };
@@ -342,8 +346,10 @@
 		E56C90F25464862ADA82366D /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				83ABB0A48BB466F2958FEC61 /* MapThemePreset.swift */,
 				4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */,
 				50F6B4CC1371445701229DA1 /* SettingsView.swift */,
+				66DD42BC430B45DCFFCBCA5C /* SpeedUnit.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -474,6 +480,7 @@
 				7ACA0383980C1BA59FAA4E7D /* MapLoadStatus.swift in Sources */,
 				709399961F959D20BBBD7770 /* MapLoadWarningBannerView.swift in Sources */,
 				C33F2E8C919D2CACAB15A433 /* MapProvider.swift in Sources */,
+				9FB49F793CD05F24C2340F52 /* MapThemePreset.swift in Sources */,
 				09EA72BBF9B9CB58D56AFF62 /* NavConstants.swift in Sources */,
 				1DD982743B5BF971AA9D1D04 /* NavDestinationSearchView.swift in Sources */,
 				913E874DAD9A4368DAA6EB20 /* NavFavoritesStore.swift in Sources */,
@@ -506,6 +513,7 @@
 				49920FEA43D184809FBEDFC4 /* SettingsView.swift in Sources */,
 				E9A12DBCFAD4A61A250105ED /* SpeedLimitBadgeView.swift in Sources */,
 				C417572521DBCF33B43D3797 /* SpeedLimitService.swift in Sources */,
+				10D7F0BBEF0BF955D189BA13 /* SpeedUnit.swift in Sources */,
 				F84C59B40DA90C8B571ED115 /* TileCacheStore.swift in Sources */,
 				4F97AE5F02F6A4D695D4F3DC /* TileCacheURLProtocol.swift in Sources */,
 				701ACF9838732CCF0B6D5395 /* TileCoordinate.swift in Sources */,

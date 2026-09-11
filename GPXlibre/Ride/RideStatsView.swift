@@ -7,13 +7,15 @@ struct RideStatsBadge: View {
     let currentSpeedKmh: Double
     let action: () -> Void
 
+    @EnvironmentObject private var settings: RideSettingsStore
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Text("\(Int(currentSpeedKmh.rounded()))")
+                Text("\(settings.speedUnit.roundedValue(fromKmh: currentSpeedKmh))")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                Text("km/h")
+                Text(settings.speedUnit.label)
                     .font(.system(size: 9))
             }
             .foregroundStyle(.white)
@@ -21,7 +23,7 @@ struct RideStatsBadge: View {
             .background(.black.opacity(0.6))
             .clipShape(Circle())
         }
-        .accessibilityLabel("Vitesse \(Int(currentSpeedKmh)) km/h, toucher pour plus de mesures")
+        .accessibilityLabel("Vitesse \(settings.speedUnit.displayString(fromKmh: currentSpeedKmh)), toucher pour plus de mesures")
     }
 }
 
@@ -35,6 +37,8 @@ struct RideStatsPanel: View {
     let recordedPointsCount: Int
     let onCollapse: () -> Void
     let onEndRide: () -> Void
+
+    @EnvironmentObject private var settings: RideSettingsStore
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -55,9 +59,9 @@ struct RideStatsPanel: View {
                 }
             }
             HStack(spacing: 24) {
-                stat("Vitesse", "\(Int(currentSpeedKmh.rounded()))", unit: "km/h", emphasized: true)
-                stat("Moyenne", "\(Int(averageSpeedKmh.rounded()))", unit: "km/h")
-                stat("Max", "\(Int(maxSpeedKmh.rounded()))", unit: "km/h")
+                stat("Vitesse", "\(settings.speedUnit.roundedValue(fromKmh: currentSpeedKmh))", unit: settings.speedUnit.label, emphasized: true)
+                stat("Moyenne", "\(settings.speedUnit.roundedValue(fromKmh: averageSpeedKmh))", unit: settings.speedUnit.label)
+                stat("Max", "\(settings.speedUnit.roundedValue(fromKmh: maxSpeedKmh))", unit: settings.speedUnit.label)
             }
             HStack(spacing: 24) {
                 stat("Restant", distanceRemainingMeters.map(formattedDistance) ?? "—", unit: "")

@@ -18,6 +18,9 @@ final class RideSettingsStore: ObservableObject {
         static let speedLimitAlertThreshold = "settings.speedLimitAlertThresholdKmh"
         static let traceWidthPreset = "settings.traceWidthPreset"
         static let traceColorPreset = "settings.traceColorPreset"
+        static let mapThemePreset = "settings.mapThemePreset"
+        static let trafficEnabled = "settings.trafficEnabled"
+        static let speedUnit = "settings.speedUnit"
     }
 
     private let defaults: UserDefaults
@@ -60,6 +63,18 @@ final class RideSettingsStore: ObservableObject {
     }
     @Published var traceColorPreset: TraceColorPreset {
         didSet { defaults.set(traceColorPreset.rawValue, forKey: Keys.traceColorPreset) }
+    }
+    /// Thème carte (item #10) : "OSM standard" = automatique, sinon force clair/sombre.
+    @Published var mapThemePreset: MapThemePreset {
+        didSet { defaults.set(mapThemePreset.rawValue, forKey: Keys.mapThemePreset) }
+    }
+    /// Trafic on/off (item #11, Bloc 4).
+    @Published var trafficEnabled: Bool {
+        didSet { defaults.set(trafficEnabled, forKey: Keys.trafficEnabled) }
+    }
+    /// Unité de vitesse affichée (item #12) — ne convertit que les vitesses, pas les distances.
+    @Published var speedUnit: SpeedUnit {
+        didSet { defaults.set(speedUnit.rawValue, forKey: Keys.speedUnit) }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -106,6 +121,19 @@ final class RideSettingsStore: ObservableObject {
             traceColorPreset = preset
         } else {
             traceColorPreset = .orange
+        }
+
+        if let rawTheme = defaults.string(forKey: Keys.mapThemePreset), let preset = MapThemePreset(rawValue: rawTheme) {
+            mapThemePreset = preset
+        } else {
+            mapThemePreset = .osmStandard
+        }
+        trafficEnabled = defaults.object(forKey: Keys.trafficEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.trafficEnabled)
+        if let rawUnit = defaults.string(forKey: Keys.speedUnit), let unit = SpeedUnit(rawValue: rawUnit) {
+            speedUnit = unit
+        } else {
+            speedUnit = .kmh
         }
     }
 }

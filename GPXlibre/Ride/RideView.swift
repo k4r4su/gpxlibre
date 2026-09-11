@@ -16,15 +16,23 @@ struct RideView: View {
     @State private var is2DNorthUp = false
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Mode nuit automatique : suit le mode sombre système (lui-même basé sur l'horaire/la
-    /// luminosité ambiante quand l'utilisateur a choisi "Automatique" dans Réglages iOS).
+    /// "OSM standard" (item #10, défaut) = automatique, suit le mode sombre système (lui-même
+    /// basé sur l'horaire/la luminosité ambiante en "Automatique" iOS) ; Clair/Sombre forcent.
+    private var isNightModeActive: Bool {
+        switch settings.mapThemePreset {
+        case .osmStandard: return colorScheme == .dark
+        case .clair: return false
+        case .sombre: return true
+        }
+    }
+
     /// Épaisseur/couleur lues en direct depuis les Réglages (items #13/14) — un changement
     /// s'applique immédiatement, partout, sans recharger la trace.
     private var currentTraceAppearance: TraceAppearance {
         TraceAppearance(
             widthPreset: settings.traceWidthPreset,
             colorPreset: settings.traceColorPreset,
-            isNightMode: colorScheme == .dark
+            isNightMode: isNightModeActive
         )
     }
 

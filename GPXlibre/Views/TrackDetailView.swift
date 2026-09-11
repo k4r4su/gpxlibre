@@ -10,10 +10,16 @@ struct TrackDetailView: View {
     @State private var showPrecacheSheet = false
 
     private var traceAppearance: TraceAppearance {
-        TraceAppearance(
+        let isNightMode: Bool
+        switch settings.mapThemePreset {
+        case .osmStandard: isNightMode = colorScheme == .dark
+        case .clair: isNightMode = false
+        case .sombre: isNightMode = true
+        }
+        return TraceAppearance(
             widthPreset: settings.traceWidthPreset,
             colorPreset: settings.traceColorPreset,
-            isNightMode: colorScheme == .dark
+            isNightMode: isNightMode
         )
     }
 

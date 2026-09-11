@@ -6,8 +6,10 @@ struct SpeedLimitBadgeView: View {
     let speedLimitKmh: Int
     let isOverLimit: Bool
 
+    @EnvironmentObject private var settings: RideSettingsStore
+
     var body: some View {
-        Text("\(speedLimitKmh)")
+        Text("\(settings.speedUnit.roundedValue(fromKmh: Double(speedLimitKmh)))")
             .font(.system(size: 22, weight: .heavy, design: .rounded))
             .foregroundStyle(.black)
             .frame(width: 54, height: 54)

@@ -42,6 +42,34 @@ struct SettingsView: View {
                         Text("Cap en haut").tag(false)
                         Text("Nord en haut").tag(true)
                     }
+                    Picker("Thème", selection: $settings.mapThemePreset) {
+                        ForEach(MapThemePreset.allCases) { preset in
+                            Text(preset.label).tag(preset)
+                        }
+                    }
+                    Picker("Unité de vitesse", selection: $settings.speedUnit) {
+                        ForEach(SpeedUnit.allCases) { unit in
+                            Text(unit.label).tag(unit)
+                        }
+                    }
+                }
+
+                Section("Mode Nav") {
+                    Picker("Seuil dépassement vitesse", selection: $settings.speedLimitAlertThresholdKmh) {
+                        ForEach(NavConstants.speedLimitAlertThresholdOptionsKmh, id: \.self) { value in
+                            Text("+\(value) km/h").tag(value)
+                        }
+                    }
+                    Toggle("Guidage vocal", isOn: $settings.voiceGuidanceEnabled)
+                    if settings.voiceGuidanceEnabled {
+                        VStack(alignment: .leading) {
+                            Text("Volume")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Slider(value: $settings.voiceGuidanceVolume, in: 0...1)
+                        }
+                    }
+                    Toggle("Trafic", isOn: $settings.trafficEnabled)
                 }
 
                 Section("Trace") {
