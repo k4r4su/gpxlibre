@@ -16,6 +16,9 @@ protocol MapProvider: View {
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,
         northUp: Bool,
+        /// Vue alternative 2D nord-en-haut (Bloc 2, Mode Nav) — le cap-en-haut perspective
+        /// reste le défaut partout ; ceci force pitch 0 + nord en haut le temps du toggle.
+        is2DNorthUp: Bool,
         isManualOverrideActive: Bool,
         detourRoute: DetourRoute?,
         onManualGesture: @escaping () -> Void,

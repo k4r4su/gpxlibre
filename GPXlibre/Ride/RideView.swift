@@ -13,6 +13,16 @@ struct RideView: View {
     @State private var showEndRideSheet = false
     @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
+    @State private var is2DNorthUp = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Mode nuit automatique : suit le mode sombre système (lui-même basé sur l'horaire/la
+    /// luminosité ambiante quand l'utilisateur a choisi "Automatique" dans Réglages iOS).
+    /// Épaisseur/couleur par défaut ici (Gants-épais, orange) ; branchées sur les Réglages
+    /// utilisateur (items 13/14) au Bloc 3.
+    private var currentTraceAppearance: TraceAppearance {
+        TraceAppearance(isNightMode: colorScheme == .dark)
+    }
 
     var body: some View {
         Group {
@@ -105,6 +115,42 @@ struct RideView: View {
                             .padding(.leading, 20)
                             .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
                     }
+                    Spacer()
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    VStack {
+                        Spacer()
+                        NavReportButton()
+                            .padding(.trailing, 20)
+                            .padding(.bottom, session.navRoute != nil ? 140 : 24)
+                    }
+                }
+            }
+
+            if modeStore.mode == .nav {
+                HStack {
+                    VStack(spacing: 10) {
+                        Button {
+                            is2DNorthUp.toggle()
+                        } label: {
+                            Text(is2DNorthUp ? "3D" : "2D")
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .background(.black.opacity(0.6))
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel(is2DNorthUp ? "Revenir à la vue cap-en-haut" : "Vue 2D nord-en-haut")
+
+                        if let limit = session.currentSpeedLimitKmh {
+                            SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)
+                        }
+                        Spacer()
+                    }
+                    .padding(.leading, 12)
+                    .padding(.top, 90)
                     Spacer()
                 }
             }
@@ -246,11 +292,12 @@ struct RideView: View {
                 checkpoints: session.checkpoints,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
-                traceAppearance: TraceAppearance(),
+                traceAppearance: currentTraceAppearance,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,
                 northUp: settings.mapOrientationNorthUp,
+                is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },
@@ -266,11 +313,12 @@ struct RideView: View {
                 checkpoints: session.checkpoints,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
-                traceAppearance: TraceAppearance(),
+                traceAppearance: currentTraceAppearance,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.cameraDistanceMeters,
                 northUp: settings.mapOrientationNorthUp,
+                is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },

@@ -23,6 +23,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
     let northUp: Bool
+    let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
     let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
@@ -60,22 +61,25 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
         context.coordinator.updateTraceAppearance(traceAppearance)
+        context.coordinator.updateNightMode(traceAppearance.isNightMode)
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
 
         guard let currentLocation, !isManualOverrideActive else { return }
 
-        let heading = northUp ? 0 : headingDegrees
+        let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
+        let pitch: CGFloat = is2DNorthUp ? 0 : CGFloat(RideConstants.cameraPitchDegrees)
+        let offsetRatio = is2DNorthUp ? 0 : RideConstants.cameraCenterOffsetRatio
         let lookAheadCenter = RideMapView.lookAheadCoordinate(
             from: currentLocation.coordinate,
             headingDegrees: heading,
-            forwardDistance: cameraDistanceMeters * RideConstants.cameraCenterOffsetRatio
+            forwardDistance: cameraDistanceMeters * offsetRatio
         )
 
         let camera = MLNMapCamera(
             lookingAtCenter: lookAheadCenter,
             acrossDistance: cameraDistanceMeters,
-            pitch: CGFloat(RideConstants.cameraPitchDegrees),
+            pitch: pitch,
             heading: heading
         )
 
@@ -121,6 +125,8 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         private weak var trackCasingLayer: MLNLineStyleLayer?
         private weak var trackColorLayer: MLNLineStyleLayer?
+        private weak var rasterLayer: MLNRasterStyleLayer?
+        private var isNightMode = false
 
         private var loadWatchdog: Timer?
         private var didAttemptFallback = false
@@ -147,6 +153,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             trackCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             trackColorLayer?.lineColor = NSExpression(forConstantValue: appearance.color)
             trackColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+        }
+
+        /// Mode nuit : assombrit le fond raster OSM (pas de tuiles sombres dédiées, gratuites,
+        /// disponibles) plutôt que de changer de source — même technique que beaucoup d'apps
+        /// nav qui appliquent un filtre plutôt que d'héberger un second jeu de tuiles.
+        func updateNightMode(_ nightMode: Bool) {
+            guard nightMode != isNightMode else { return }
+            isNightMode = nightMode
+            rasterLayer?.maximumRasterBrightness = NSExpression(forConstantValue: nightMode ? 0.55 : 1.0)
+            rasterLayer?.rasterSaturation = NSExpression(forConstantValue: nightMode ? -0.4 : 0.0)
         }
 
         /// Si le style n'a pas fini de charger en `styleLoadTimeoutSeconds`, on n'attend pas
@@ -181,6 +197,12 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             loadWatchdog?.invalidate()
             print("[MapLibre] Style chargé avec succès (\(style.sources.count) source(s)).")
             onStatusChange?(.loaded)
+
+            rasterLayer = style.layer(withIdentifier: MapEngineConstants.rasterLayerIdentifier) as? MLNRasterStyleLayer
+            if traceAppearance.isNightMode {
+                isNightMode = false // force l'application au premier passage
+                updateNightMode(true)
+            }
 
             let detourSource = MLNShapeSource(identifier: MapEngineConstants.detourSourceIdentifier, shape: nil, options: nil)
             style.addSource(detourSource)

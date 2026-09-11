@@ -16,6 +16,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
     let northUp: Bool
+    let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
     /// Détour temporaire (contournement en ligne ou guidage direct) superposé à la trace
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
@@ -62,19 +63,22 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
+        mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
         guard let currentLocation, !isManualOverrideActive else { return }
 
-        let heading = northUp ? 0 : headingDegrees
+        let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
+        let pitch: CLLocationDegrees = is2DNorthUp ? 0 : RideConstants.cameraPitchDegrees
+        let offsetRatio = is2DNorthUp ? 0 : RideConstants.cameraCenterOffsetRatio
         let lookAheadCenter = Self.lookAheadCoordinate(
             from: currentLocation.coordinate,
             headingDegrees: heading,
-            forwardDistance: cameraDistanceMeters * RideConstants.cameraCenterOffsetRatio
+            forwardDistance: cameraDistanceMeters * offsetRatio
         )
 
         let camera = MKMapCamera(
             lookingAtCenter: lookAheadCenter,
             fromDistance: cameraDistanceMeters,
-            pitch: RideConstants.cameraPitchDegrees,
+            pitch: pitch,
             heading: heading
         )
 

@@ -61,6 +61,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var navRoutingTask: Task<Void, Never>?
     private let voiceAnnouncer = NavVoiceAnnouncer()
 
+    // MARK: - Limite de vitesse (Mode Nav, OSM maxspeed, silencieux si absent)
+    @Published private(set) var currentSpeedLimitKmh: Int?
+    @Published private(set) var isOverSpeedLimit = false
+    private var lastSpeedLimitLookupDate: Date?
+
     var currentManeuver: NavManeuver? {
         guard let navRoute, navRoute.maneuvers.indices.contains(currentManeuverIndex) else { return nil }
         return navRoute.maneuvers[currentManeuverIndex]
@@ -561,6 +566,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         distanceRemainingMeters = nil
         percentComplete = nil
         estimatedArrivalDate = nil
+        currentSpeedLimitKmh = nil
+        isOverSpeedLimit = false
+        lastSpeedLimitLookupDate = nil
         voiceAnnouncer.stop()
     }
 
@@ -650,5 +658,32 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             navOffRouteSinceDate = nil
         }
+
+        updateSpeedLimit(near: location.coordinate)
+        updateOverSpeedFlag()
+    }
+
+    // MARK: - Limite de vitesse
+
+    private func updateSpeedLimit(near coordinate: CLLocationCoordinate2D) {
+        let now = Date()
+        if let last = lastSpeedLimitLookupDate, now.timeIntervalSince(last) < NavConstants.speedLimitMinIntervalSeconds { return }
+        lastSpeedLimitLookupDate = now
+        Task { [weak self] in
+            guard let self else { return }
+            let speed = await SpeedLimitService.shared.lookup(near: coordinate)
+            await MainActor.run {
+                self.currentSpeedLimitKmh = speed
+                self.updateOverSpeedFlag()
+            }
+        }
+    }
+
+    private func updateOverSpeedFlag() {
+        guard let limit = currentSpeedLimitKmh else {
+            isOverSpeedLimit = false
+            return
+        }
+        isOverSpeedLimit = smoothedSpeedKmh > Double(limit + settings.speedLimitAlertThresholdKmh)
     }
 }

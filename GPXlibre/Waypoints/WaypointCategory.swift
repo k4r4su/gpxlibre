@@ -2,6 +2,9 @@ import Foundation
 
 enum WaypointCategory: String, Codable, CaseIterable, Identifiable {
     case essence, eau, bivouac, vue, danger
+    /// Ajoutés pour le signalement 1-tap Mode Nav (Bloc 2) — local uniquement, pas de
+    /// serveur de partage en v1 (voir WaypointCategoryExtensions.navReportCategories).
+    case bouchon, attention
 
     var id: String { rawValue }
 
@@ -11,7 +14,9 @@ enum WaypointCategory: String, Codable, CaseIterable, Identifiable {
         case .eau: return "Eau"
         case .bivouac: return "Bivouac"
         case .vue: return "Point de vue"
-        case .danger: return "Attention"
+        case .danger: return "Danger"
+        case .bouchon: return "Bouchon"
+        case .attention: return "Attention"
         }
     }
 
@@ -22,6 +27,8 @@ enum WaypointCategory: String, Codable, CaseIterable, Identifiable {
         case .bivouac: return "tent.fill"
         case .vue: return "binoculars.fill"
         case .danger: return "exclamationmark.triangle.fill"
+        case .bouchon: return "car.fill"
+        case .attention: return "exclamationmark.circle.fill"
         }
     }
 }

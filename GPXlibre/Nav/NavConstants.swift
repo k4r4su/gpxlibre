@@ -27,4 +27,11 @@ enum NavConstants {
     // MARK: - Favoris
 
     static let maxSavedFavorites = 8
+
+    // MARK: - Limite de vitesse (OSM maxspeed via Overpass, silencieux si absent)
+
+    static let speedLimitMinIntervalSeconds: Double = 20
+    static let speedLimitSearchRadiusMeters: Double = 25
+    static let speedLimitAlertThresholdOptionsKmh: [Int] = [5, 10, 15]
+    static let speedLimitAlertThresholdDefaultKmh = 10
 }

@@ -15,6 +15,7 @@ final class RideSettingsStore: ObservableObject {
         static let hasSeenOnboarding = "settings.hasSeenOnboarding"
         static let voiceGuidanceEnabled = "settings.voiceGuidanceEnabled"
         static let voiceGuidanceVolume = "settings.voiceGuidanceVolume"
+        static let speedLimitAlertThreshold = "settings.speedLimitAlertThresholdKmh"
     }
 
     private let defaults: UserDefaults
@@ -47,6 +48,10 @@ final class RideSettingsStore: ObservableObject {
     @Published var voiceGuidanceVolume: Double {
         didSet { defaults.set(voiceGuidanceVolume, forKey: Keys.voiceGuidanceVolume) }
     }
+    /// Seuil d'alerte dépassement de vitesse, km/h (item Réglages #8).
+    @Published var speedLimitAlertThresholdKmh: Int {
+        didSet { defaults.set(speedLimitAlertThresholdKmh, forKey: Keys.speedLimitAlertThreshold) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -78,5 +83,9 @@ final class RideSettingsStore: ObservableObject {
             ? true : defaults.bool(forKey: Keys.voiceGuidanceEnabled)
         let storedVolume = defaults.object(forKey: Keys.voiceGuidanceVolume) as? Double
         voiceGuidanceVolume = storedVolume ?? 1.0
+
+        let storedThresholdKmh = defaults.integer(forKey: Keys.speedLimitAlertThreshold)
+        speedLimitAlertThresholdKmh = NavConstants.speedLimitAlertThresholdOptionsKmh.contains(storedThresholdKmh)
+            ? storedThresholdKmh : NavConstants.speedLimitAlertThresholdDefaultKmh
     }
 }
