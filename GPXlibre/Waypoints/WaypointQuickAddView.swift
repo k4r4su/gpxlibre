@@ -16,7 +16,13 @@ struct WaypointQuickAddButton: View {
     private let hapticGenerator = UINotificationFeedbackGenerator()
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 10) {
+        // Fix "safe-area-overlays" (Bug 5, iPhone 13 Pro) : ce bouton vit en zone GAUCHE de
+        // l'écran (leftMiddleLayer) — un alignement .trailing hérité d'une ancienne position
+        // (bas-droite) faisait bondir le bouton principal vers la droite dès que la rangée de
+        // catégories, plus large, apparaissait (VStack(alignment:) aligne tous les enfants sur
+        // le bord de l'enfant le plus large). Toujours aligner relativement à la zone
+        // d'ancrage réelle, jamais un offset absolu.
+        VStack(alignment: .leading, spacing: 10) {
             if showAudioPrompt, let waypoint = lastCreatedWaypoint {
                 AudioNotePromptView(
                     isRecording: audioRecorder.isRecording,
