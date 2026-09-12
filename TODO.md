@@ -1,5 +1,30 @@
 # TODO
 
+## Itération 9 (stabilisation UI) — idées annexes notées, non traitées
+
+Consigne explicite de cette itération : "aucune nouvelle feature, si tenté d'améliorer
+autre chose, note-le ici à la place." Voici ce qui a été repéré en marge des 6 bugs
+demandés, volontairement laissé de côté :
+
+- **Chrome secondaire sous 56pt** : icône recherche (40×40), bascule 2D/3D (40×40),
+  sous-boutons de catégorie du panneau POI (48×48) sont plus petits que les boutons
+  critiques (≥56pt, déjà conformes). Le Bug 6 ne visait que les boutons critiques
+  ("gants") — uniformiser aussi ce chrome secondaire à 56pt serait un choix de design
+  à valider (risque de surcharger l'écran), pas un bug d'affichage.
+- **Bug 1 (nav-route-overlay), cause racine non isolée avec certitude** : l'ancien
+  rendu suivait déjà le patron du détour (fonctionnel), sans defect structurel trouvé.
+  Si le symptôme "route invisible" réapparaît malgré la reconstruction de ce commit, il
+  faudrait instrumenter `NavigationCoordinator`/`updateNavRouteShape` avec un compteur
+  de features pour confirmer que `source.shape` reçoit bien une géométrie non vide au
+  moment du symptôme (piste de debug, pas un fix).
+- **Validation paysage non faite cette itération** : toutes les captures de vérification
+  (grille, ancrage position) ont été prises en portrait uniquement — pas d'automatisation
+  de rotation disponible dans cet environnement. `RideOverlayLayout.landscapeSidePanelWidth`
+  existe déjà mais n'a pas été revérifiée visuellement pour cette itération.
+- **Overlay POI/paramètres "centré" (validation Bug 5)** : n'a pas pu être capturé en
+  simulateur faute d'automatisation tactile pour ouvrir la feuille de recherche/réglages ;
+  vérifié uniquement par lecture de code (alignements relatifs, pas d'offset absolu).
+
 ## Thème Relief : Option A retenue (raster OpenTopoMap), Option B non tentée
 
 **Choix assumé** : Option A (tuiles raster OpenTopoMap toutes prêtes) est implémentée et
