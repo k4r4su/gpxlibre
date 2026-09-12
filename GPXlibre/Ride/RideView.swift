@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import UIKit
 
 struct RideView: View {
     @EnvironmentObject private var library: LibraryStore
@@ -170,7 +171,9 @@ struct RideView: View {
     }
 
     /// Zone "topBar" (spec Bloc 2) : segmented Trace/Nav centré, recherche calée à droite,
-    /// puis au plus une bannière éphémère en dessous (voir activeBanner/bannerView).
+    /// puis au plus une bannière éphémère en dessous (voir activeBanner/bannerView). Cette
+    /// zone n'ignore PAS la safe area (contrairement à mapLayer) : elle évite automatiquement
+    /// l'encoche/Dynamic Island, comme n'importe quelle vue SwiftUI normale.
     private func topStackLayer(track: GPXTrack?) -> some View {
         VStack {
             HStack {
@@ -320,27 +323,41 @@ struct RideView: View {
                 }
                 Spacer()
             }
-            .padding(.top, RideOverlayLayout.topBarHeight + RideOverlayLayout.bannerHeight + RideOverlayLayout.cameraInsetMarginPoints)
+            .padding(.top, RideOverlayLayout.topBarHeight + RideOverlayLayout.bannerHeight + RideOverlayLayout.cameraInsetMarginTopPoints)
             .padding(.trailing, 12)
         }
     }
 
+    /// Point d'entrée : mesure la VRAIE safe area (encoche/Dynamic Island en haut ; tab bar +
+    /// home indicator combinés en bas) par comparaison de coordonnées GLOBALES plutôt que via
+    /// `GeometryProxy.safeAreaInsets` — cette dernière s'est avérée peu fiable ici : un
+    /// GeometryReader qui ignore lui-même la safe area (essayé dans une itération précédente
+    /// de ce fix) rapportait 0, confirmé visuellement (segmented control chevauchant
+    /// l'encoche). En laissant CE reader respecter normalement la safe area, son
+    /// `frame(in: .global).minY` est exactement la vraie marge haute, et
+    /// `écran - frame.maxY` la vraie marge basse (tab bar comprise, celle-ci étant injectée
+    /// par SwiftUI comme safe area supplémentaire pour le contenu d'un onglet de TabView).
+    /// Seul `mapLayer` ignore la safe area (voir rideContentBody) ; le reste de l'UI l'évite
+    /// normalement, comme avant ce fix.
     private func rideContent(track: GPXTrack?) -> some View {
         GeometryReader { geometry in
-            let safeArea = RideOverlayLayout.systemSafeAreaInsets
-            let contentInset = RideOverlayLayout.cameraContentInset(
-                safeAreaTop: safeArea.top,
-                safeAreaBottom: safeArea.bottom,
+            let frame = geometry.frame(in: .global)
+            let safeAreaTop = frame.minY
+            let safeAreaBottom = max(UIScreen.main.bounds.height - frame.maxY, 0)
+            let insets = RideOverlayLayout.computeMapInsets(
+                safeAreaTop: safeAreaTop,
+                safeAreaBottom: safeAreaBottom,
                 hasBottomPanel: hasBottomPanel(track: track),
+                hasBanner: activeBanner(track: track) != nil,
                 isLandscape: geometry.size.width > geometry.size.height
             )
-            rideContentBody(track: track, contentInset: contentInset)
+            rideContentBody(track: track, insets: insets)
         }
     }
 
-    private func rideContentBody(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
+    private func rideContentBody(track: GPXTrack?, insets: RideOverlayLayout.MapInsets) -> some View {
         ZStack(alignment: .bottom) {
-            mapLayer(track: track, contentInset: contentInset)
+            mapLayer(track: track, insets: insets)
                 .ignoresSafeArea()
 
             topStackLayer(track: track)
@@ -472,7 +489,7 @@ struct RideView: View {
     /// moteur actif par défaut (MapEngineConstants.active), MapKit reste intact pour
     /// comparaison sans être instancié.
     @ViewBuilder
-    private func mapLayer(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
+    private func mapLayer(track: GPXTrack?, insets: RideOverlayLayout.MapInsets) -> some View {
         switch MapEngineConstants.active {
         case .mapLibre:
             RideMapLibreView(
@@ -485,10 +502,10 @@ struct RideView: View {
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
-                cameraContentInsetTop: contentInset.top,
-                cameraContentInsetBottom: contentInset.bottom,
-                cameraContentInsetLeft: contentInset.left,
-                cameraContentInsetRight: contentInset.right,
+                cameraContentInsetTop: insets.cameraTop,
+                cameraContentInsetBottom: insets.cameraBottom,
+                cameraContentInsetLeft: insets.cameraLeft,
+                cameraContentInsetRight: insets.cameraRight,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
@@ -515,10 +532,10 @@ struct RideView: View {
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
-                cameraContentInsetTop: contentInset.top,
-                cameraContentInsetBottom: contentInset.bottom,
-                cameraContentInsetLeft: contentInset.left,
-                cameraContentInsetRight: contentInset.right,
+                cameraContentInsetTop: insets.cameraTop,
+                cameraContentInsetBottom: insets.cameraBottom,
+                cameraContentInsetLeft: insets.cameraLeft,
+                cameraContentInsetRight: insets.cameraRight,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
