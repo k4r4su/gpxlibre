@@ -265,16 +265,16 @@ struct RideView: View {
         return RoadbookPanelView.OffTrackInfo(relativeBearingDegrees: relativeBearing, distanceMeters: session.offTrackResumeDistanceMeters)
     }
 
-    /// Zone "gauche milieu" (spec Bloc 2) : waypoints rapides en Trace, 2D/3D + limite de
-    /// vitesse en Nav — jamais collé au bas de l'écran (contrairement à l'ancien layout).
+    /// Zone "gauche milieu" (spec Bloc 2) : 2D/3D + limite de vitesse en Nav — jamais collé
+    /// au bas de l'écran (contrairement à l'ancien layout). Vide en Trace depuis la
+    /// suppression du POI rapide (chore "remove-poi", itération 10) : rien ne remplace le
+    /// bouton "Point", conformément à la philosophie "moins de boutons".
     @ViewBuilder
     private var leftMiddleLayer: some View {
-        HStack {
-            VStack {
-                Spacer()
-                if modeStore.mode == .trace {
-                    WaypointQuickAddButton()
-                } else {
+        if modeStore.mode == .nav {
+            HStack {
+                VStack {
+                    Spacer()
                     VStack(spacing: 10) {
                         Button {
                             is2DNorthUp.toggle()
@@ -292,11 +292,11 @@ struct RideView: View {
                             SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)
                         }
                     }
+                    Spacer()
                 }
+                .padding(.leading, 20)
                 Spacer()
             }
-            .padding(.leading, 20)
-            Spacer()
         }
     }
 

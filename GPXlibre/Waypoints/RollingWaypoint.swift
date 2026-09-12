@@ -6,17 +6,14 @@ struct RollingWaypoint: Codable, Identifiable {
     let category: WaypointCategory
     let coordinate: CLLocationCoordinate2DCodable
     let createdAt: Date
-    /// Nom de fichier .m4a dans Waypoints/Audio/, si une note audio a été ajoutée.
-    var audioFileName: String?
     /// Trace en cours d'enregistrement au moment de la création (pour la fusion à l'export, axe recording).
     let recordedTrackID: UUID?
 
-    init(category: WaypointCategory, coordinate: CLLocationCoordinate2D, audioFileName: String? = nil, recordedTrackID: UUID?) {
+    init(category: WaypointCategory, coordinate: CLLocationCoordinate2D, recordedTrackID: UUID?) {
         self.id = UUID()
         self.category = category
         self.coordinate = CLLocationCoordinate2DCodable(coordinate)
         self.createdAt = Date()
-        self.audioFileName = audioFileName
         self.recordedTrackID = recordedTrackID
     }
 }
@@ -38,14 +35,6 @@ final class RollingWaypointStore: ObservableObject {
         return dir
     }
 
-    var audioDirectory: URL {
-        let dir = directory.appendingPathComponent("Audio", isDirectory: true)
-        if !fileManager.fileExists(atPath: dir.path) {
-            try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-        return dir
-    }
-
     private var indexFileURL: URL { directory.appendingPathComponent("waypoints.json") }
 
     init() {
@@ -58,17 +47,6 @@ final class RollingWaypointStore: ObservableObject {
         waypoints.insert(waypoint, at: 0)
         save()
         return waypoint
-    }
-
-    func attachAudio(fileName: String, to waypoint: RollingWaypoint) {
-        guard let index = waypoints.firstIndex(where: { $0.id == waypoint.id }) else { return }
-        waypoints[index].audioFileName = fileName
-        save()
-    }
-
-    func audioURL(for waypoint: RollingWaypoint) -> URL? {
-        guard let fileName = waypoint.audioFileName else { return nil }
-        return audioDirectory.appendingPathComponent(fileName)
     }
 
     func nearby(_ coordinate: CLLocationCoordinate2D, radiusMeters: Double = WaypointConstants.proximityDisplayRadiusMeters) -> [RollingWaypoint] {
