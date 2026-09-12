@@ -17,6 +17,16 @@ protocol MapProvider: View {
         currentLocation: CLLocation?,
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,
+        /// Zone visible réellement utile pour la caméra (spec "camera-inset") : exclut les
+        /// panneaux qui recouvrent la carte (segmented control en haut, roadbook/tab bar en
+        /// bas) pour que la position ne soit jamais masquée. Voir RideOverlayLayout pour le
+        /// calcul et MLNMapView.contentInset pour l'implémentation MapLibre ; MapKit
+        /// (comparaison uniquement) n'a pas d'équivalent persistant pour une caméra continue,
+        /// voir le commentaire dans RideMapView.
+        cameraContentInsetTop: Double,
+        cameraContentInsetBottom: Double,
+        cameraContentInsetLeft: Double,
+        cameraContentInsetRight: Double,
         northUp: Bool,
         /// Vue alternative 2D nord-en-haut (Bloc 2, Mode Nav) — le cap-en-haut perspective
         /// reste le défaut partout ; ceci force pitch 0 + nord en haut le temps du toggle.

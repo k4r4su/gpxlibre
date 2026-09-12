@@ -97,6 +97,7 @@
 		F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */; };
 		FAA066824132C41AD020F6A8 /* RideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5204AEC04322271B21AADF /* RideView.swift */; };
 		FD3611964B492E902B2F92DC /* TrackProjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9096A18F5E400501B3D925 /* TrackProjector.swift */; };
+		FFAD9E1E0CBCBB4BEA8FA192 /* RideOverlayLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8A9723D9DCD1AAE2B0A2A9 /* RideOverlayLayout.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,6 +120,7 @@
 		1B05894EAE37DD950673FC01 /* SharedBlockageSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageSyncService.swift; sourceTree = "<group>"; };
 		1D85D3EE795613A3D5CF17F4 /* NavGuidancePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavGuidancePanelView.swift; sourceTree = "<group>"; };
 		1DE8E0D7E7FB50D07B4E617C /* SharedBlockageSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageSyncCoordinator.swift; sourceTree = "<group>"; };
+		1F8A9723D9DCD1AAE2B0A2A9 /* RideOverlayLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideOverlayLayout.swift; sourceTree = "<group>"; };
 		2319D3A331C723DEDBD6249D /* GPXTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXTrack.swift; sourceTree = "<group>"; };
 		2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackDetailView.swift; sourceTree = "<group>"; };
 		2E6E91693E4BD31C90751CBC /* TileCacheURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCacheURLProtocol.swift; sourceTree = "<group>"; };
@@ -244,6 +246,7 @@
 				FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */,
 				A02F17CE2FFA7298E276CE0F /* RideGlovedControlsView.swift */,
 				3850C3C410BAB86CA35E1B21 /* RideMapView.swift */,
+				1F8A9723D9DCD1AAE2B0A2A9 /* RideOverlayLayout.swift */,
 				AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */,
 				C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */,
 				0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */,
@@ -615,6 +618,7 @@
 				B94CAA9252791F1D208B3C36 /* RideMapView.swift in Sources */,
 				9E455F6B99F7D30CD1F45158 /* RideMode.swift in Sources */,
 				BDCE38D5739FE8053202B793 /* RideModeSegmentedControl.swift in Sources */,
+				FFAD9E1E0CBCBB4BEA8FA192 /* RideOverlayLayout.swift in Sources */,
 				5837477CC1A63950072B5D8C /* RideSessionManager.swift in Sources */,
 				11919957C972AB067F2A09C1 /* RideSettingsStore.swift in Sources */,
 				C725513EBF028CD538ACCD7C /* RideStatsView.swift in Sources */,

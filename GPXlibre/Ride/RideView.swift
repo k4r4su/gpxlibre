@@ -65,9 +65,31 @@ struct RideView: View {
         }
     }
 
+    /// La trace/le guidage Nav occupent la zone `bottomPanel` (RoadbookPanelView /
+    /// NavGuidancePanelView) — quand c'est le cas, la caméra doit réserver cette hauteur en
+    /// plus de la tab bar (spec "camera-inset"), sinon la position se retrouve cachée dessous.
+    private func hasBottomPanel(track: GPXTrack?) -> Bool {
+        switch modeStore.mode {
+        case .trace: return session.currentCheckpoint != nil || !session.checkpoints.isEmpty
+        case .nav: return session.navRoute != nil
+        }
+    }
+
     private func rideContent(track: GPXTrack?) -> some View {
+        GeometryReader { geometry in
+            let contentInset = RideOverlayLayout.cameraContentInset(
+                safeAreaTop: geometry.safeAreaInsets.top,
+                safeAreaBottom: geometry.safeAreaInsets.bottom,
+                hasBottomPanel: hasBottomPanel(track: track),
+                isLandscape: geometry.size.width > geometry.size.height
+            )
+            rideContentBody(track: track, contentInset: contentInset)
+        }
+    }
+
+    private func rideContentBody(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
         ZStack(alignment: .bottom) {
-            mapLayer(track: track)
+            mapLayer(track: track, contentInset: contentInset)
                 .ignoresSafeArea()
 
             VStack {
@@ -417,7 +439,7 @@ struct RideView: View {
     /// moteur actif par défaut (MapEngineConstants.active), MapKit reste intact pour
     /// comparaison sans être instancié.
     @ViewBuilder
-    private func mapLayer(track: GPXTrack?) -> some View {
+    private func mapLayer(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
         switch MapEngineConstants.active {
         case .mapLibre:
             RideMapLibreView(
@@ -430,6 +452,10 @@ struct RideView: View {
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
+                cameraContentInsetTop: contentInset.top,
+                cameraContentInsetBottom: contentInset.bottom,
+                cameraContentInsetLeft: contentInset.left,
+                cameraContentInsetRight: contentInset.right,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
@@ -456,6 +482,10 @@ struct RideView: View {
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
+                cameraContentInsetTop: contentInset.top,
+                cameraContentInsetBottom: contentInset.bottom,
+                cameraContentInsetLeft: contentInset.left,
+                cameraContentInsetRight: contentInset.right,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,

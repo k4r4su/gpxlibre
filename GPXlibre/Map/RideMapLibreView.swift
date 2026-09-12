@@ -23,6 +23,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
+    /// Zone caméra utile (spec "camera-inset") — voir MapProvider et RideOverlayLayout.
+    let cameraContentInsetTop: Double
+    let cameraContentInsetBottom: Double
+    let cameraContentInsetLeft: Double
+    let cameraContentInsetRight: Double
     let northUp: Bool
     let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
@@ -54,6 +59,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onLongPress = onLongPress
         context.coordinator.armLoadWatchdog(for: mapView)
         onStatusChange(.loading)
+        context.coordinator.updateContentInset(
+            UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
+            on: mapView
+        )
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPressDetected))
         mapView.addGestureRecognizer(longPress)
@@ -82,6 +91,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
+        context.coordinator.updateContentInset(
+            UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
+            on: mapView
+        )
 
         let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
         context.coordinator.lastCameraCommandToken = cameraCommandToken
@@ -160,6 +173,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var traceAppearance = TraceAppearance()
         var lastCameraCommandToken: UUID?
         var currentTileSource: TileSource = .osmStandard
+        private var currentContentInset: UIEdgeInsets?
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
@@ -204,6 +218,15 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             isNightMode = nightMode
             rasterLayer?.maximumRasterBrightness = NSExpression(forConstantValue: nightMode ? 0.55 : 1.0)
             rasterLayer?.rasterSaturation = NSExpression(forConstantValue: nightMode ? -0.4 : 0.0)
+        }
+
+        /// Zone caméra utile (spec "camera-inset") : `centerCoordinate`/`lookingAtCenter` se
+        /// recentrent sur le rectangle INSET, pas sur la vue pleine — c'est ce qui garantit que
+        /// la position reste dans la zone visible réelle, jamais sous le roadbook/tab bar.
+        func updateContentInset(_ inset: UIEdgeInsets, on mapView: MLNMapView) {
+            guard currentContentInset != inset else { return }
+            currentContentInset = inset
+            mapView.contentInset = inset
         }
 
         /// Base partagée des points bloqués (Bloc 5) : indépendant du style (contrairement

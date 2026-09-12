@@ -19,6 +19,16 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
+    /// Zone caméra utile (spec "camera-inset") — MapKit n'a pas d'équivalent persistant de
+    /// `MLNMapView.contentInset` pour une caméra continue (`MKMapCamera`) : la seule API
+    /// d'edge-padding de MapKit (`setVisibleMapRect:edgePadding:`) est un cadrage ponctuel,
+    /// pas un suivi continu. Ces valeurs sont donc acceptées pour respecter le contrat
+    /// MapProvider mais ignorées ici — implémentation de comparaison uniquement, voir
+    /// RideMapLibreView pour le vrai comportement (moteur actif).
+    let cameraContentInsetTop: Double
+    let cameraContentInsetBottom: Double
+    let cameraContentInsetLeft: Double
+    let cameraContentInsetRight: Double
     let northUp: Bool
     let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
