@@ -4,6 +4,20 @@ import Foundation
 /// SEUL endroit qui documente les zones ; RideView ne fait qu'appliquer ce qui est décrit ici.
 /// Aucun élément flottant ne doit être positionné ailleurs que dans une zone décrite ci-dessous.
 ///
+/// ## Règle "un overlay ne pousse jamais" (fix "overlay-never-pushes", Bloc 2, it10)
+/// Cause identifiée du bug terrain ("la colonne droite décalée hors écran") : le panneau POI
+/// (supprimé, chore "remove-poi") s'insérait comme sibling dans la même VStack que le bouton
+/// qu'il partageait, dont la largeur grandissait avec le contenu — tout enfant plus étroit de
+/// cette VStack se retrouvait réaligné. Règle valable pour tout nouvel overlay custom (hors
+/// `.sheet`/`.confirmationDialog`, non-reflowing par construction) :
+/// - Un calque `ZStack` ISOLÉ, jamais un sibling dans une VStack existante qui pourrait
+///   grandir/rétrécir avec son contenu.
+/// - Position fixe, indépendante du contenu des autres zones.
+/// - Fond assombri cliquable pour fermer si l'overlay est modal.
+/// La carte "Reprendre ici" (feat "resume-at-point", Bloc 3) suit cette règle en réutilisant
+/// le mécanisme de bannière ci-dessous (`bannerZone`, déjà isolé) plutôt que d'inventer une
+/// nouvelle zone — aucun risque de reflow des colonnes bas-gauche/bas-droite/gauche-milieu.
+///
 /// Repères (portrait — device de référence iPhone 13 Pro) :
 /// ```
 /// ┌───────────────────────────────────────┐
