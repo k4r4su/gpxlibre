@@ -136,6 +136,16 @@ enum RideConstants {
 
     // MARK: - Resync hors-trace (spec "resync-hysteresis")
 
+    // MARK: - Chevrons de direction par trace (spec "per-track-settings")
+
+    /// DIRECTION_ARROW_SPACING_M — espacement par défaut des chevrons de direction le long de
+    /// la trace, réglable par trace (100 / 200 / 500 / 1000 m).
+    static let directionArrowSpacingMetersDefault: Double = 500
+    static let directionArrowSpacingMetersOptions: [Double] = [100, 200, 500, 1000]
+    /// Distance sous laquelle un point de départ personnalisé "capture" le tap sur la carte
+    /// d'aperçu (spec "Choisir le début").
+    static let customStartPickRadiusMeters: Double = 5000
+
     /// RESYNC_HYSTERESIS_S : durée stable ON trace avant reprise complète du roadbook — évite
     /// un rebond d'un seul point GPS dérivant near la trace. Voir aussi
     /// resyncMinConsecutiveStableFixes (OU logique : le premier des deux déclenche la reprise).

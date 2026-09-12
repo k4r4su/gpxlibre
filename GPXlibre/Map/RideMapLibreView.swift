@@ -35,6 +35,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
     let sharedBlockages: [SharedBlockage]
+    let chevronSpacingMeters: Double
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -91,6 +92,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
         updateUserLocationHalo(on: mapView, context: context)
+        context.coordinator.updateChevronShape(track: track, spacingMeters: chevronSpacingMeters, on: mapView)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
         context.coordinator.updateContentInset(
             UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
@@ -199,6 +201,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private weak var trackCasingLayer: MLNLineStyleLayer?
         private weak var trackColorLayer: MLNLineStyleLayer?
         private weak var rasterLayer: MLNRasterStyleLayer?
+        fileprivate weak var chevronLayerRef: MLNSymbolStyleLayer?
+        /// Clé (trackID, nombre de points, espacement) — évite tout recalcul des chevrons
+        /// tant que ni la trace ni l'espacement n'ont réellement changé (Bloc 6, performance :
+        /// "jamais de rebuild en réponse aux updates CoreLocation").
+        private var currentChevronKey: String?
         private var isNightMode = false
 
         private var loadWatchdog: Timer?
@@ -245,6 +252,58 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             guard currentContentInset != inset else { return }
             currentContentInset = inset
             mapView.contentInset = inset
+        }
+
+        /// Chevrons de direction (spec "per-track-settings") : recalculés UNIQUEMENT si la
+        /// trace ou l'espacement a changé (clé trackID+nombre de points+espacement) — jamais
+        /// à chaque frame/update de position (Bloc 6, performance).
+        func updateChevronShape(track: GPXTrack?, spacingMeters: Double, on mapView: MLNMapView) {
+            guard let style = mapView.style,
+                  let source = style.source(withIdentifier: MapEngineConstants.chevronSourceIdentifier) as? MLNShapeSource
+            else { return }
+
+            guard let track, track.points.count > 1 else {
+                if currentChevronKey != nil {
+                    currentChevronKey = nil
+                    source.shape = nil
+                }
+                return
+            }
+
+            let key = "\(track.id.uuidString)-\(track.points.count)-\(spacingMeters)"
+            guard key != currentChevronKey else { return }
+            currentChevronKey = key
+
+            let chevrons = DirectionChevronComputer.chevrons(for: track.points, spacingMeters: spacingMeters)
+            let features = chevrons.map { chevron -> MLNPointFeature in
+                let feature = MLNPointFeature()
+                feature.coordinate = chevron.coordinate
+                feature.attributes = ["bearing": chevron.bearingDegrees]
+                return feature
+            }
+            source.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /// Petit chevron plein pointant vers le HAUT au repos (0°) — `icon-rotate` tourne en
+        /// degrés horaires depuis le nord comme un cap boussole, donc l'icône doit être
+        /// dessinée pointant nord pour que `bearing` (aussi un cap boussole) corresponde
+        /// directement, sans décalage de 90°. Couleur de la trace + liseré sombre pour rester
+        /// lisible sur fond clair ET sombre — même logique que le casing de la trace.
+        static func chevronImage(color: UIColor) -> UIImage {
+            let size = CGSize(width: 22, height: 22)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { _ in
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: size.width / 2, y: size.height * 0.18))
+                path.addLine(to: CGPoint(x: size.width * 0.82, y: size.height * 0.78))
+                path.addLine(to: CGPoint(x: size.width * 0.18, y: size.height * 0.78))
+                path.close()
+                color.setFill()
+                path.fill()
+                UIColor.black.withAlphaComponent(0.55).setStroke()
+                path.lineWidth = 1.5
+                path.stroke()
+            }
         }
 
         /// Base partagée des points bloqués (Bloc 5) : indépendant du style (contrairement
@@ -374,6 +433,23 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             haloLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.black.withAlphaComponent(0.55))
             haloLayer.circleStrokeWidth = NSExpression(forConstantValue: 3)
             style.addLayer(haloLayer)
+
+            // Chevrons de direction par trace (spec "per-track-settings") : icône enregistrée
+            // une fois, source vide au chargement — remplie par updateChevronShape (diff par
+            // trace+espacement, jamais reconstruite par frame). Couleur trace + contour pour
+            // rester lisible sur n'importe quel fond, cf. le casing de la trace.
+            style.setImage(Self.chevronImage(color: traceAppearance.color), forName: MapEngineConstants.chevronIconName)
+            let chevronSource = MLNShapeSource(identifier: MapEngineConstants.chevronSourceIdentifier, shape: nil, options: nil)
+            style.addSource(chevronSource)
+            let chevronLayer = MLNSymbolStyleLayer(identifier: MapEngineConstants.chevronLayerIdentifier, source: chevronSource)
+            chevronLayer.iconImageName = NSExpression(forConstantValue: MapEngineConstants.chevronIconName)
+            chevronLayer.iconRotation = NSExpression(forKeyPath: "bearing")
+            chevronLayer.iconRotationAlignment = NSExpression(forConstantValue: "map")
+            chevronLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            chevronLayer.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            chevronLayer.minimumZoomLevel = Float(MapEngineConstants.chevronMinZoom)
+            style.addLayer(chevronLayer)
+            chevronLayerRef = chevronLayer
 
             // Détour, route Nav et "Aller à" ajoutés après la trace : ils doivent rester
             // visibles au-dessus.

@@ -42,6 +42,9 @@ protocol MapProvider: View {
         /// Base partagée des points bloqués (Bloc 5) : marqueurs triangle rouge, opacité
         /// réduite au-delà de 90 j sans reconfirmation (voir SharedBlockage.isFaded).
         sharedBlockages: [SharedBlockage],
+        /// Chevrons de direction par trace (spec "per-track-settings", DIRECTION_ARROW_SPACING_M) —
+        /// orientés selon le sens déjà appliqué à `track.points` (voir GPXTrack.reordered).
+        chevronSpacingMeters: Double,
         onManualGesture: @escaping () -> Void,
         onStatusChange: @escaping (MapLoadStatus) -> Void,
         onLongPress: @escaping (CLLocationCoordinate2D) -> Void

@@ -10,6 +10,7 @@ struct RideView: View {
     @EnvironmentObject private var waypointStore: RollingWaypointStore
     @EnvironmentObject private var modeStore: RideModeStore
     @EnvironmentObject private var sharedBlockages: SharedBlockageSyncCoordinator
+    @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @State private var showDetourConfirmation = false
     @State private var dismissedSharedBlockageAlertID: String?
     @State private var showStatsPanel = false
@@ -42,11 +43,13 @@ struct RideView: View {
     }
 
     /// Épaisseur/couleur lues en direct depuis les Réglages (items #13/14) — un changement
-    /// s'applique immédiatement, partout, sans recharger la trace.
-    private var currentTraceAppearance: TraceAppearance {
-        TraceAppearance(
-            widthPreset: settings.traceWidthPreset,
-            colorPreset: settings.traceColorPreset,
+    /// s'applique immédiatement, partout, sans recharger la trace. Override par trace (spec
+    /// "per-track-settings") si défini, sinon le réglage global reste le défaut.
+    private func traceAppearance(for track: GPXTrack?) -> TraceAppearance {
+        let overrides = track.map { trackRideSettings.settings(for: $0.id) }
+        return TraceAppearance(
+            widthPreset: overrides?.widthOverride ?? settings.traceWidthPreset,
+            colorPreset: overrides?.colorOverride ?? settings.traceColorPreset,
             isNightMode: isNightModeActive
         )
     }
@@ -56,7 +59,10 @@ struct RideView: View {
             switch modeStore.mode {
             case .trace:
                 if let track = library.selectedTrack {
-                    rideContent(track: track)
+                    // Sens A→B/B→A + départ personnalisé (spec "per-track-settings") — appliqués
+                    // UNE fois ici, jamais écrits dans le fichier GPX source ; tout le reste
+                    // (roadbook, projection, stats, rendu) continue de lire `points` normalement.
+                    rideContent(track: track.reordered(using: trackRideSettings.settings(for: track.id)))
                 } else {
                     emptyState
                 }
@@ -513,7 +519,7 @@ struct RideView: View {
                 checkpoints: session.checkpoints,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
-                traceAppearance: currentTraceAppearance,
+                traceAppearance: traceAppearance(for: track),
                 tileSource: activeTileSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
@@ -529,6 +535,7 @@ struct RideView: View {
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
                 sharedBlockages: sharedBlockages.blockages,
+                chevronSpacingMeters: track.map { trackRideSettings.settings(for: $0.id).chevronSpacingMeters } ?? RideConstants.directionArrowSpacingMetersDefault,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
@@ -543,7 +550,7 @@ struct RideView: View {
                 checkpoints: session.checkpoints,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
-                traceAppearance: currentTraceAppearance,
+                traceAppearance: traceAppearance(for: track),
                 tileSource: activeTileSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
@@ -559,6 +566,7 @@ struct RideView: View {
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
                 sharedBlockages: sharedBlockages.blockages,
+                chevronSpacingMeters: track.map { trackRideSettings.settings(for: $0.id).chevronSpacingMeters } ?? RideConstants.directionArrowSpacingMetersDefault,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in

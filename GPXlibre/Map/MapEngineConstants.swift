@@ -47,6 +47,15 @@ enum MapEngineConstants {
     static let hillshadeMaxZoomLevel = 13
     static let hillshadeExaggerationDefault: Double = 0.4
 
+    /// Chevrons de direction par trace (spec "per-track-settings") — un MLNSymbolStyleLayer
+    /// unique, données mises à jour par diff (voir RideMapLibreView.updateChevronShape),
+    /// jamais reconstruit par frame. `bearing`, propriété par feature, pilote la rotation
+    /// (icon-rotate data-driven), lisible dès le zoom 14.
+    static let chevronSourceIdentifier = "direction-chevron-source"
+    static let chevronLayerIdentifier = "direction-chevron-layer"
+    static let chevronIconName = "direction-chevron-icon"
+    static let chevronMinZoom: Double = 14
+
     /// Nom du fichier de style de secours embarqué dans le bundle (GPXlibre/Resources/),
     /// utilisé si le style principal échoue à charger (JSON invalide, timeout) — l'utilisateur
     /// doit toujours voir un fond de carte, même dégradé.

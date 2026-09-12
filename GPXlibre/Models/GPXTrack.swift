@@ -46,4 +46,25 @@ struct GPXTrack: Identifiable, Codable, Hashable {
         let lonDelta = max((maxLon - minLon) * 1.3, 0.01)
         return (center, (latDelta, lonDelta))
     }
+
+    /// Boucle détectée (spec "per-track-settings") : premier et dernier point à moins de
+    /// 200 m — dans ce cas, le sens par défaut reste l'ordre du fichier (indiqué dans l'UI),
+    /// jamais deviné autrement.
+    var isLoop: Bool {
+        guard let first = points.first, let last = points.last, points.count > 2 else { return false }
+        return RoadbookAnalyzer.distanceMeters(first.coordinate, last.coordinate) < 200
+    }
+
+    /// Trace effective (spec "per-track-settings") : sens A→B/B→A + départ personnalisé,
+    /// appliqués UNE fois ici — n'écrit JAMAIS le fichier GPX source, tout le reste du code
+    /// (roadbook, projection, stats, rendu) continue de lire `points` normalement sans savoir
+    /// qu'un réordonnancement a eu lieu.
+    func reordered(using settings: TrackRideSettings) -> GPXTrack {
+        guard settings.isReversed || settings.customStartPointIndex != nil else { return self }
+        var reordered = settings.isReversed ? points.reversed().map { $0 } : points
+        if let startIndex = settings.customStartPointIndex, reordered.indices.contains(startIndex), startIndex > 0 {
+            reordered = Array(reordered[startIndex...] + reordered[..<startIndex])
+        }
+        return GPXTrack(id: id, name: name, fileName: fileName, importDate: importDate, points: reordered, waypoints: waypoints)
+    }
 }

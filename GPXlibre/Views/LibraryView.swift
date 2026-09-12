@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var isImporting = false
     @State private var renamingTrack: GPXTrack?
     @State private var renameText = ""
+    @State private var trackToConfigure: GPXTrack?
 
     private static let gpxType = UTType(filenameExtension: "gpx") ?? .xml
 
@@ -133,10 +134,23 @@ struct LibraryView: View {
                     }
                     .tint(.orange)
                 }
+                // Swipe à DROITE (edge .leading, spec "per-track-settings") : accès direct au
+                // panneau "Paramétrer la trace" — sens, départ personnalisé, apparence, chevrons.
+                .swipeActions(edge: .leading) {
+                    Button {
+                        trackToConfigure = track
+                    } label: {
+                        Label("Paramétrer", systemImage: "slider.horizontal.3")
+                    }
+                    .tint(.blue)
+                }
             }
         }
         .navigationDestination(for: GPXTrack.self) { track in
             TrackDetailView(track: track)
+        }
+        .sheet(item: $trackToConfigure) { track in
+            TrackSettingsView(track: track)
         }
     }
 }

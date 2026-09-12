@@ -38,6 +38,10 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
     let sharedBlockages: [SharedBlockage]
+    /// Chevrons de direction (spec "per-track-settings") — comparaison uniquement, non
+    /// implémenté ici (pas de couche symbole data-driven équivalente sans complexité
+    /// disproportionnée pour un moteur non actif) ; voir RideMapLibreView.
+    let chevronSpacingMeters: Double
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
