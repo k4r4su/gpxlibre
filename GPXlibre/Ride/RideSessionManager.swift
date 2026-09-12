@@ -221,6 +221,48 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         syncSharedBlockagesIfNeeded()
     }
 
+    /// Bascule Trace ↔ Nav OU retour d'onglet SANS repartir de zéro (spec "camera-mode-stability") —
+    /// `start(track:)` remettait `currentBucketIndex` à 0 (palier de zoom le plus rapproché) et
+    /// vidait l'historique de vitesse à CHAQUE appel, y compris pour un simple aller-retour
+    /// Biblio→Ride ou Trace→Nav : c'était la cause du "le zoom change drastiquement" remonté du
+    /// terrain. Ici, seul ce qui dépend réellement de la trace active est recalculé (checkpoints,
+    /// distance cumulée, état hors-trace) ; le zoom (manuel ou auto), l'historique de vitesse, les
+    /// statistiques de sortie et l'enregistrement en cours restent intacts. La caméra elle-même
+    /// n'a rien de spécial à faire : elle continue de suivre `currentLocation` avec la même
+    /// `cameraDistanceMeters` qu'avant, donc "conservée à l'identique" tombe naturellement de ne
+    /// plus réinitialiser le palier de zoom.
+    func switchMode(track: GPXTrack?) {
+        self.track = track
+
+        if let track {
+            trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+            rebuildCheckpoints()
+            resetBlockedPathState()
+            distanceRemainingMeters = track.totalDistanceMeters
+            percentComplete = 0
+
+            if recordingTrackID != track.id {
+                recordedPoints = []
+                recordedPointsCount = 0
+                recordingTrackID = track.id
+                lastRecordedLocation = nil
+                lastRecordedDate = nil
+            }
+        } else {
+            trackCumulativeDistances = []
+            checkpoints = []
+        }
+
+        if !isActive {
+            // Session pas encore active (jamais démarrée) — même démarrage que start(track:).
+            isActive = true
+            manager.requestWhenInUseAuthorization()
+            manager.startUpdatingLocation()
+            applyIdleTimerSetting()
+        }
+        syncSharedBlockagesIfNeeded()
+    }
+
     /// Synchro Bloc 5 : "une fois par jour + à chaque lancement" — déclenchée ici (ouverture
     /// de l'onglet Ride) et à chaque mise à jour de position tant qu'aucune trace n'est
     /// chargée (Mode Nav), le garde-fou anti-rafale étant porté par le coordinateur lui-même.

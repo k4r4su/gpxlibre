@@ -423,7 +423,9 @@ struct RideView: View {
         }
         .onChange(of: navigationState.selectedTab) { tab in
             if tab == .ride {
-                session.start(track: modeStore.mode == .trace ? track : nil)
+                // switchMode (pas start) : un simple retour d'onglet ne doit jamais réinitialiser
+                // le zoom (spec "camera-mode-stability", Bloc 5 — "pas de fit-bounds non désiré").
+                session.switchMode(track: modeStore.mode == .trace ? track : nil)
             } else {
                 session.stop()
             }
@@ -432,9 +434,9 @@ struct RideView: View {
             switch newMode {
             case .trace:
                 session.stopNav()
-                session.start(track: track)
+                session.switchMode(track: track)
             case .nav:
-                session.start(track: nil)
+                session.switchMode(track: nil)
             }
         }
         .onChange(of: settings.turnThresholdDegrees) { _ in
