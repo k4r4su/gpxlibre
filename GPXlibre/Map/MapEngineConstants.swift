@@ -41,6 +41,11 @@ enum MapEngineConstants {
     }
     static let goToSourceIdentifier = "goto-source"
     static let goToLayerIdentifier = "goto-layer"
+    static let resumeRouteSourceIdentifier = "resume-route-source"
+    static let resumeRouteLayerIdentifier = "resume-route-layer"
+    static let resumeRouteCasingLayerIdentifier = "resume-route-layer-casing"
+    static let resumePinSourceIdentifier = "resume-pin-source"
+    static let resumePinLayerIdentifier = "resume-pin-layer"
     /// Halo de contraste derrière le point de position natif (spec "fab-contrast") — même
     /// idée que le casing de la trace : un disque qui ressort sur fond clair ET sur fond
     /// sombre, indépendant du point natif lui-même (qui reste géré par MapLibre).

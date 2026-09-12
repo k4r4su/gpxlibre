@@ -37,6 +37,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
+    let resumeGuidance: ResumeGuidance?
     let sharedBlockages: [SharedBlockage]
     /// Chevrons de direction (spec "per-track-settings") — comparaison uniquement, non
     /// implémenté ici (pas de couche symbole data-driven équivalente sans complexité
@@ -45,6 +46,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
+    let onTrackTap: (CLLocationCoordinate2D, Double) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -68,6 +70,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
 
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onLongPress = onLongPress
+        context.coordinator.onTrackTap = onTrackTap
         let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.gestureDetected))
         pinch.delegate = context.coordinator
         mapView.addGestureRecognizer(pinch)
@@ -76,6 +79,11 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         mapView.addGestureRecognizer(pan)
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPressDetected))
         mapView.addGestureRecognizer(longPress)
+        // Bloc 3 "resume-at-point" — implémentation de comparaison (MapLibre reste le moteur
+        // testé) : un simple tap, sans conflit avec le double-tap-zoom natif de MapKit
+        // (nombre de taps différent, pas besoin du require(toFail:) documenté côté MapLibre).
+        let trackTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.trackTapDetected))
+        mapView.addGestureRecognizer(trackTap)
 
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
@@ -112,6 +120,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         syncGoToOverlay(on: mapView, context: context)
         syncReliefOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
+        updateResumeOverlay(on: mapView, context: context)
         syncSharedBlockageAnnotations(on: mapView, context: context)
         mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
 
@@ -209,6 +218,29 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         mapView.addOverlay(overlay)
     }
 
+    /// "Reprendre la trace ici" (Bloc 3, comparaison) — pin toujours visible (même en mode
+    /// dégradé), tracé pointillé bleu seulement si une route a été calculée.
+    private func updateResumeOverlay(on mapView: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        if let existing = coordinator.resumeOverlay {
+            mapView.removeOverlay(existing)
+            coordinator.resumeOverlay = nil
+        }
+        if let existingPin = coordinator.resumePinAnnotation {
+            mapView.removeAnnotation(existingPin)
+            coordinator.resumePinAnnotation = nil
+        }
+        guard let resumeGuidance else { return }
+        let pin = ResumePinAnnotation(coordinate: resumeGuidance.pinCoordinate)
+        mapView.addAnnotation(pin)
+        coordinator.resumePinAnnotation = pin
+
+        guard resumeGuidance.routeCoordinates.count > 1 else { return }
+        let overlay = ResumePolyline(coordinates: resumeGuidance.routeCoordinates, count: resumeGuidance.routeCoordinates.count)
+        coordinator.resumeOverlay = overlay
+        mapView.addOverlay(overlay)
+    }
+
     /// Base partagée des points bloqués (Bloc 5) — implémentation de comparaison, même
     /// contrat que côté MapLibre (voir RideMapLibreView.syncSharedBlockageAnnotations).
     private func syncSharedBlockageAnnotations(on mapView: MKMapView, context: Context) {
@@ -247,6 +279,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var onManualGesture: (() -> Void)?
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
+        var onTrackTap: ((CLLocationCoordinate2D, Double) -> Void)?
         var detourOverlay: DetourPolyline?
         var traceAppearance = TraceAppearance()
         var currentTileSource: TileSource = .osmStandard
@@ -261,6 +294,8 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         var currentGoToComputedAt: Date?
         var currentSharedBlockages: [SharedBlockage] = []
         var sharedBlockageAnnotations: [SharedBlockageAnnotation] = []
+        var resumeOverlay: ResumePolyline?
+        var resumePinAnnotation: ResumePinAnnotation?
 
         @objc func gestureDetected(_ gesture: UIGestureRecognizer) {
             guard gesture.state == .began || gesture.state == .changed else { return }
@@ -272,6 +307,18 @@ struct RideMapView: UIViewRepresentable, MapProvider {
             let point = gesture.location(in: mapView)
             let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
             onLongPress?(coordinate)
+        }
+
+        /// Bloc 3 "resume-at-point" (comparaison) — MapKit n'a pas d'équivalent direct de
+        /// `metersPerPointAtLatitude(_:)` : mesure la distance réelle entre deux points-écran
+        /// voisins pour en déduire l'échelle courante, valable à tout niveau de zoom.
+        @objc func trackTapDetected(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let mapView = gesture.view as? MKMapView else { return }
+            let point = gesture.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            let offsetCoordinate = mapView.convert(CGPoint(x: point.x + 1, y: point.y), toCoordinateFrom: mapView)
+            let metersPerPoint = RoadbookAnalyzer.distanceMeters(coordinate, offsetCoordinate)
+            onTrackTap?(coordinate, metersPerPoint * RideConstants.resumeTapToleranceScreenPoints)
         }
 
         func gestureRecognizer(
@@ -316,6 +363,15 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 renderer.lineDashPattern = [10, 8]
                 return renderer
             }
+            if let resume = overlay as? ResumePolyline {
+                // "Reprendre ici" (Bloc 3) : bleu pointillé distinct de la trace, du détour
+                // (rouge) et de "Aller à" (cyan).
+                let renderer = MKPolylineRenderer(polyline: resume)
+                renderer.strokeColor = .systemBlue
+                renderer.lineWidth = traceAppearance.detourLineWidth
+                renderer.lineDashPattern = [8, 4]
+                return renderer
+            }
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor.systemOrange
@@ -351,6 +407,17 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 view.canShowCallout = true
                 return view
             }
+            if let resumePin = annotation as? ResumePinAnnotation {
+                let identifier = "resumePin"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: resumePin, reuseIdentifier: identifier)
+                view.annotation = resumePin
+                view.markerTintColor = .systemBlue
+                view.glyphImage = UIImage(systemName: "mappin")
+                view.displayPriority = .required
+                view.canShowCallout = false
+                return view
+            }
             if let sharedBlockageAnnotation = annotation as? SharedBlockageAnnotation {
                 let identifier = "sharedBlockage"
                 let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
@@ -383,6 +450,19 @@ final class NavRoutePolyline: MKPolyline {}
 /// "Aller à" universel (Bloc 4) — pointillés cyan, jamais confondu avec la trace, la route
 /// Nav ou le détour.
 final class GoToPolyline: MKPolyline {}
+
+/// "Reprendre la trace ici" (Bloc 3) — pointillés bleus, jamais confondus avec la trace, le
+/// détour (rouge) ou "Aller à" (cyan).
+final class ResumePolyline: MKPolyline {}
+
+final class ResumePinAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    var title: String? { "Reprendre ici" }
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
 
 final class CheckpointAnnotation: NSObject, MKAnnotation {
     let checkpoint: Checkpoint

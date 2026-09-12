@@ -39,6 +39,10 @@ protocol MapProvider: View {
         /// "Aller à" universel (Bloc 4) : guidage parallèle, jamais un remplacement de la
         /// trace ou de la route Nav — toujours en pointillés cyan.
         goToGuidance: GoToGuidance?,
+        /// "Reprendre la trace ici" (Bloc 3, it10) : pin + route (ou vol d'oiseau dégradé)
+        /// vers un point tapé plus loin sur la trace — toujours en pointillés bleus, distinct
+        /// de la trace, du détour (rouge) et de "Aller à" (cyan).
+        resumeGuidance: ResumeGuidance?,
         /// Base partagée des points bloqués (Bloc 5) : marqueurs triangle rouge, opacité
         /// réduite au-delà de 90 j sans reconfirmation (voir SharedBlockage.isFaded).
         sharedBlockages: [SharedBlockage],
@@ -47,7 +51,12 @@ protocol MapProvider: View {
         chevronSpacingMeters: Double,
         onManualGesture: @escaping () -> Void,
         onStatusChange: @escaping (MapLoadStatus) -> Void,
-        onLongPress: @escaping (CLLocationCoordinate2D) -> Void
+        onLongPress: @escaping (CLLocationCoordinate2D) -> Void,
+        /// Tap simple sur la carte (Bloc 3) — coordonnée tapée + tolérance déjà convertie en
+        /// mètres (dépend du zoom courant, voir `MLNMapView.metersPerPointAtLatitude(_:)`).
+        /// La décision "est-ce assez près de la trace pour proposer une reprise ?" reste dans
+        /// RideView (comme pour `onLongPress`), jamais dupliquée ici.
+        onTrackTap: @escaping (CLLocationCoordinate2D, Double) -> Void
     )
 }
 

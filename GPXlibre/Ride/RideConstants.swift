@@ -167,6 +167,15 @@ enum RideConstants {
 
     static let detourRoutingTimeoutSeconds: Double = 12
 
+    // MARK: - "Reprendre la trace ici" (feat "resume-at-point", Bloc 3, it10)
+
+    /// Tolérance de tap sur la trace (points écran, ~30-40 pt demandés) — convertie en mètres
+    /// au moment du tap via `MLNMapView.metersPerPointAtLatitude(_:)`, donc valable à tout
+    /// niveau de zoom.
+    static let resumeTapToleranceScreenPoints: Double = 36
+    /// Jonction considérée atteinte (spec explicite "< 30 m") — reprise normale du fil.
+    static let resumeJunctionDistanceMeters: Double = 30
+
     /// API publique gratuite de démonstration OSRM — pas de clé, usage raisonnable uniquement.
     /// À remplacer par une instance auto-hébergée si le volume d'usage grandit (cf. doc OSRM).
     static let osrmPublicBaseURL = "https://router.project-osrm.org"

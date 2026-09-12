@@ -34,11 +34,13 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let cameraCommandToken: UUID?
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
+    let resumeGuidance: ResumeGuidance?
     let sharedBlockages: [SharedBlockage]
     let chevronSpacingMeters: Double
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
+    let onTrackTap: (CLLocationCoordinate2D, Double) -> Void
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON(source: tileSource))
@@ -58,6 +60,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
+        context.coordinator.onTrackTap = onTrackTap
         context.coordinator.armLoadWatchdog(for: mapView)
         onStatusChange(.loading)
         context.coordinator.updateContentInset(
@@ -68,6 +71,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPressDetected))
         mapView.addGestureRecognizer(longPress)
 
+        // Tap simple sur la trace (Bloc 3, "resume-at-point") : notre propre reconnaisseur
+        // bloquerait par défaut ceux intégrés à MLNMapView (double-tap zoom, sélection
+        // d'annotation) — pattern documenté dans MLNMapView.h, `require(toFail:)` sur chacun
+        // des UITapGestureRecognizer déjà présents pour ne jamais leur voler le geste.
+        let trackTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.trackTapDetected))
+        for recognizer in mapView.gestureRecognizers ?? [] where recognizer is UITapGestureRecognizer {
+            trackTap.require(toFail: recognizer)
+        }
+        mapView.addGestureRecognizer(trackTap)
+
         return mapView
     }
 
@@ -75,6 +88,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
+        context.coordinator.onTrackTap = onTrackTap
 
         if context.coordinator.currentTileSource != tileSource {
             // Changement de thème carte (#10) : source raster différente (Relief =
@@ -91,6 +105,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
+        updateResumeShape(on: mapView, context: context)
         updateUserLocationHalo(on: mapView, context: context)
         context.coordinator.updateChevronShape(track: track, spacingMeters: chevronSpacingMeters, on: mapView)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
@@ -134,6 +149,32 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         }
         let coordinates = goToGuidance.coordinates
         source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
+    }
+
+    /// "Reprendre la trace ici" (Bloc 3) — mutation de `.shape` uniquement (même patron que
+    /// le détour/la route Nav), jamais de reconstruction de couche. Le pin reste visible même
+    /// en mode dégradé (pas de route calculée, `routeCoordinates` vide) ; seul le tracé
+    /// pointillé disparaît dans ce cas.
+    private func updateResumeShape(on mapView: MLNMapView, context: Context) {
+        guard let style = mapView.style,
+              let routeSource = style.source(withIdentifier: MapEngineConstants.resumeRouteSourceIdentifier) as? MLNShapeSource,
+              let pinSource = style.source(withIdentifier: MapEngineConstants.resumePinSourceIdentifier) as? MLNShapeSource
+        else { return }
+
+        guard let resumeGuidance else {
+            routeSource.shape = nil
+            pinSource.shape = nil
+            return
+        }
+
+        if resumeGuidance.routeCoordinates.count > 1 {
+            routeSource.shape = MLNPolyline(coordinates: resumeGuidance.routeCoordinates, count: UInt(resumeGuidance.routeCoordinates.count))
+        } else {
+            routeSource.shape = nil
+        }
+        let pin = MLNPointAnnotation()
+        pin.coordinate = resumeGuidance.pinCoordinate
+        pinSource.shape = pin
     }
 
     /// Halo de contraste (spec "fab-contrast") — même principe que le casing de la trace :
@@ -194,6 +235,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
+        var onTrackTap: ((CLLocationCoordinate2D, Double) -> Void)?
 
         private weak var trackCasingLayer: MLNLineStyleLayer?
         private weak var trackColorLayer: MLNLineStyleLayer?
@@ -201,6 +243,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private weak var navRouteColorLayer: MLNLineStyleLayer?
         private weak var detourLayerRef: MLNLineStyleLayer?
         private weak var goToLayerRef: MLNLineStyleLayer?
+        private weak var resumeRouteCasingLayer: MLNLineStyleLayer?
+        private weak var resumeRouteColorLayer: MLNLineStyleLayer?
+        private weak var resumePinLayerRef: MLNCircleStyleLayer?
         private weak var rasterLayer: MLNRasterStyleLayer?
         fileprivate weak var chevronLayerRef: MLNSymbolStyleLayer?
         /// Clé (trackID, nombre de points, espacement) — évite tout recalcul des chevrons
@@ -224,6 +269,18 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             onLongPress?(coordinate)
         }
 
+        /// Bloc 3 "resume-at-point" : la coordonnée SEULE ne suffit pas à décider si le tap
+        /// est "sur la trace" — la tolérance en points-écran dépend du zoom courant, convertie
+        /// ici en mètres via `metersPerPointAtLatitude(_:)` (le test de proximité à la trace
+        /// reste dans RideView, comme pour `onLongPress` — pas de décision dupliquée ici).
+        @objc func trackTapDetected(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let mapView = gesture.view as? MLNMapView else { return }
+            let point = gesture.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            let toleranceMeters = mapView.metersPerPoint(atLatitude: coordinate.latitude) * RideConstants.resumeTapToleranceScreenPoints
+            onTrackTap?(coordinate, toleranceMeters)
+        }
+
         /// Les propriétés de style MapLibre sont mutables en direct (contrairement aux
         /// MKOverlayRenderer de MapKit, mis en cache) : pas besoin de retirer/recréer la
         /// couche pour appliquer un nouveau réglage — Bloc 3, "appliqué en direct".
@@ -242,6 +299,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             navRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
             detourLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
             goToLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+            // "Reprendre ici" (Bloc 3) : même classe de poids visuel que le détour.
+            resumeRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
+            resumeRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
+            resumeRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
         }
 
         /// Mode nuit : assombrit le fond raster OSM (pas de tuiles sombres dédiées, gratuites,
@@ -426,6 +487,36 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             goToLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
             goToLayer.lineDashPattern = NSExpression(forConstantValue: [6, 6])
             goToLayerRef = goToLayer
+
+            // "Reprendre la trace ici" (Bloc 3) : bleu pointillé distinct de la trace, du
+            // détour (rouge) et de "Aller à" (cyan) — même construction casing+couleur que
+            // la trace/route Nav, sur sa propre source (un recalcul ne fait que remplacer
+            // .shape, voir updateResumeShape). Pin séparé (cercle) : reste visible même en
+            // mode dégradé, quand routeCoordinates est vide (pas de réseau).
+            let resumeRouteSource = MLNShapeSource(identifier: MapEngineConstants.resumeRouteSourceIdentifier, shape: nil, options: nil)
+            style.addSource(resumeRouteSource)
+            let resumeCasingLayer = MLNLineStyleLayer(identifier: MapEngineConstants.resumeRouteCasingLayerIdentifier, source: resumeRouteSource)
+            resumeCasingLayer.lineColor = NSExpression(forConstantValue: traceAppearance.casingColor)
+            resumeCasingLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.casingWidth)
+            style.addLayer(resumeCasingLayer)
+            resumeRouteCasingLayer = resumeCasingLayer
+
+            let resumeColorLayer = MLNLineStyleLayer(identifier: MapEngineConstants.resumeRouteLayerIdentifier, source: resumeRouteSource)
+            resumeColorLayer.lineColor = NSExpression(forConstantValue: UIColor.systemBlue)
+            resumeColorLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.detourLineWidth)
+            resumeColorLayer.lineDashPattern = NSExpression(forConstantValue: [8, 4])
+            style.addLayer(resumeColorLayer)
+            resumeRouteColorLayer = resumeColorLayer
+
+            let resumePinSource = MLNShapeSource(identifier: MapEngineConstants.resumePinSourceIdentifier, shape: nil, options: nil)
+            style.addSource(resumePinSource)
+            let resumePinLayer = MLNCircleStyleLayer(identifier: MapEngineConstants.resumePinLayerIdentifier, source: resumePinSource)
+            resumePinLayer.circleRadius = NSExpression(forConstantValue: 9)
+            resumePinLayer.circleColor = NSExpression(forConstantValue: UIColor.systemBlue)
+            resumePinLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            resumePinLayer.circleStrokeWidth = NSExpression(forConstantValue: 2)
+            style.addLayer(resumePinLayer)
+            resumePinLayerRef = resumePinLayer
 
             if let track, track.points.count > 1 {
                 let trackCoordinates = track.points.map(\.coordinate)

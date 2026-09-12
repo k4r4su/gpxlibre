@@ -1,5 +1,19 @@
 # TODO
 
+## Itération 10 — idées annexes notées, non traitées
+
+- **Test "sans réseau" pour resume-at-point non fiable à écrire tel quel** :
+  `RideSessionManager.requestResume` dégrade honnêtement (pin + vol d'oiseau, message clair)
+  quand `networkMonitor.isReachable == false`, mais le simulateur a un vrai accès réseau et
+  `NetworkMonitor` s'appuie sur `NWPathMonitor` (pas d'état forçable depuis un test). Pour
+  tester ce chemin de façon déterministe, il faudrait extraire un petit protocole
+  `NetworkReachability` (`var isReachable: Bool`) que `NetworkMonitor` implémenterait, et
+  typer `RideSessionManager.networkMonitor`/`NavRoutingService.route(networkMonitor:)` sur ce
+  protocole plutôt que la classe concrète — repoussé cette itération (pas demandé, risque de
+  toucher plusieurs fichiers pour un seul test). Le test actuel
+  (`ResumeGuidanceTests.testRequestResumeStartsUnroutedBeforeAnyNetworkResponse`) vérifie à la
+  place que le mode "non routé" est garanti tant qu'aucune réponse réseau n'est arrivée.
+
 ## Itération 9 (stabilisation UI) — idées annexes notées, non traitées
 
 Consigne explicite de cette itération : "aucune nouvelle feature, si tenté d'améliorer

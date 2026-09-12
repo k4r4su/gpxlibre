@@ -91,6 +91,7 @@ struct RideView: View {
         case mapLoadError(String)
         case blockedPath
         case detour(DetourRoute)
+        case resumeGuidance(ResumeGuidance)
         case goTo(GoToGuidance)
         case sharedBlockageAlert(SharedBlockage)
         case navChooseDestination
@@ -104,6 +105,7 @@ struct RideView: View {
         case .trace:
             if session.isBlockedBannerVisible { return .blockedPath }
             if let detour = session.detourRoute { return .detour(detour) }
+            if let resume = session.resumeGuidance { return .resumeGuidance(resume) }
             if let guidance = session.goToGuidance { return .goTo(guidance) }
             if let alert = nearbySharedBlockageAlert(track: track) { return .sharedBlockageAlert(alert) }
             return nil
@@ -130,6 +132,16 @@ struct RideView: View {
             )
         case .detour(let detour):
             DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
+        case .resumeGuidance(let guidance):
+            ResumeGuidanceCardView(
+                guidance: guidance,
+                isRequesting: session.isRequestingResume,
+                routingError: session.resumeRoutingError,
+                birdDistanceMeters: session.currentLocation.map { RoadbookAnalyzer.distanceMeters($0.coordinate, guidance.pinCoordinate) },
+                relativeBearingDegrees: resumeRelativeBearingDegrees(to: guidance.pinCoordinate),
+                onConfirm: { session.confirmResume() },
+                onCancel: { session.cancelResume() }
+            )
         case .goTo(let guidance):
             GoToStatusPillView(
                 guidance: guidance,
@@ -263,6 +275,14 @@ struct RideView: View {
         let targetBearing = RoadbookAnalyzer.bearing(from: currentLocation.coordinate, to: resumeCoordinate)
         let relativeBearing = RoadbookAnalyzer.signedAngleDifference(from: session.headingDegrees, to: targetBearing)
         return RoadbookPanelView.OffTrackInfo(relativeBearingDegrees: relativeBearing, distanceMeters: session.offTrackResumeDistanceMeters)
+    }
+
+    /// Cap relatif vers le pin "Reprendre ici" (Bloc 3, mode dégradé sans route) — même
+    /// calcul que `offTrackPanelInfo`, réutilisé pour rester cohérent visuellement.
+    private func resumeRelativeBearingDegrees(to pin: CLLocationCoordinate2D) -> Double? {
+        guard let currentLocation = session.currentLocation else { return nil }
+        let targetBearing = RoadbookAnalyzer.bearing(from: currentLocation.coordinate, to: pin)
+        return RoadbookAnalyzer.signedAngleDifference(from: session.headingDegrees, to: targetBearing)
     }
 
     /// Zone "gauche milieu" (spec Bloc 2) : 2D/3D + limite de vitesse en Nav — jamais collé
@@ -546,6 +566,7 @@ struct RideView: View {
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
+                resumeGuidance: session.resumeGuidance,
                 sharedBlockages: sharedBlockages.blockages,
                 chevronSpacingMeters: track.map { trackRideSettings.settings(for: $0.id).chevronSpacingMeters } ?? RideConstants.directionArrowSpacingMetersDefault,
                 onManualGesture: { session.registerManualGesture() },
@@ -554,6 +575,9 @@ struct RideView: View {
                     pendingGoToCoordinate = coordinate
                     pendingGoToLabel = "Point sur la carte"
                     showGoToActionSheet = true
+                },
+                onTrackTap: { coordinate, toleranceMeters in
+                    handleTrackTap(track: track, coordinate: coordinate, toleranceMeters: toleranceMeters)
                 }
             )
         case .mapKit:
@@ -577,6 +601,7 @@ struct RideView: View {
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
+                resumeGuidance: session.resumeGuidance,
                 sharedBlockages: sharedBlockages.blockages,
                 chevronSpacingMeters: track.map { trackRideSettings.settings(for: $0.id).chevronSpacingMeters } ?? RideConstants.directionArrowSpacingMetersDefault,
                 onManualGesture: { session.registerManualGesture() },
@@ -585,9 +610,26 @@ struct RideView: View {
                     pendingGoToCoordinate = coordinate
                     pendingGoToLabel = "Point sur la carte"
                     showGoToActionSheet = true
+                },
+                onTrackTap: { coordinate, toleranceMeters in
+                    handleTrackTap(track: track, coordinate: coordinate, toleranceMeters: toleranceMeters)
                 }
             )
         }
+    }
+
+    /// Bloc 3 "resume-at-point" : décision "est-ce assez près de la trace ?" centralisée ici
+    /// (comme pour `onLongPress`), jamais dupliquée dans les moteurs de carte. Un seul
+    /// guidage à la fois — retaper pendant qu'un guidage existe déjà est ignoré (annuler
+    /// d'abord). Trace-only : sans objet en Mode Nav (pas de trace chargée).
+    private func handleTrackTap(track: GPXTrack?, coordinate: CLLocationCoordinate2D, toleranceMeters: Double) {
+        guard modeStore.mode == .trace, let track, track.points.count > 1, session.resumeGuidance == nil else { return }
+        let cumulative = TrackProjector.cumulativeDistances(for: track.points)
+        guard let projection = TrackProjector.project(coordinate, onto: track.points, cumulativeDistances: cumulative),
+              projection.distanceToTrackMeters <= toleranceMeters,
+              let pin = TrackProjector.coordinate(in: track.points, cumulativeDistances: cumulative, atCumulativeDistance: projection.cumulativeDistanceMeters)
+        else { return }
+        session.requestResume(pinCoordinate: pin, pinCumulativeDistanceMeters: projection.cumulativeDistanceMeters)
     }
 
     private var emptyState: some View {

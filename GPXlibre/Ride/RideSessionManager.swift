@@ -37,6 +37,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var isRequestingDetour = false
     @Published private(set) var detourRequestFailed = false
 
+    // MARK: - "Reprendre la trace ici" (feat "resume-at-point", Bloc 3, it10) — guidage
+    // parallèle vers un point tapé plus loin sur la trace, jamais une altération de celle-ci.
+    @Published private(set) var resumeGuidance: ResumeGuidance?
+    @Published private(set) var isRequestingResume = false
+    @Published private(set) var resumeRoutingError: String?
+    private var resumeTask: Task<Void, Never>?
+
     // MARK: - Mesures en cours
     @Published private(set) var averageSpeedKmh: Double = 0
     @Published private(set) var maxSpeedKmh: Double = 0
@@ -227,6 +234,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             trackCumulativeDistances = []
             checkpoints = []
+            // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
+            // purge tout guidage en cours, jamais laissé orphelin.
+            resumeTask?.cancel()
+            resumeGuidance = nil
         }
 
         manager.requestWhenInUseAuthorization()
@@ -265,6 +276,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             trackCumulativeDistances = []
             checkpoints = []
+            // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
+            // purge tout guidage en cours, jamais laissé orphelin.
+            resumeTask?.cancel()
+            resumeGuidance = nil
         }
 
         if !isActive {
@@ -329,6 +344,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         offTrackResumeDistanceMeters = nil
         onTrackStableSinceDate = nil
         onTrackStableFixCount = 0
+        resumeTask?.cancel()
+        resumeGuidance = nil
+        isRequestingResume = false
+        resumeRoutingError = nil
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
@@ -367,7 +386,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 
-    private func handle(location: CLLocation) {
+    /// `internal` plutôt que `private` uniquement pour la testabilité (appelé directement
+    /// par les tests de la state machine "resume-at-point" — le vrai chemin de production
+    /// passe toujours par `locationManager(_:didUpdateLocations:)`, inchangé).
+    func handle(location: CLLocation) {
         currentLocation = location
 
         let speedMps = max(location.speed, 0)
@@ -541,6 +563,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// n'intervient qu'après une période stable ON trace (hystérésis), et reprend TOUJOURS à
     /// l'index courant ou plus loin — jamais de rattrapage des checkpoints déjà passés.
     private func updateRoadbookProgress(from location: CLLocation, projection: TrackProjector.Projection?) {
+        // "Reprendre la trace ici" confirmé (Bloc 3) : la progression normale est gelée tant
+        // que le guidage vers le pin n'a pas atteint sa jonction — en phase "previewing"
+        // (pas encore confirmé), le hors-trace normal continue de tourner sans interférence,
+        // réversible sans conséquence.
+        guard resumeGuidance?.phase != .active else {
+            updateResumeProgress(from: location)
+            return
+        }
+
         guard let projection else { return }
 
         guard projection.distanceToTrackMeters <= RideConstants.offTrackDistanceThresholdMeters else {
@@ -629,6 +660,36 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         trackCumulativeDistances.indices.contains(checkpoint.sourcePointIndex)
             ? trackCumulativeDistances[checkpoint.sourcePointIndex]
             : .infinity
+    }
+
+    /// Phase "active" du guidage "Reprendre ici" (Bloc 3) — deux façons de rejoindre le fil,
+    /// jamais de retour en arrière (réutilise `resyncCheckpointIndex`, déjà garanti par it8) :
+    /// jonction avec le pin atteinte (< 30 m), OU retour naturel sur la trace avant même
+    /// d'y arriver ("hystérésis silencieuse" demandée — pas de confirmation, juste la reprise).
+    private func updateResumeProgress(from location: CLLocation) {
+        guard let guidance = resumeGuidance, let track, !trackCumulativeDistances.isEmpty else { return }
+
+        let distanceToPin = RoadbookAnalyzer.distanceMeters(location.coordinate, guidance.pinCoordinate)
+        if distanceToPin <= RideConstants.resumeJunctionDistanceMeters {
+            let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
+            if let projection {
+                resyncCheckpointIndex(to: projection)
+            } else if let firstAhead = checkpoints.firstIndex(where: { checkpointCumulativeDistanceMeters($0) > guidance.pinCumulativeDistanceMeters }) {
+                currentCheckpointIndex = max(currentCheckpointIndex, firstAhead)
+            }
+            resumeTask?.cancel()
+            resumeGuidance = nil
+            resumeRoutingError = nil
+            return
+        }
+
+        guard let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances) else { return }
+        if projection.distanceToTrackMeters <= RideConstants.offTrackDistanceThresholdMeters {
+            resyncCheckpointIndex(to: projection)
+            resumeTask?.cancel()
+            resumeGuidance = nil
+            resumeRoutingError = nil
+        }
     }
 
     // MARK: - Chemin bloqué / détour
@@ -784,6 +845,77 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         if haptic {
             detourClearedHapticGenerator.notificationOccurred(.success)
         }
+    }
+
+    // MARK: - "Reprendre la trace ici" (feat "resume-at-point", Bloc 3, it10)
+
+    /// Pose le pin en phase "previewing" immédiatement (distance à vol d'oiseau visible sans
+    /// réseau), puis lance le calcul d'itinéraire route (miroir exact de `requestDetour`,
+    /// même `DetourRoutingService`) — la réponse met à jour l'objet EN PLACE sans changer de
+    /// phase : rien n'est figé tant que `confirmResume()` n'a pas été appelé.
+    func requestResume(pinCoordinate: CLLocationCoordinate2D, pinCumulativeDistanceMeters: Double) {
+        resumeTask?.cancel()
+        resumeRoutingError = nil
+        resumeGuidance = ResumeGuidance(
+            pinCoordinate: pinCoordinate,
+            pinCumulativeDistanceMeters: pinCumulativeDistanceMeters,
+            phase: .previewing
+        )
+
+        guard let origin = currentLocation?.coordinate else { return }
+        guard networkMonitor.isReachable else {
+            resumeRoutingError = "Réseau requis pour l'itinéraire — vol d'oiseau affiché"
+            return
+        }
+
+        isRequestingResume = true
+        resumeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await DetourRoutingService.requestRoute(from: origin, candidates: [pinCoordinate], profile: .route)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard var guidance = self.resumeGuidance, guidance.pinCoordinate.latitude == pinCoordinate.latitude, guidance.pinCoordinate.longitude == pinCoordinate.longitude else { return }
+                    guidance.routeCoordinates = result.coordinates
+                    guidance.isRouted = true
+                    guidance.routeDistanceMeters = self.routeLengthMeters(result.coordinates)
+                    self.resumeGuidance = guidance
+                    self.isRequestingResume = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.isRequestingResume = false
+                    self.resumeRoutingError = "Réseau requis pour l'itinéraire — vol d'oiseau affiché"
+                }
+            }
+        }
+    }
+
+    /// Confirme le guidage prévisualisé — seul moment où la progression normale du roadbook
+    /// se fige (voir `updateRoadbookProgress`). Ne touche jamais `track`/checkpoints.
+    func confirmResume() {
+        guard var guidance = resumeGuidance else { return }
+        guidance.phase = .active
+        resumeGuidance = guidance
+    }
+
+    /// Annulation 1 tap, à tout instant (preview ou active) — état propre, trace jamais
+    /// altérée (spec Bloc 3 explicite).
+    func cancelResume() {
+        resumeTask?.cancel()
+        resumeGuidance = nil
+        isRequestingResume = false
+        resumeRoutingError = nil
+    }
+
+    private func routeLengthMeters(_ coordinates: [CLLocationCoordinate2D]) -> Double {
+        guard coordinates.count > 1 else { return 0 }
+        var total: Double = 0
+        for i in 1..<coordinates.count {
+            total += RoadbookAnalyzer.distanceMeters(coordinates[i - 1], coordinates[i])
+        }
+        return total
     }
 
     // MARK: - Mode Nav (guidage A→B)
