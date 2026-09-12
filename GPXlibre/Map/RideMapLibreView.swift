@@ -90,6 +90,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
+        updateUserLocationHalo(on: mapView, context: context)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
         context.coordinator.updateContentInset(
             UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
@@ -134,6 +135,23 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         }
         let coordinates = goToGuidance.coordinates
         source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
+    }
+
+    /// Halo de contraste (spec "fab-contrast") — même principe que le casing de la trace :
+    /// un disque qui reste visible sur fond clair ET sur fond sombre, sous le point natif
+    /// (celui-ci reste dessiné par MapLibre par-dessus, en UIView, donc toujours au-dessus).
+    private func updateUserLocationHalo(on mapView: MLNMapView, context: Context) {
+        guard let style = mapView.style,
+              let source = style.source(withIdentifier: MapEngineConstants.userLocationHaloSourceIdentifier) as? MLNShapeSource
+        else { return }
+
+        guard let currentLocation else {
+            source.shape = nil
+            return
+        }
+        let point = MLNPointAnnotation()
+        point.coordinate = currentLocation.coordinate
+        source.shape = point
     }
 
     private func updateDetourShape(on mapView: MLNMapView, context: Context) {
@@ -323,6 +341,18 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 style.addLayer(colorLayer)
                 trackColorLayer = colorLayer
             }
+
+            // Halo de contraste sous le point de position natif (spec "fab-contrast") : disque
+            // blanc cerné d'un trait sombre, lisible sur fond clair ET sur fond sombre — le
+            // point natif MapLibre (UIView) reste toujours rendu par-dessus.
+            let haloSource = MLNShapeSource(identifier: MapEngineConstants.userLocationHaloSourceIdentifier, shape: nil, options: nil)
+            style.addSource(haloSource)
+            let haloLayer = MLNCircleStyleLayer(identifier: MapEngineConstants.userLocationHaloLayerIdentifier, source: haloSource)
+            haloLayer.circleRadius = NSExpression(forConstantValue: 13)
+            haloLayer.circleColor = NSExpression(forConstantValue: UIColor.white)
+            haloLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.black.withAlphaComponent(0.55))
+            haloLayer.circleStrokeWidth = NSExpression(forConstantValue: 3)
+            style.addLayer(haloLayer)
 
             // Détour, route Nav et "Aller à" ajoutés après la trace : ils doivent rester
             // visibles au-dessus.

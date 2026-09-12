@@ -29,6 +29,11 @@ enum MapEngineConstants {
     static let navRouteLayerIdentifier = "nav-route-layer"
     static let goToSourceIdentifier = "goto-source"
     static let goToLayerIdentifier = "goto-layer"
+    /// Halo de contraste derrière le point de position natif (spec "fab-contrast") — même
+    /// idée que le casing de la trace : un disque qui ressort sur fond clair ET sur fond
+    /// sombre, indépendant du point natif lui-même (qui reste géré par MapLibre).
+    static let userLocationHaloSourceIdentifier = "user-location-halo-source"
+    static let userLocationHaloLayerIdentifier = "user-location-halo-layer"
 
     /// Nom du fichier de style de secours embarqué dans le bundle (GPXlibre/Resources/),
     /// utilisé si le style principal échoue à charger (JSON invalide, timeout) — l'utilisateur

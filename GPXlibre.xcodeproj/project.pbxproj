@@ -44,6 +44,7 @@
 		632A62E679D0DCEE539E445B /* SharedBlockageConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0116CEBAE504808F55025A09 /* SharedBlockageConstants.swift */; };
 		63F1641057903E4FAA48F0DF /* GPXlibreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C764785477A8517BB18083FE /* GPXlibreApp.swift */; };
 		68EA18A7D69584F368EB4322 /* TrafficService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD459CD19AEC11BC6AC5299 /* TrafficService.swift */; };
+		6D8B6D69DC382AA946E58A6A /* TabBarAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B238FC05037A7D406FCCCCCB /* TabBarAppearance.swift */; };
 		701ACF9838732CCF0B6D5395 /* TileCoordinate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A5C078CC241E99F42255BE /* TileCoordinate.swift */; };
 		709399961F959D20BBBD7770 /* MapLoadWarningBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE1CC05064D82C3B5978F86 /* MapLoadWarningBannerView.swift */; };
 		70E872A1581371D76A198904 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */; };
@@ -177,6 +178,7 @@
 		AD3EF8177D32ECCB3969F6C6 /* GoToGuidance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToGuidance.swift; sourceTree = "<group>"; };
 		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
 		AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongPressTooltip.swift; sourceTree = "<group>"; };
+		B238FC05037A7D406FCCCCCB /* TabBarAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarAppearance.swift; sourceTree = "<group>"; };
 		B474A0CD23D4910F89D3D0F7 /* CorridorPrecacheEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorPrecacheEstimator.swift; sourceTree = "<group>"; };
 		BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageLiveServerTests.swift; sourceTree = "<group>"; };
 		BD6EBC7F4FD3F2F99ADBDB22 /* TileSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileSource.swift; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 				E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */,
 				AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */,
 				5377D7D96D91B4019D5F0517 /* RootView.swift */,
+				B238FC05037A7D406FCCCCCB /* TabBarAppearance.swift */,
 				2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */,
 				66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */,
 			);
@@ -638,6 +641,7 @@
 				E9A12DBCFAD4A61A250105ED /* SpeedLimitBadgeView.swift in Sources */,
 				C417572521DBCF33B43D3797 /* SpeedLimitService.swift in Sources */,
 				10D7F0BBEF0BF955D189BA13 /* SpeedUnit.swift in Sources */,
+				6D8B6D69DC382AA946E58A6A /* TabBarAppearance.swift in Sources */,
 				F84C59B40DA90C8B571ED115 /* TileCacheStore.swift in Sources */,
 				4F97AE5F02F6A4D695D4F3DC /* TileCacheURLProtocol.swift in Sources */,
 				701ACF9838732CCF0B6D5395 /* TileCoordinate.swift in Sources */,

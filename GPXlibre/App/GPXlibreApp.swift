@@ -15,6 +15,7 @@ struct GPXlibreApp: App {
 
     init() {
         MapLibreBootstrap.configure()
+        TabBarAppearance.configure()
         let settingsStore = RideSettingsStore()
         let monitor = NetworkMonitor()
         let modeStore = RideModeStore()

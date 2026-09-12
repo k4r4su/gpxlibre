@@ -45,6 +45,11 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
+        // Halo de contraste (spec "fab-contrast") : implémenté côté MapLibre via une couche
+        // de cercle indépendante sous le point natif (voir RideMapLibreView). MapKit ne permet
+        // pas d'ajouter un calque sous son point bleu système sans le remplacer entièrement
+        // par une vue custom (perte du cône de cap natif) — non fait ici, comparaison
+        // uniquement, MapLibre reste le moteur actif et le vrai chemin testé.
         mapView.showsUserLocation = true
         mapView.showsCompass = false
         mapView.showsScale = false
