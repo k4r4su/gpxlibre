@@ -11,16 +11,19 @@ struct GPXlibreApp: App {
     @StateObject private var waypointStore = RollingWaypointStore()
     @StateObject private var rideModeStore = RideModeStore()
     @StateObject private var navFavorites = NavFavoritesStore()
+    @StateObject private var sharedBlockages: SharedBlockageSyncCoordinator
 
     init() {
         MapLibreBootstrap.configure()
         let settingsStore = RideSettingsStore()
         let monitor = NetworkMonitor()
         let modeStore = RideModeStore()
+        let blockagesCoordinator = SharedBlockageSyncCoordinator()
         _settings = StateObject(wrappedValue: settingsStore)
         _networkMonitor = StateObject(wrappedValue: monitor)
         _rideModeStore = StateObject(wrappedValue: modeStore)
-        _rideSession = StateObject(wrappedValue: RideSessionManager(settings: settingsStore, networkMonitor: monitor, modeStore: modeStore))
+        _sharedBlockages = StateObject(wrappedValue: blockagesCoordinator)
+        _rideSession = StateObject(wrappedValue: RideSessionManager(settings: settingsStore, networkMonitor: monitor, modeStore: modeStore, sharedBlockages: blockagesCoordinator))
     }
 
     var body: some Scene {
@@ -35,6 +38,7 @@ struct GPXlibreApp: App {
                 .environmentObject(waypointStore)
                 .environmentObject(rideModeStore)
                 .environmentObject(navFavorites)
+                .environmentObject(sharedBlockages)
                 .onOpenURL { url in
                     library.importTrack(from: url)
                 }

@@ -85,6 +85,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private let networkMonitor: NetworkMonitor
     private let modeStore: RideModeStore
     private let blockageLog = BlockageLogStore()
+    private let sharedBlockages: SharedBlockageSyncCoordinator
     private var track: GPXTrack?
     private var trackCumulativeDistances: [Double] = []
 
@@ -151,10 +152,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         max(checkpoints.count - currentCheckpointIndex, 0)
     }
 
-    init(settings: RideSettingsStore, networkMonitor: NetworkMonitor, modeStore: RideModeStore) {
+    init(settings: RideSettingsStore, networkMonitor: NetworkMonitor, modeStore: RideModeStore, sharedBlockages: SharedBlockageSyncCoordinator) {
         self.settings = settings
         self.networkMonitor = networkMonitor
         self.modeStore = modeStore
+        self.sharedBlockages = sharedBlockages
         self.cameraDistanceMeters = ZoomPreset.normal.buckets.first?.cameraDistanceMeters ?? 300
         super.init()
         manager.delegate = self
@@ -209,6 +211,27 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
         applyIdleTimerSetting()
+        syncSharedBlockagesIfNeeded()
+    }
+
+    /// Synchro Bloc 5 : "une fois par jour + à chaque lancement" — déclenchée ici (ouverture
+    /// de l'onglet Ride) et à chaque mise à jour de position tant qu'aucune trace n'est
+    /// chargée (Mode Nav), le garde-fou anti-rafale étant porté par le coordinateur lui-même.
+    private func syncSharedBlockagesIfNeeded() {
+        let bbox: SharedBlockageBBox?
+        if let track {
+            bbox = SharedBlockageBBox.around(trackPoints: track.points.map(\.coordinate))
+        } else if let currentLocation {
+            bbox = SharedBlockageBBox.around(location: currentLocation.coordinate)
+        } else {
+            bbox = nil
+        }
+        sharedBlockages.syncIfNeeded(
+            bbox: bbox,
+            serverURLString: settings.sharedBlockageServerURLString,
+            isReachable: networkMonitor.isReachable,
+            isEnabled: settings.shareBlockagesAnonymously
+        )
     }
 
     func stop() {
@@ -311,6 +334,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         updateGoToGuidance(from: location)
         recordRideTrack(location: location)
+
+        if track == nil {
+            syncSharedBlockagesIfNeeded()
+        }
     }
 
     /// Enregistre un point dès que l'un des deux seuils est atteint (5 s OU 15 m, le plus
@@ -549,6 +576,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                     self.detourRoute = result
                     self.isRequestingDetour = false
                     self.blockageLog.append(BlockageEvent(coordinate: location.coordinate, resolvedOnline: true), for: track.id)
+                    self.reportBlockageIfSharingEnabled(at: location.coordinate)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -577,6 +605,20 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         detourRoute = DetourRoute(coordinates: [location.coordinate, target], mode: .direct, targetCoordinate: target, startedAt: Date())
         blockageLog.append(BlockageEvent(coordinate: location.coordinate, resolvedOnline: false), for: track.id)
+        reportBlockageIfSharingEnabled(at: location.coordinate)
+    }
+
+    /// Signalement anonyme sortant (spec Bloc 5, toggle "partager anonymement" par défaut
+    /// ON dans Réglages) — même point que le journal 100% local ci-dessus, best-effort,
+    /// n'affecte jamais le flow de détour qui l'a déclenché.
+    private func reportBlockageIfSharingEnabled(at coordinate: CLLocationCoordinate2D) {
+        sharedBlockages.report(
+            coordinate: coordinate,
+            note: nil,
+            serverURLString: settings.sharedBlockageServerURLString,
+            isReachable: networkMonitor.isReachable,
+            isEnabled: settings.shareBlockagesAnonymously
+        )
     }
 
     func cancelDetour() {

@@ -29,6 +29,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let cameraCommandToken: UUID?
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
+    let sharedBlockages: [SharedBlockage]
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -80,6 +81,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
+        context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
 
         let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
         context.coordinator.lastCameraCommandToken = cameraCommandToken
@@ -153,6 +155,8 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var track: GPXTrack?
         var checkpoints: [Checkpoint] = []
         var waypoints: [RollingWaypoint] = []
+        private var sharedBlockages: [SharedBlockage] = []
+        private var sharedBlockageAnnotations: [SharedBlockageMLNAnnotation] = []
         var traceAppearance = TraceAppearance()
         var lastCameraCommandToken: UUID?
         var currentTileSource: TileSource = .osmStandard
@@ -200,6 +204,18 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             isNightMode = nightMode
             rasterLayer?.maximumRasterBrightness = NSExpression(forConstantValue: nightMode ? 0.55 : 1.0)
             rasterLayer?.rasterSaturation = NSExpression(forConstantValue: nightMode ? -0.4 : 0.0)
+        }
+
+        /// Base partagée des points bloqués (Bloc 5) : indépendant du style (contrairement
+        /// aux sources/couches trace-détour-route), donc jamais perturbé par un rechargement
+        /// de style (changement de thème carte, #10) — pas besoin de re-synchroniser à
+        /// `didFinishLoading` comme pour checkpoints/waypoints ci-dessus.
+        func syncSharedBlockageAnnotations(_ blockages: [SharedBlockage], on mapView: MLNMapView) {
+            guard sharedBlockages != blockages else { return }
+            sharedBlockages = blockages
+            mapView.removeAnnotations(sharedBlockageAnnotations)
+            sharedBlockageAnnotations = blockages.map(SharedBlockageMLNAnnotation.init)
+            mapView.addAnnotations(sharedBlockageAnnotations)
         }
 
         /// Si le style n'a pas fini de charger en `styleLoadTimeoutSeconds`, on n'attend pas
@@ -315,6 +331,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             if let waypointAnnotation = annotation as? RollingWaypointMLNAnnotation {
                 return annotationView(on: mapView, identifier: "waypoint", annotation: waypointAnnotation, tint: .systemBlue, systemImageName: waypointAnnotation.waypoint.category.systemImageName, size: 28)
             }
+            if let sharedBlockageAnnotation = annotation as? SharedBlockageMLNAnnotation {
+                let view = annotationView(on: mapView, identifier: "sharedBlockage", annotation: sharedBlockageAnnotation, tint: .systemRed, systemImageName: "exclamationmark.triangle.fill", size: 30)
+                view.alpha = sharedBlockageAnnotation.blockage.mapOpacity
+                return view
+            }
             return nil
         }
 
@@ -352,6 +373,16 @@ final class CheckpointMLNAnnotation: NSObject, MLNAnnotation {
 
     init(checkpoint: Checkpoint) {
         self.checkpoint = checkpoint
+    }
+}
+
+final class SharedBlockageMLNAnnotation: NSObject, MLNAnnotation {
+    let blockage: SharedBlockage
+    var coordinate: CLLocationCoordinate2D { blockage.coordinate.coordinate }
+    var title: String? { blockage.note ?? "Point bloqué signalé" }
+
+    init(blockage: SharedBlockage) {
+        self.blockage = blockage
     }
 }
 

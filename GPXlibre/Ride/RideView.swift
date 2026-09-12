@@ -8,7 +8,9 @@ struct RideView: View {
     @EnvironmentObject private var navigationState: AppNavigationState
     @EnvironmentObject private var waypointStore: RollingWaypointStore
     @EnvironmentObject private var modeStore: RideModeStore
+    @EnvironmentObject private var sharedBlockages: SharedBlockageSyncCoordinator
     @State private var showDetourConfirmation = false
+    @State private var dismissedSharedBlockageAlertID: String?
     @State private var showStatsPanel = false
     @State private var showEndRideSheet = false
     @State private var showDestinationSearch = false
@@ -105,6 +107,10 @@ struct RideView: View {
                             onIgnorer: { session.dismissBlockedPathBanner() }
                         )
                         .padding(.top, 8)
+                    }
+                    if let alert = nearbySharedBlockageAlert(track: track) {
+                        SharedBlockageAlertPillView(blockage: alert, onDismiss: { dismissedSharedBlockageAlertID = alert.id })
+                            .padding(.top, 8)
                     }
                     if let detour = session.detourRoute {
                         DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
@@ -351,6 +357,17 @@ struct RideView: View {
         }
     }
 
+    /// Spec Bloc 5 : pill d'alerte si la trace chargée passe à moins de 300 m d'un point
+    /// bloqué connu de la base partagée — masquée pour la session en cours après un tap
+    /// sur la croix (pas une suppression définitive, juste ignorée jusqu'au prochain point).
+    private func nearbySharedBlockageAlert(track: GPXTrack?) -> SharedBlockage? {
+        guard let track,
+              let nearest = sharedBlockages.nearestKnownBlockage(alongTrackPoints: track.points.map(\.coordinate)),
+              nearest.id != dismissedSharedBlockageAlertID
+        else { return nil }
+        return nearest
+    }
+
     private var navStatusBanner: some View {
         Group {
             if session.navRoute == nil {
@@ -419,6 +436,7 @@ struct RideView: View {
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
+                sharedBlockages: sharedBlockages.blockages,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
@@ -444,6 +462,7 @@ struct RideView: View {
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 goToGuidance: session.goToGuidance,
+                sharedBlockages: sharedBlockages.blockages,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in

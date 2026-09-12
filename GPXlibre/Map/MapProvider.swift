@@ -29,6 +29,9 @@ protocol MapProvider: View {
         /// "Aller à" universel (Bloc 4) : guidage parallèle, jamais un remplacement de la
         /// trace ou de la route Nav — toujours en pointillés cyan.
         goToGuidance: GoToGuidance?,
+        /// Base partagée des points bloqués (Bloc 5) : marqueurs triangle rouge, opacité
+        /// réduite au-delà de 90 j sans reconfirmation (voir SharedBlockage.isFaded).
+        sharedBlockages: [SharedBlockage],
         onManualGesture: @escaping () -> Void,
         onStatusChange: @escaping (MapLoadStatus) -> Void,
         onLongPress: @escaping (CLLocationCoordinate2D) -> Void

@@ -97,6 +97,28 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Partager mes signalements anonymement", isOn: $settings.shareBlockagesAnonymously)
+                        .longPressTooltip("Envoie uniquement un point GPS, une date et une note optionnelle — aucune donnée nominative, aucun compte")
+                } header: {
+                    Text("Communauté")
+                } footer: {
+                    Text("Un chemin bloqué que tu signales est ajouté à une base partagée anonyme, pour alerter les autres utilisateurs qui passent par là.")
+                }
+
+                // Section repliée par défaut (Bloc 5, "cachée avancé") : URL du serveur
+                // auto-hébergé des points bloqués partagés — vide par défaut (voir
+                // SharedBlockageConstants, server/README.md).
+                DisclosureGroup("Avancé") {
+                    TextField("URL du serveur (points bloqués)", text: $settings.sharedBlockageServerURLString)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    Text("Laisser vide désactive toute tentative réseau vers cette fonctionnalité.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
                     Button("Revoir le didacticiel") {
                         showOnboarding = true
                     }

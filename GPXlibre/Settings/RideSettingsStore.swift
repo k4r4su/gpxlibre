@@ -21,6 +21,8 @@ final class RideSettingsStore: ObservableObject {
         static let mapThemePreset = "settings.mapThemePreset"
         static let trafficEnabled = "settings.trafficEnabled"
         static let speedUnit = "settings.speedUnit"
+        static let shareBlockagesAnonymously = "settings.shareBlockagesAnonymously"
+        static let sharedBlockageServerURL = "settings.sharedBlockageServerURL"
     }
 
     private let defaults: UserDefaults
@@ -75,6 +77,15 @@ final class RideSettingsStore: ObservableObject {
     /// Unité de vitesse affichée (item #12) — ne convertit que les vitesses, pas les distances.
     @Published var speedUnit: SpeedUnit {
         didSet { defaults.set(speedUnit.rawValue, forKey: Keys.speedUnit) }
+    }
+    /// Section "Avancé" (Bloc 5) — partage anonyme des points bloqués, ON par défaut.
+    @Published var shareBlockagesAnonymously: Bool {
+        didSet { defaults.set(shareBlockagesAnonymously, forKey: Keys.shareBlockagesAnonymously) }
+    }
+    /// URL de l'instance auto-hébergée du serveur `server/` — vide par défaut (voir
+    /// SharedBlockageConstants), aucune tentative réseau tant qu'elle n'est pas renseignée.
+    @Published var sharedBlockageServerURLString: String {
+        didSet { defaults.set(sharedBlockageServerURLString, forKey: Keys.sharedBlockageServerURL) }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -135,5 +146,9 @@ final class RideSettingsStore: ObservableObject {
         } else {
             speedUnit = .kmh
         }
+
+        shareBlockagesAnonymously = defaults.object(forKey: Keys.shareBlockagesAnonymously) == nil
+            ? true : defaults.bool(forKey: Keys.shareBlockagesAnonymously)
+        sharedBlockageServerURLString = defaults.string(forKey: Keys.sharedBlockageServerURL) ?? SharedBlockageConstants.defaultServerURLString
     }
 }

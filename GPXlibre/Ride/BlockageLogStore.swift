@@ -16,7 +16,7 @@ struct BlockageEvent: Codable, Identifiable {
 }
 
 /// Encodable/Decodable wrapper — CLLocationCoordinate2D lui-même ne conforme pas à Codable.
-struct CLLocationCoordinate2DCodable: Codable {
+struct CLLocationCoordinate2DCodable: Codable, Equatable {
     let latitude: Double
     let longitude: Double
 

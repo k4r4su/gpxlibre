@@ -27,6 +27,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
     let detourRoute: DetourRoute?
     let goToGuidance: GoToGuidance?
+    let sharedBlockages: [SharedBlockage]
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -92,6 +93,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         syncGoToOverlay(on: mapView, context: context)
         syncReliefOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
+        syncSharedBlockageAnnotations(on: mapView, context: context)
         mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
 
         let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
@@ -188,6 +190,17 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         mapView.addOverlay(overlay)
     }
 
+    /// Base partagée des points bloqués (Bloc 5) — implémentation de comparaison, même
+    /// contrat que côté MapLibre (voir RideMapLibreView.syncSharedBlockageAnnotations).
+    private func syncSharedBlockageAnnotations(on mapView: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        guard coordinator.currentSharedBlockages != sharedBlockages else { return }
+        coordinator.currentSharedBlockages = sharedBlockages
+        mapView.removeAnnotations(coordinator.sharedBlockageAnnotations)
+        coordinator.sharedBlockageAnnotations = sharedBlockages.map(SharedBlockageAnnotation.init)
+        mapView.addAnnotations(coordinator.sharedBlockageAnnotations)
+    }
+
     /// Point projeté à `forwardDistance` mètres dans la direction `headingDegrees`,
     /// utilisé comme centre caméra pour que la position réelle apparaisse plus bas à l'écran.
     static func lookAheadCoordinate(
@@ -227,6 +240,8 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         var currentNavRouteComputedAt: Date?
         var goToOverlay: GoToPolyline?
         var currentGoToComputedAt: Date?
+        var currentSharedBlockages: [SharedBlockage] = []
+        var sharedBlockageAnnotations: [SharedBlockageAnnotation] = []
 
         @objc func gestureDetected(_ gesture: UIGestureRecognizer) {
             guard gesture.state == .began || gesture.state == .changed else { return }
@@ -315,6 +330,18 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 view.canShowCallout = true
                 return view
             }
+            if let sharedBlockageAnnotation = annotation as? SharedBlockageAnnotation {
+                let identifier = "sharedBlockage"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: sharedBlockageAnnotation, reuseIdentifier: identifier)
+                view.annotation = sharedBlockageAnnotation
+                view.markerTintColor = .systemRed
+                view.glyphImage = UIImage(systemName: "exclamationmark.triangle.fill")
+                view.displayPriority = .defaultLow
+                view.canShowCallout = true
+                view.alpha = sharedBlockageAnnotation.blockage.mapOpacity
+                return view
+            }
             return nil
         }
     }
@@ -352,5 +379,15 @@ final class RollingWaypointAnnotation: NSObject, MKAnnotation {
 
     init(waypoint: RollingWaypoint) {
         self.waypoint = waypoint
+    }
+}
+
+final class SharedBlockageAnnotation: NSObject, MKAnnotation {
+    let blockage: SharedBlockage
+    var coordinate: CLLocationCoordinate2D { blockage.coordinate.coordinate }
+    var title: String? { blockage.note ?? "Point bloqué signalé" }
+
+    init(blockage: SharedBlockage) {
+        self.blockage = blockage
     }
 }

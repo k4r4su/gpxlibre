@@ -35,6 +35,7 @@ targets:
       - path: GPXlibre/Rendering
       - path: GPXlibre/Settings
       - path: GPXlibre/Onboarding
+      - path: GPXlibre/Sync
       - path: GPXlibre/Resources
         buildPhase: resources
     dependencies:
@@ -78,5 +79,21 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: V9Q4V3W2RZ
+
+  # Tests unitaires (Bloc 5) : encode/decode du payload de synchro des points bloqués
+  # partagés — livré même sans instance serveur publique prouvée dans cette session.
+  GPXlibreTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GPXlibreTests
+    dependencies:
+      - target: GPXlibre
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: V9Q4V3W2RZ
