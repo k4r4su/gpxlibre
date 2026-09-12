@@ -64,9 +64,20 @@ enum RideConstants {
     // MARK: - Caméra Ride (perspective)
 
     static let cameraPitchDegrees: Double = 55
-    /// Position verticale de la position actuelle à l'écran (0 = haut, 1 = bas).
-    /// ~0.33 place la position dans le tiers inférieur, regard vers l'avant.
+
+    /// MapKit UNIQUEMENT (comparaison, non actif) — décalage géographique heuristique vers
+    /// l'avant, seul outil disponible en l'absence d'équivalent à MLNMapView.contentInset.
+    /// Côté MapLibre (moteur actif), voir `positionAnchorRatio` + RideOverlayLayout à la
+    /// place : ancrage EXACT via contentInset, pas une heuristique de décalage.
     static let cameraCenterOffsetRatio: Double = 0.33
+
+    /// POSITION_ANCHOR_RATIO (fix "position-anchor", Bug 2) — ratio, depuis le HAUT de la
+    /// zone visible libre, auquel la position s'ancre en mode 3D pitché. Constante fixe
+    /// (itération "stabilisation UI" : aucun nouveau réglage), dans la fourchette 60-65%
+    /// demandée. En 2D (nord en haut, sans pitch), la position reste au centre géométrique
+    /// (0.5) — pas de biais "regarder devant soi" pertinent sans perspective.
+    static let positionAnchorRatio: Double = 0.625
+    static let positionAnchorRatio2D: Double = 0.5
 
     // MARK: - Paliers de zoom (distance caméra en mètres) par preset, selon la vitesse (km/h)
 

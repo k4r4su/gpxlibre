@@ -105,15 +105,12 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
         let pitch: CGFloat = is2DNorthUp ? 0 : CGFloat(RideConstants.cameraPitchDegrees)
-        let offsetRatio = is2DNorthUp ? 0 : RideConstants.cameraCenterOffsetRatio
-        let lookAheadCenter = RideMapView.lookAheadCoordinate(
-            from: currentLocation.coordinate,
-            headingDegrees: heading,
-            forwardDistance: cameraDistanceMeters * offsetRatio
-        )
-
+        // Fix "position-anchor" (Bug 2) : plus de décalage géographique heuristique vers
+        // l'avant — lookingAtCenter est TOUJOURS la position réelle ; tout l'ancrage vertical
+        // (POSITION_ANCHOR_RATIO) vient de `contentInset.top`, déjà appliqué via
+        // `updateContentInset` ci-dessus. Voir RideOverlayLayout.computeMapInsets.
         let camera = MLNMapCamera(
-            lookingAtCenter: lookAheadCenter,
+            lookingAtCenter: currentLocation.coordinate,
             acrossDistance: cameraDistanceMeters,
             pitch: pitch,
             heading: heading

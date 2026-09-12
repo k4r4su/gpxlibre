@@ -1,97 +1,91 @@
 import Foundation
 
-/// Grille documentée des zones d'overlays flottants du mode Ride (itérations "camera-inset" +
-/// "overlay-grid" + fix "camera-inset-tracking") — chaque élément flottant a UNE zone fixe
-/// assignée ci-dessous, jamais deux éléments dans la même zone en même temps (sauf la pile de
-/// bannières, volontairement limitée à 1 visible à la fois par RideView). Un nouvel élément
-/// flottant doit d'abord obtenir une zone ici avant d'être ajouté à RideView.
+/// Grille FIGÉE des zones d'overlays flottants du mode Ride (itération 9, "stabilisation UI") —
+/// SEUL endroit qui documente les zones ; RideView ne fait qu'appliquer ce qui est décrit ici.
+/// Aucun élément flottant ne doit être positionné ailleurs que dans une zone décrite ci-dessous.
 ///
-/// Repères (portrait) :
+/// Repères (portrait — device de référence iPhone 13 Pro) :
 /// ```
 /// ┌───────────────────────────────────────┐
 /// │ (safe area haut : heure/cap, natif OS) │
 /// │  [Segmented Trace/Nav]         [🔍]    │  topBar
-/// │  [Bannière éphémère (1 max)]           │  bannerStack
+/// │  [Bannière éphémère (1 max)]           │  bannerZone
+/// │  [Roadbook / guidage Nav, PLEINE LARGEUR]│ directionPanelZone
 /// ├─────────────────────────────────────────┤
-/// │                                    [🏍] │  topRight (badge vitesse, fixe)
-/// │  [Point]                     [+]        │  midLeft / midRight
-/// │                               [-]       │
-/// │  [Bloqué]                [recentrer]    │
-/// │                              [Stop]     │
+/// │                                         │
+/// │              (carte, vide)              │  centerZone — rien n'y flotte jamais
+/// │                                         │
+/// │                              [recentrer]│  bottomRight (colonne, 12pt)
+/// │                                     [+] │
+/// │                                     [−] │
+/// │                                  [Stop] │
+/// │                                [Bloqué] │
+/// │ [vitesse]                               │  bottomLeft
 /// ├─────────────────────────────────────────┤
-/// │       [Roadbook / guidage Nav]          │  bottomPanel
-/// ├─────────────────────────────────────────┤
-/// │ (tab bar, natif OS)                     │
+/// │ (tab bar, natif OS — RIEN d'autre ici)  │  tabBarZone
 /// └───────────────────────────────────────┘
 /// ```
-/// En paysage, les mêmes zones logiques s'appliquent ; `landscapeSidePanelWidth` réserve une
-/// marge latérale pour que les panneaux flottants gauche/droite ne rognent jamais la carte
-/// utile ni ne se recouvrent entre eux.
 ///
-/// ## Fix "camera-inset-tracking"
-/// La marge caméra a besoin de la VRAIE safe area (encoche/Dynamic Island en haut ; tab bar +
-/// home indicator combinés en bas — ce dernier chiffre est injecté par SwiftUI comme safe area
-/// supplémentaire pour le contenu d'un onglet de TabView). Deux approches se sont révélées
-/// fausses avant celle-ci : un lookup UIKit sur la fenêtre (`UIWindow.safeAreaInsets`) ne voit
-/// PAS la hauteur de la tab bar (injectée plus bas dans la hiérarchie, pas au niveau fenêtre) ;
-/// un `GeometryReader` qui ignore lui-même la safe area pour "forcer" `safeAreaInsets` à
-/// rapporter la vraie valeur s'est avéré peu fiable dans ce contexte précis (vérifié
-/// visuellement : le segmented control se retrouvait sous l'encoche). La méthode fiable
-/// retenue (voir RideView.rideContent) : un GeometryReader qui respecte NORMALEMENT la safe
-/// area, dont on compare `frame(in: .global)` à `UIScreen.main.bounds` — son bord haut/bas
-/// tombe exactement sur la vraie limite de safe area, sans ambiguïté. Seule `mapLayer` ignore
-/// la safe area (pour le plein écran) ; le reste de l'UI l'évite normalement, comme avant.
+/// ## Ancrage de la position (fix "position-anchor", Bug 2)
+/// Zone haute inviolable = safe area + topBar + bannière (si visible) + panneau de direction
+/// (si visible) + marge. Zone basse inviolable = safe area + tab bar + marge (le panneau de
+/// direction est en HAUT désormais — la tab bar seule ferme la zone basse, spec Bug 3). Le
+/// marqueur de position s'ancre à `RideConstants.positionAnchorRatio` (60-65 %) DEPUIS LE HAUT
+/// de la zone libre restante entre ces deux exclusions — un calcul EXACT via `contentInset`
+/// (pas une heuristique de décalage géographique) : MapLibre centre toujours `lookingAtCenter`
+/// au milieu du rectangle défini par `contentInset` ; pour le faire apparaître à `ratio` du
+/// haut de la zone visible plutôt qu'au centre (0.5), on agrandit `contentInset.top` de
+/// `(2×ratio − 1) × hauteurVisible` — voir `computeMapInsets`. Recalculé à CHAQUE render (les
+/// booléens viennent de @Published state) : aucune exception panneau/bannière/mode.
 enum RideOverlayLayout {
-    /// Segmented control + bouton recherche, replié contre le haut.
     static let topBarHeight: Double = 56
-    /// Bannière éphémère unique (blocage / erreur carte / alerte partagée / guidage "Aller à")
-    /// — une seule visible à la fois, voir RideView.activeBanner.
     static let bannerHeight: Double = 64
-    /// Roadbook (Trace) ou panneau de guidage Nav — même gabarit dans les deux modes.
-    static let bottomPanelHeight: Double = 108
-    /// Marges de respiration entre la zone utile caméra et le contenu réel des panneaux —
-    /// valeurs distinctes haut/bas (spec fix "camera-inset-tracking").
+    static let directionPanelHeight: Double = 132
     static let cameraInsetMarginTopPoints: Double = 16
-    static let cameraInsetMarginBottomPoints: Double = 24
-    /// Empilement vertical de la colonne droite (stop / recentrer / +− / bloqué), spec Bloc 2.
+    static let cameraInsetMarginBottomPoints: Double = 16
+    /// Espacement uniforme de la colonne bas-droite (spec Bug 3).
     static let rightStackSpacing: Double = 12
-    /// Largeur réservée aux panneaux flottants latéraux en paysage (contrôles droite, waypoints
-    /// gauche) — évite qu'ils rognent le cadrage caméra ou se chevauchent près des bords.
     static let landscapeSidePanelWidth: Double = 100
 
-    /// Les 4 marges caméra (contentInset) + les valeurs de safe area brutes qui ont servi à les
-    /// calculer, pour que RideView puisse repositionner ses propres overlays cohéremment
-    /// (single source of truth demandée par le fix "camera-inset-tracking").
+    /// Toutes les marges nécessaires en un seul calcul (single source of truth, Bug 3/Bug 2) :
+    /// `uiTop`/`uiBottom` positionnent les overlays SwiftUI (topBar/panneaux), `cameraTop`/
+    /// `cameraBottom` alimentent `MLNMapView.contentInset` (voir RideMapLibreView).
     struct MapInsets {
-        var safeAreaTop: Double
-        var safeAreaBottom: Double
+        var uiTop: Double
+        var uiBottom: Double
         var cameraTop: Double
         var cameraBottom: Double
         var cameraLeft: Double
         var cameraRight: Double
     }
 
-    /// Fonction UNIQUE de calcul des marges caméra — utilisée à la fois par le suivi caméra
-    /// continu et par "me recentrer" (RideMapLibreView.updateUIView, un seul appel à
-    /// contentInset, aucune logique dupliquée). `hasBanner` fait grandir la marge haute quand
-    /// une bannière est affichée ; `hasBottomPanel` fait grandir la marge basse quand le
-    /// roadbook/guidage Nav est affiché — recalculée à chaque apparition/disparition puisque
-    /// RideView repasse ici à chaque render (ces deux booléens viennent de @Published state).
     static func computeMapInsets(
         safeAreaTop: Double,
         safeAreaBottom: Double,
-        hasBottomPanel: Bool,
+        screenHeight: Double,
+        hasDirectionPanel: Bool,
         hasBanner: Bool,
-        isLandscape: Bool
+        isLandscape: Bool,
+        positionAnchorRatio: Double
     ) -> MapInsets {
         let side = isLandscape ? landscapeSidePanelWidth : 0
-        let top = safeAreaTop + topBarHeight + (hasBanner ? bannerHeight : 0) + cameraInsetMarginTopPoints
-        let bottom = safeAreaBottom + (hasBottomPanel ? bottomPanelHeight : 0) + cameraInsetMarginBottomPoints
+        let uiTop = safeAreaTop + topBarHeight
+            + (hasBanner ? bannerHeight : 0)
+            + (hasDirectionPanel ? directionPanelHeight : 0)
+            + cameraInsetMarginTopPoints
+        let uiBottom = safeAreaBottom + cameraInsetMarginBottomPoints
+
+        let visibleHeight = max(screenHeight - uiTop - uiBottom, 1)
+        let ratio = min(max(positionAnchorRatio, 0.5), 0.9)
+        // cameraTop = uiTop + (2×ratio − 1) × visibleHeight — dérivation dans le commentaire
+        // de tête. Jamais < uiTop (jamais moins que le vrai recouvrement UI).
+        let cameraTop = max(uiTop + (2 * ratio - 1) * visibleHeight, uiTop)
+
         return MapInsets(
-            safeAreaTop: safeAreaTop,
-            safeAreaBottom: safeAreaBottom,
-            cameraTop: top,
-            cameraBottom: bottom,
+            uiTop: uiTop,
+            uiBottom: uiBottom,
+            cameraTop: cameraTop,
+            cameraBottom: uiBottom,
             cameraLeft: side,
             cameraRight: side
         )
