@@ -5,7 +5,7 @@ import CoreLocation
 /// du roadbook (changements de cap). Ne modifie jamais la trace elle-même.
 enum RoadbookAnalyzer {
 
-    static func buildCheckpoints(for track: GPXTrack, turnThresholdDegrees: Double) -> [Checkpoint] {
+    static func buildCheckpoints(for track: GPXTrack, turnThresholdDegrees: Double, turnMergeMinDistanceMeters: Double = RideConstants.turnMergeMinDistanceMetersDefault) -> [Checkpoint] {
         let points = track.points
         guard points.count > 2 else { return [] }
 
@@ -34,19 +34,22 @@ enum RoadbookAnalyzer {
             raw.append((points[i].coordinate, absDelta, direction))
         }
 
-        return mergeNearby(raw)
+        return mergeNearby(raw, minDistanceMeters: turnMergeMinDistanceMeters)
     }
 
     /// Fusionne les points de virage trop rapprochés (même épingle détectée sur plusieurs
-    /// points consécutifs de la trace) en gardant celui à l'angle le plus marqué.
+    /// points consécutifs de la trace, ou piste qui zigzague) en gardant celui à l'angle le
+    /// plus marqué — le total affiché (X/Y) reflète donc toujours la liste FUSIONNÉE, jamais
+    /// le nombre brut de candidats détectés.
     private static func mergeNearby(
-        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)]
+        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)],
+        minDistanceMeters: Double
     ) -> [Checkpoint] {
         var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)] = []
 
         for candidate in raw {
             if let lastIndex = merged.indices.last,
-               distanceMeters(merged[lastIndex].coordinate, candidate.coordinate) < RideConstants.checkpointPassedRadiusMeters {
+               distanceMeters(merged[lastIndex].coordinate, candidate.coordinate) < minDistanceMeters {
                 if candidate.angle > merged[lastIndex].angle {
                     merged[lastIndex] = candidate
                 }

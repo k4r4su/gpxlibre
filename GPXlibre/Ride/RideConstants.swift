@@ -21,6 +21,14 @@ enum RideConstants {
     /// Distance (m) sous laquelle un checkpoint est considéré "atteint" et on passe au suivant.
     static let checkpointPassedRadiusMeters: Double = 25
 
+    /// Fusionne les checkpoints trop rapprochés (piste qui zigzague, sinon "196 virages"
+    /// pour une trace qui n'en a réellement qu'une poignée) — DISTINCT de
+    /// checkpointPassedRadiusMeters ci-dessus (rayon "checkpoint atteint" en Ride, un tout
+    /// autre usage) : les deux étaient auparavant confondus dans le même chiffre (25 m),
+    /// bien trop court pour déclencher une vraie fusion. Réglable en Réglages (item #15).
+    static let turnMergeMinDistanceMetersDefault: Double = 150
+    static let turnMergeMinDistanceMetersOptions: [Double] = [100, 150, 250]
+
     /// Distance (m) sous laquelle la flèche grossit + haptique se déclenche.
     static let checkpointCloseRadiusMeters: Double = 30
 

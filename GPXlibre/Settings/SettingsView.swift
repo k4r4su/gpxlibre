@@ -35,6 +35,12 @@ struct SettingsView: View {
                             Text("\(value)").tag(value)
                         }
                     }
+                    Picker("Fusion des virages rapprochés", selection: $settings.turnMergeMinDistanceMeters) {
+                        ForEach(RideConstants.turnMergeMinDistanceMetersOptions, id: \.self) { value in
+                            Text("\(Int(value)) m").tag(value)
+                        }
+                    }
+                    .longPressTooltip("Deux virages détectés à moins de cette distance sont fusionnés en un seul — utile sur piste qui zigzague")
                 }
 
                 Section("Carte") {

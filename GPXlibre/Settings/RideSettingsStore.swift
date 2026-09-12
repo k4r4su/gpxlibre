@@ -23,6 +23,7 @@ final class RideSettingsStore: ObservableObject {
         static let speedUnit = "settings.speedUnit"
         static let shareBlockagesAnonymously = "settings.shareBlockagesAnonymously"
         static let sharedBlockageServerURL = "settings.sharedBlockageServerURL"
+        static let turnMergeMinDistance = "settings.turnMergeMinDistanceMeters"
     }
 
     private let defaults: UserDefaults
@@ -87,6 +88,11 @@ final class RideSettingsStore: ObservableObject {
     @Published var sharedBlockageServerURLString: String {
         didSet { defaults.set(sharedBlockageServerURLString, forKey: Keys.sharedBlockageServerURL) }
     }
+    /// Distance de fusion des checkpoints trop rapprochés (item Réglages #15, spec
+    /// "roadbook-declutter") — DISTINCT du rayon "checkpoint atteint", voir RideConstants.
+    @Published var turnMergeMinDistanceMeters: Double {
+        didSet { defaults.set(turnMergeMinDistanceMeters, forKey: Keys.turnMergeMinDistance) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -150,5 +156,9 @@ final class RideSettingsStore: ObservableObject {
         shareBlockagesAnonymously = defaults.object(forKey: Keys.shareBlockagesAnonymously) == nil
             ? true : defaults.bool(forKey: Keys.shareBlockagesAnonymously)
         sharedBlockageServerURLString = defaults.string(forKey: Keys.sharedBlockageServerURL) ?? SharedBlockageConstants.defaultServerURLString
+
+        let storedMergeDistance = defaults.double(forKey: Keys.turnMergeMinDistance)
+        turnMergeMinDistanceMeters = RideConstants.turnMergeMinDistanceMetersOptions.contains(storedMergeDistance)
+            ? storedMergeDistance : RideConstants.turnMergeMinDistanceMetersDefault
     }
 }

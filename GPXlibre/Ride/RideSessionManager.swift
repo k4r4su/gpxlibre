@@ -148,6 +148,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         checkpoints.indices.contains(currentCheckpointIndex) ? checkpoints[currentCheckpointIndex] : nil
     }
 
+    /// Mini preview roadbook (spec "roadbook-declutter") : le motard voit qu'il y a un
+    /// deuxième virage à venir sans avoir à lire le détail.
+    var nextCheckpoint: Checkpoint? {
+        let nextIndex = currentCheckpointIndex + 1
+        return checkpoints.indices.contains(nextIndex) ? checkpoints[nextIndex] : nil
+    }
+
     var remainingCheckpointsCount: Int {
         max(checkpoints.count - currentCheckpointIndex, 0)
     }
@@ -264,7 +271,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// Prend effet immédiatement, pas besoin de relancer l'app.
     func rebuildCheckpoints() {
         guard let track else { return }
-        checkpoints = RoadbookAnalyzer.buildCheckpoints(for: track, turnThresholdDegrees: settings.turnThresholdDegrees)
+        checkpoints = RoadbookAnalyzer.buildCheckpoints(
+            for: track,
+            turnThresholdDegrees: settings.turnThresholdDegrees,
+            turnMergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
+        )
         currentCheckpointIndex = 0
         distanceToCurrentCheckpointMeters = nil
         isCloseToCheckpoint = false

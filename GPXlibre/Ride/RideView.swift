@@ -214,6 +214,7 @@ struct RideView: View {
         if modeStore.mode == .trace, session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
             RoadbookPanelView(
                 checkpoint: session.currentCheckpoint,
+                nextCheckpoint: session.nextCheckpoint,
                 totalCount: session.checkpoints.count,
                 distanceMeters: session.distanceToCurrentCheckpointMeters,
                 isClose: session.isCloseToCheckpoint
@@ -420,6 +421,9 @@ struct RideView: View {
             }
         }
         .onChange(of: settings.turnThresholdDegrees) { _ in
+            session.rebuildCheckpoints()
+        }
+        .onChange(of: settings.turnMergeMinDistanceMeters) { _ in
             session.rebuildCheckpoints()
         }
         .onChange(of: settings.keepScreenAwakeInRide) { _ in
