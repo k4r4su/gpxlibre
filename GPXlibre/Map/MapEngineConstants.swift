@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum MapEngineConstants {
     /// Moteur de carte actif dans l'app. MapKit reste compilable et intact (comparaison),
@@ -27,6 +28,17 @@ enum MapEngineConstants {
     static let detourLayerIdentifier = "detour-layer"
     static let navRouteSourceIdentifier = "nav-route-source"
     static let navRouteLayerIdentifier = "nav-route-layer"
+    static let navRouteCasingLayerIdentifier = "nav-route-layer-casing"
+
+    /// Couleur de la route Nav (spec fix "nav-route-overlay") : DISTINCTE de la trace GPX
+    /// (couleur choisie par l'utilisateur) et du guidage "Aller à" (cyan pointillé) — un bleu
+    /// "route", plein, comme la plupart des apps de navigation. Bleu nuit profond sur fond
+    /// clair (Standard/Clair/Relief), bleu plus clair sur fond sombre pour rester lisible.
+    static func navRouteColor(isNightMode: Bool) -> UIColor {
+        isNightMode
+            ? UIColor(red: 0.40, green: 0.80, blue: 1.0, alpha: 1)
+            : UIColor(red: 0.05, green: 0.16, blue: 0.55, alpha: 1)
+    }
     static let goToSourceIdentifier = "goto-source"
     static let goToLayerIdentifier = "goto-layer"
     /// Halo de contraste derrière le point de position natif (spec "fab-contrast") — même

@@ -293,8 +293,10 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 return renderer
             }
             if let navPolyline = overlay as? NavRoutePolyline {
+                // Fix "nav-route-overlay" (Bug 1) : même couleur distincte que MapLibre (moteur
+                // actif), pas un bleu système générique proche d'autres éléments UIKit.
                 let renderer = MKPolylineRenderer(polyline: navPolyline)
-                renderer.strokeColor = .systemBlue
+                renderer.strokeColor = MapEngineConstants.navRouteColor(isNightMode: traceAppearance.isNightMode)
                 renderer.lineWidth = traceAppearance.lineWidth
                 return renderer
             }

@@ -197,6 +197,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         private weak var trackCasingLayer: MLNLineStyleLayer?
         private weak var trackColorLayer: MLNLineStyleLayer?
+        private weak var navRouteCasingLayer: MLNLineStyleLayer?
+        private weak var navRouteColorLayer: MLNLineStyleLayer?
+        private weak var detourLayerRef: MLNLineStyleLayer?
+        private weak var goToLayerRef: MLNLineStyleLayer?
         private weak var rasterLayer: MLNRasterStyleLayer?
         fileprivate weak var chevronLayerRef: MLNSymbolStyleLayer?
         /// Clé (trackID, nombre de points, espacement) — évite tout recalcul des chevrons
@@ -230,6 +234,14 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             trackCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             trackColorLayer?.lineColor = NSExpression(forConstantValue: appearance.color)
             trackColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+            // Fix "nav-route-overlay" (Bug 1) : épaisseur réglable "même logique que la trace"
+            // — la route Nav, le détour et "Aller à" suivent aussi l'épaisseur/contour choisis,
+            // en mutant les couches existantes (jamais de reconstruction, jamais de flash).
+            navRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
+            navRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
+            navRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+            detourLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
+            goToLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
         }
 
         /// Mode nuit : assombrit le fond raster OSM (pas de tuiles sombres dédiées, gratuites,
@@ -240,6 +252,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             isNightMode = nightMode
             rasterLayer?.maximumRasterBrightness = NSExpression(forConstantValue: nightMode ? 0.55 : 1.0)
             rasterLayer?.rasterSaturation = NSExpression(forConstantValue: nightMode ? -0.4 : 0.0)
+            // Fix "nav-route-overlay" (Bug 1) : couleur "bleu nuit / cyan clair" selon le thème
+            // — mutation de couche existante, jamais de reconstruction.
+            navRouteColorLayer?.lineColor = NSExpression(forConstantValue: MapEngineConstants.navRouteColor(isNightMode: nightMode))
         }
 
         /// Zone caméra utile (spec "camera-inset") : `centerCoordinate`/`lookingAtCenter` se
@@ -383,12 +398,24 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             // pointillés rouges, jamais confondu avec elle.
             detourLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.detourLineWidth)
             detourLayer.lineDashPattern = NSExpression(forConstantValue: [10, 8])
+            detourLayerRef = detourLayer
 
+            // Route Nav (fix "nav-route-overlay") : même construction casing+couleur que la
+            // trace (contour de contraste identique), sur la MÊME source — un recalcul
+            // d'itinéraire ne fait que remplacer `source.shape` (voir updateNavRouteShape),
+            // jamais reconstruire les couches, donc aucun flash.
             let navRouteSource = MLNShapeSource(identifier: MapEngineConstants.navRouteSourceIdentifier, shape: nil, options: nil)
             style.addSource(navRouteSource)
+            let navRouteCasingLayer = MLNLineStyleLayer(identifier: MapEngineConstants.navRouteCasingLayerIdentifier, source: navRouteSource)
+            navRouteCasingLayer.lineColor = NSExpression(forConstantValue: traceAppearance.casingColor)
+            navRouteCasingLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.casingWidth)
+            style.addLayer(navRouteCasingLayer)
+            self.navRouteCasingLayer = navRouteCasingLayer
+
             let navRouteLayer = MLNLineStyleLayer(identifier: MapEngineConstants.navRouteLayerIdentifier, source: navRouteSource)
-            navRouteLayer.lineColor = NSExpression(forConstantValue: UIColor.systemBlue)
+            navRouteLayer.lineColor = NSExpression(forConstantValue: MapEngineConstants.navRouteColor(isNightMode: isNightMode))
             navRouteLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+            navRouteColorLayer = navRouteLayer
 
             // "Aller à" universel (Bloc 4) : toujours cyan pointillé, jamais confondu avec la
             // trace (couleur choisie), la route Nav (bleu) ou le détour (rouge).
@@ -398,6 +425,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             goToLayer.lineColor = NSExpression(forConstantValue: UIColor.systemCyan)
             goToLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
             goToLayer.lineDashPattern = NSExpression(forConstantValue: [6, 6])
+            goToLayerRef = goToLayer
 
             if let track, track.points.count > 1 {
                 let trackCoordinates = track.points.map(\.coordinate)
