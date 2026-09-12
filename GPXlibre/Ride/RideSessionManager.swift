@@ -20,6 +20,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var currentCheckpointIndex: Int = 0
     @Published private(set) var distanceToCurrentCheckpointMeters: Double?
     @Published private(set) var isCloseToCheckpoint: Bool = false
+    /// Bloc 2 "resync-hysteresis" : roadbook en pause (hors trace) — direction/distance vers
+    /// le checkpoint courant gelées, remplacées par un indicateur "hors trace" + point de
+    /// reprise, tant que la position n'est pas stable ON trace pendant resyncHysteresisSeconds
+    /// (ou resyncMinConsecutiveStableFixes points consécutifs).
+    @Published private(set) var isOffTrackPaused = false
+    @Published private(set) var offTrackResumeCoordinate: CLLocationCoordinate2D?
+    @Published private(set) var offTrackResumeDistanceMeters: Double?
     /// Change de valeur à chaque déclenchement d'alerte : FlashOverlayView observe ce token.
     @Published var flashSequenceToken: UUID?
 
@@ -100,6 +107,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var offTrackSinceDate: Date?
     private var offTrackAccumulatedDistance: Double = 0
     private var lastOffTrackLocation: CLLocation?
+
+    // MARK: - Resync hors-trace (spec "resync-hysteresis") — hystérésis de reprise, distincte
+    // du minuteur "Portion bloquée ?" ci-dessus (celui-ci propose un détour après 30s/200m ;
+    // la pause roadbook ci-dessous s'active IMMÉDIATEMENT dès la sortie de trace, pour ne
+    // plus rappeler un checkpoint largué).
+    private var onTrackStableSinceDate: Date?
+    private var onTrackStableFixCount: Int = 0
     private var detourTask: Task<Void, Never>?
 
     private var rideStartDate: Date?
@@ -300,6 +314,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         offTrackAccumulatedDistance = 0
         lastOffTrackLocation = nil
         detourTask?.cancel()
+        isOffTrackPaused = false
+        offTrackResumeCoordinate = nil
+        offTrackResumeDistanceMeters = nil
+        onTrackStableSinceDate = nil
+        onTrackStableFixCount = 0
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
@@ -378,8 +397,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         switch modeStore.mode {
         case .trace:
-            updateRoadbookProgress(from: location)
+            // La projection (distance perpendiculaire + position curviligne) sert à la fois au
+            // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
+            updateRoadbookProgress(from: location, projection: projection)
             updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
         case .nav:
             updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
@@ -503,7 +524,42 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         rideContext == .fastRoad ? RideConstants.fastRoadAlertDistanceMeters : settings.checkpointAlertDistanceMeters
     }
 
-    private func updateRoadbookProgress(from location: CLLocation) {
+    /// Bloc 2 "resync-hysteresis" — tant que hors trace (au-delà du seuil d'alerte), le
+    /// roadbook s'arrête (plus de rappel d'un checkpoint déjà largué) : affiche à la place un
+    /// indicateur "hors trace" + le point de reprise le plus proche plus loin sur la trace
+    /// (même mécanique que le détour direct sans réseau). Le retour au guidage complet
+    /// n'intervient qu'après une période stable ON trace (hystérésis), et reprend TOUJOURS à
+    /// l'index courant ou plus loin — jamais de rattrapage des checkpoints déjà passés.
+    private func updateRoadbookProgress(from location: CLLocation, projection: TrackProjector.Projection?) {
+        guard let projection else { return }
+
+        guard projection.distanceToTrackMeters <= RideConstants.offTrackDistanceThresholdMeters else {
+            onTrackStableSinceDate = nil
+            onTrackStableFixCount = 0
+            isOffTrackPaused = true
+            updateOffTrackResumeTarget(from: location, projection: projection)
+            return
+        }
+
+        if isOffTrackPaused {
+            if onTrackStableSinceDate == nil {
+                onTrackStableSinceDate = location.timestamp
+                onTrackStableFixCount = 0
+            }
+            onTrackStableFixCount += 1
+            let stableElapsed = location.timestamp.timeIntervalSince(onTrackStableSinceDate ?? location.timestamp)
+            let isStableEnough = stableElapsed >= RideConstants.resyncHysteresisSeconds
+                || onTrackStableFixCount >= RideConstants.resyncMinConsecutiveStableFixes
+            guard isStableEnough else { return }
+
+            resyncCheckpointIndex(to: projection)
+            isOffTrackPaused = false
+            offTrackResumeCoordinate = nil
+            offTrackResumeDistanceMeters = nil
+            onTrackStableSinceDate = nil
+            onTrackStableFixCount = 0
+        }
+
         guard currentCheckpointIndex < checkpoints.count else {
             distanceToCurrentCheckpointMeters = nil
             isCloseToCheckpoint = false
@@ -534,6 +590,35 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             isCloseToCheckpoint = false
         }
+    }
+
+    /// Point de reprise (spec Bloc 2) : le premier point de trace atteignable plus loin —
+    /// même mécanique que `requestDirectDetour()` (detourAheadMinMeters), pas un nouvel algo.
+    private func updateOffTrackResumeTarget(from location: CLLocation, projection: TrackProjector.Projection) {
+        guard let track else { return }
+        guard let target = TrackProjector.coordinate(
+            in: track.points,
+            cumulativeDistances: trackCumulativeDistances,
+            atCumulativeDistance: projection.cumulativeDistanceMeters + RideConstants.detourAheadMinMeters
+        ) else { return }
+        offTrackResumeCoordinate = target
+        offTrackResumeDistanceMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, target)
+    }
+
+    /// Resynchronise l'index de checkpoint sur la position curviligne actuelle — ne recule
+    /// JAMAIS (spec Bloc 2) : les checkpoints en arrière de l'index courant restent "passés".
+    private func resyncCheckpointIndex(to projection: TrackProjector.Projection) {
+        guard let firstAhead = checkpoints.firstIndex(where: { checkpointCumulativeDistanceMeters($0) > projection.cumulativeDistanceMeters }) else {
+            currentCheckpointIndex = checkpoints.count
+            return
+        }
+        currentCheckpointIndex = max(currentCheckpointIndex, firstAhead)
+    }
+
+    private func checkpointCumulativeDistanceMeters(_ checkpoint: Checkpoint) -> Double {
+        trackCumulativeDistances.indices.contains(checkpoint.sourcePointIndex)
+            ? trackCumulativeDistances[checkpoint.sourcePointIndex]
+            : .infinity
     }
 
     // MARK: - Chemin bloqué / détour

@@ -9,7 +9,7 @@ enum RoadbookAnalyzer {
         let points = track.points
         guard points.count > 2 else { return [] }
 
-        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)] = []
+        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
 
         for i in 1..<(points.count - 1) {
             guard let beforeCoord = coordinate(in: points, aroundIndex: i, stepBack: true),
@@ -31,7 +31,7 @@ enum RoadbookAnalyzer {
                 direction = .left
             }
 
-            raw.append((points[i].coordinate, absDelta, direction))
+            raw.append((points[i].coordinate, absDelta, direction, i))
         }
 
         return mergeNearby(raw, minDistanceMeters: turnMergeMinDistanceMeters)
@@ -42,10 +42,10 @@ enum RoadbookAnalyzer {
     /// plus marqué — le total affiché (X/Y) reflète donc toujours la liste FUSIONNÉE, jamais
     /// le nombre brut de candidats détectés.
     private static func mergeNearby(
-        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)],
+        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)],
         minDistanceMeters: Double
     ) -> [Checkpoint] {
-        var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection)] = []
+        var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
 
         for candidate in raw {
             if let lastIndex = merged.indices.last,
@@ -59,7 +59,7 @@ enum RoadbookAnalyzer {
         }
 
         return merged.enumerated().map { index, item in
-            Checkpoint(coordinate: item.coordinate, turnAngleDegrees: item.angle, direction: item.direction, sequenceIndex: index + 1)
+            Checkpoint(coordinate: item.coordinate, turnAngleDegrees: item.angle, direction: item.direction, sequenceIndex: index + 1, sourcePointIndex: item.pointIndex)
         }
     }
 

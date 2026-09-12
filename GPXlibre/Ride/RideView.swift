@@ -214,13 +214,15 @@ struct RideView: View {
 
     @ViewBuilder
     private var bottomPanelLayer: some View {
-        if modeStore.mode == .trace, session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
+        if modeStore.mode == .trace,
+           session.currentCheckpoint != nil || !session.checkpoints.isEmpty || session.isOffTrackPaused {
             RoadbookPanelView(
                 checkpoint: session.currentCheckpoint,
                 nextCheckpoint: session.nextCheckpoint,
                 totalCount: session.checkpoints.count,
                 distanceMeters: session.distanceToCurrentCheckpointMeters,
-                isClose: session.isCloseToCheckpoint
+                isClose: session.isCloseToCheckpoint,
+                offTrackInfo: offTrackPanelInfo
             )
         }
         if modeStore.mode == .nav, session.navRoute != nil {
@@ -231,6 +233,18 @@ struct RideView: View {
                 isRecalculating: session.isRecalculatingRoute
             )
         }
+    }
+
+    /// Cap vers le point de reprise, RELATIF au cap actuel (spec Bloc 2 "resync-hysteresis") —
+    /// 0° = droit devant à l'écran, cohérent avec la caméra cap-en-haut.
+    private var offTrackPanelInfo: RoadbookPanelView.OffTrackInfo? {
+        guard session.isOffTrackPaused,
+              let resumeCoordinate = session.offTrackResumeCoordinate,
+              let currentLocation = session.currentLocation
+        else { return nil }
+        let targetBearing = RoadbookAnalyzer.bearing(from: currentLocation.coordinate, to: resumeCoordinate)
+        let relativeBearing = RoadbookAnalyzer.signedAngleDifference(from: session.headingDegrees, to: targetBearing)
+        return RoadbookPanelView.OffTrackInfo(relativeBearingDegrees: relativeBearing, distanceMeters: session.offTrackResumeDistanceMeters)
     }
 
     /// Zone "gauche milieu" (spec Bloc 2) : waypoints rapides en Trace, 2D/3D + limite de

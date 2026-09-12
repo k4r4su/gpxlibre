@@ -134,6 +134,16 @@ enum RideConstants {
     /// Distance de retour sur la trace (m) qui efface automatiquement le détour (+ haptique).
     static let detourRejoinClearRadiusMeters: Double = 20
 
+    // MARK: - Resync hors-trace (spec "resync-hysteresis")
+
+    /// RESYNC_HYSTERESIS_S : durée stable ON trace avant reprise complète du roadbook — évite
+    /// un rebond d'un seul point GPS dérivant near la trace. Voir aussi
+    /// resyncMinConsecutiveStableFixes (OU logique : le premier des deux déclenche la reprise).
+    static let resyncHysteresisSeconds: Double = 20
+    /// Alternative "au moins N points GPS consécutifs proches de la trace" — peu importe le
+    /// temps exact, l'important est une vraie reprise, pas un rebond isolé.
+    static let resyncMinConsecutiveStableFixes: Int = 2
+
     static let detourRoutingTimeoutSeconds: Double = 12
 
     /// API publique gratuite de démonstration OSRM — pas de clé, usage raisonnable uniquement.

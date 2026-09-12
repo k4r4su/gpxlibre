@@ -29,6 +29,11 @@ struct Checkpoint: Identifiable, Hashable {
     let turnAngleDegrees: Double
     let direction: TurnDirection
     let sequenceIndex: Int
+    /// Index dans `GPXTrack.points` d'origine — permet de retrouver la distance cumulée du
+    /// checkpoint (`trackCumulativeDistances[sourcePointIndex]`) sans re-projeter sa
+    /// coordonnée sur la trace (spec "resync-hysteresis" : resynchroniser l'index courant
+    /// sans jamais reculer).
+    let sourcePointIndex: Int
 
     static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
