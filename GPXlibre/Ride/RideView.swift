@@ -72,12 +72,14 @@ struct RideView: View {
         }
     }
 
-    /// La trace/le guidage Nav occupent la zone `bottomPanel` (RoadbookPanelView /
-    /// NavGuidancePanelView) — quand c'est le cas, la caméra doit réserver cette hauteur en
-    /// plus de la tab bar (spec "camera-inset"), sinon la position se retrouve cachée dessous.
-    private func hasBottomPanel(track: GPXTrack?) -> Bool {
+    /// La trace/le guidage Nav occupent la zone `directionPanelLayer` (RoadbookPanelView /
+    /// NavGuidancePanelView, EN HAUT — fix "overlay-layout-grid") — quand c'est le cas, la
+    /// caméra doit réserver cette hauteur côté haut (fix "position-anchor"), sinon le calcul
+    /// d'ancrage de la position serait faux. Reflète EXACTEMENT la condition d'affichage de
+    /// `directionPanelLayer` (y compris l'indicateur "hors trace").
+    private func hasDirectionPanel(track: GPXTrack?) -> Bool {
         switch modeStore.mode {
-        case .trace: return session.currentCheckpoint != nil || !session.checkpoints.isEmpty
+        case .trace: return session.currentCheckpoint != nil || !session.checkpoints.isEmpty || session.isOffTrackPaused
         case .nav: return session.navRoute != nil
         }
     }
@@ -176,10 +178,11 @@ struct RideView: View {
         }
     }
 
-    /// Zone "topBar" (spec Bloc 2) : segmented Trace/Nav centré, recherche calée à droite,
-    /// puis au plus une bannière éphémère en dessous (voir activeBanner/bannerView). Cette
-    /// zone n'ignore PAS la safe area (contrairement à mapLayer) : elle évite automatiquement
-    /// l'encoche/Dynamic Island, comme n'importe quelle vue SwiftUI normale.
+    /// Zone haute (fix "overlay-layout-grid", Bug 3) : segmented Trace/Nav centré, recherche
+    /// calée à droite, PUIS au plus une bannière éphémère, PUIS le panneau de direction pleine
+    /// largeur — TOUT en haut, rien de tout ça en bas (c'est ce qui se confondait avec la tab
+    /// bar). Cette zone n'ignore PAS la safe area (contrairement à mapLayer) : elle évite
+    /// automatiquement l'encoche/Dynamic Island, comme n'importe quelle vue SwiftUI normale.
     private func topStackLayer(track: GPXTrack?) -> some View {
         VStack {
             HStack {
@@ -212,14 +215,23 @@ struct RideView: View {
 
             bannerView(activeBanner(track: track))
                 .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+
+            directionPanelLayer
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
 
             Spacer()
         }
-        .animation(.easeInOut(duration: 0.25), value: session.isBlockedBannerVisible)
+        // Fix "panel-consistency" (Bug 6) : fondu + léger slide, jamais d'apparition brute.
+        .animation(.easeInOut(duration: 0.2), value: session.isBlockedBannerVisible)
+        .animation(.easeInOut(duration: 0.2), value: hasDirectionPanel(track: track))
     }
 
+    /// Panneau de direction (fix "overlay-layout-grid", Bug 3) : EN HAUT, pleine largeur —
+    /// jamais en bas, où il se confondait avec la tab bar et masquait la position (Bug 2).
     @ViewBuilder
-    private var bottomPanelLayer: some View {
+    private var directionPanelLayer: some View {
         if modeStore.mode == .trace,
            session.currentCheckpoint != nil || !session.checkpoints.isEmpty || session.isOffTrackPaused {
             RoadbookPanelView(
@@ -288,41 +300,40 @@ struct RideView: View {
         }
     }
 
-    /// Zone "droite milieu" + "droite-milieu bas" (spec Bloc 2) : Stop / recentrer / zoom
-    /// empilés avec un espacement de 12 pt, puis le bouton critique (Bloqué en Trace,
-    /// Signaler en Nav) séparé par un espace visuel dédié — jamais mélangé à la même hauteur
-    /// que le badge vitesse (zone topRight, totalement indépendante, voir speedBadgeLayer).
+    /// Bas-droite (fix "overlay-layout-grid", Bug 3) : colonne verticale ANCRÉE EN BAS
+    /// (au-dessus de la tab bar, jamais au centre) — ordre figé : Me recentrer, +, −, Stop,
+    /// Bloqué/Signaler, espacés uniformément de 12 pt. Plus jamais mélangée au badge vitesse
+    /// (bas-gauche, zone totalement séparée).
     @ViewBuilder
-    private var rightMiddleLayer: some View {
+    private var bottomRightColumn: some View {
         HStack {
             Spacer()
             VStack(spacing: RideOverlayLayout.rightStackSpacing) {
                 Spacer()
-                RideStopButton { showStopConfirmation = true }
                 if session.isManualOverrideActive {
                     RideRecenterButton { session.recenterCamera() }
                 }
                 RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
-                Spacer().frame(height: 24)
+                RideStopButton { showStopConfirmation = true }
                 if modeStore.mode == .trace {
                     BlockedPathButton { showDetourConfirmation = true }
                 } else {
                     NavReportButton()
                 }
-                Spacer()
             }
             .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
             .padding(.trailing, 20)
+            .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
         }
     }
 
-    /// Zone "haut-droite" (spec Bloc 2) : badge vitesse TOUJOURS à sa place fixe, hors zone
-    /// bannières — décalage calculé pour la place PIRE cas (bannière visible), jamais un
-    /// simple magic number, pour garantir zéro chevauchement même quand une bannière apparaît.
-    private var speedBadgeLayer: some View {
+    /// Bas-gauche (fix "overlay-layout-grid", Bug 3) : badge vitesse ancré juste au-dessus de
+    /// la tab bar — plus au top-droite (ancienne position, source de chevauchement avec les
+    /// bannières hautes).
+    private var bottomLeftBadge: some View {
         HStack {
-            Spacer()
             VStack {
+                Spacer()
                 if showStatsPanel {
                     RideStatsPanel(
                         currentSpeedKmh: session.smoothedSpeedKmh,
@@ -341,10 +352,10 @@ struct RideView: View {
                         withAnimation { showStatsPanel = true }
                     }
                 }
-                Spacer()
             }
-            .padding(.top, RideOverlayLayout.topBarHeight + RideOverlayLayout.bannerHeight + RideOverlayLayout.cameraInsetMarginTopPoints)
-            .padding(.trailing, 12)
+            .padding(.leading, 20)
+            .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
+            Spacer()
         }
     }
 
@@ -367,9 +378,11 @@ struct RideView: View {
             let insets = RideOverlayLayout.computeMapInsets(
                 safeAreaTop: safeAreaTop,
                 safeAreaBottom: safeAreaBottom,
-                hasBottomPanel: hasBottomPanel(track: track),
+                screenHeight: UIScreen.main.bounds.height,
+                hasDirectionPanel: hasDirectionPanel(track: track),
                 hasBanner: activeBanner(track: track) != nil,
-                isLandscape: geometry.size.width > geometry.size.height
+                isLandscape: geometry.size.width > geometry.size.height,
+                positionAnchorRatio: is2DNorthUp ? RideConstants.positionAnchorRatio2D : RideConstants.positionAnchorRatio
             )
             rideContentBody(track: track, insets: insets)
         }
@@ -381,10 +394,9 @@ struct RideView: View {
                 .ignoresSafeArea()
 
             topStackLayer(track: track)
-            bottomPanelLayer
             leftMiddleLayer
-            rightMiddleLayer
-            speedBadgeLayer
+            bottomRightColumn
+            bottomLeftBadge
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
