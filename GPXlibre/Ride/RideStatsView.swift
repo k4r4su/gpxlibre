@@ -57,6 +57,7 @@ struct RideStatsPanel: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.white.opacity(0.7))
                 }
+                .longPressTooltip("Replier les mesures")
             }
             HStack(spacing: 24) {
                 stat("Vitesse", "\(settings.speedUnit.roundedValue(fromKmh: currentSpeedKmh))", unit: settings.speedUnit.label, emphasized: true)

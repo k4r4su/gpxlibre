@@ -31,12 +31,18 @@ struct WaypointQuickAddButton: View {
                         Button {
                             createWaypoint(category: category)
                         } label: {
-                            Image(systemName: category.systemImageName)
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(.blue.opacity(0.85))
-                                .clipShape(Circle())
+                            VStack(spacing: 2) {
+                                Image(systemName: category.systemImageName)
+                                    .font(.system(size: 16, weight: .bold))
+                                Text(category.label)
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(.blue.opacity(0.85))
+                            .clipShape(Circle())
                         }
                         .accessibilityLabel(category.label)
                     }
@@ -46,17 +52,23 @@ struct WaypointQuickAddButton: View {
                 .clipShape(Capsule())
             }
 
+            // "waypoint" est une action critique (spec Bloc 2) : label texte permanent,
+            // pas seulement un explicateur au long-press.
             Button {
                 withAnimation { isExpanded.toggle() }
             } label: {
-                Image(systemName: isExpanded ? "xmark" : "mappin.and.ellipse")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(.blue.opacity(0.9))
-                    .clipShape(Circle())
+                VStack(spacing: 2) {
+                    Image(systemName: isExpanded ? "xmark" : "mappin.and.ellipse")
+                        .font(.system(size: 20, weight: .bold))
+                    Text(isExpanded ? "Fermer" : "Point")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(.blue.opacity(0.9))
+                .clipShape(Circle())
             }
-            .accessibilityLabel("Ajouter un point d'intérêt")
+            .accessibilityLabel(isExpanded ? "Fermer le menu des points d'intérêt" : "Ajouter un point d'intérêt")
         }
     }
 

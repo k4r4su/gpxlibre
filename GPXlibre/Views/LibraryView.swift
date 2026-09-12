@@ -27,7 +27,7 @@ struct LibraryView: View {
                     } label: {
                         Image(systemName: "arrow.down.circle")
                     }
-                    .accessibilityLabel("Cartes hors-ligne")
+                    .longPressTooltip("Cartes hors-ligne")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -44,6 +44,7 @@ struct LibraryView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .longPressTooltip("Ajouter une trace")
                 }
             }
             .fileImporter(

@@ -14,7 +14,8 @@ struct RideGlovedZoomControls: View {
     }
 
     private func glovedButton(systemImage: String, label: String?, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let explanation = systemImage == "plus" ? "Zoomer" : "Dézoomer"
+        return Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
@@ -22,7 +23,7 @@ struct RideGlovedZoomControls: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .accessibilityLabel(systemImage == "plus" ? "Zoomer" : "Dézoomer")
+        .longPressTooltip(explanation)
     }
 }
 

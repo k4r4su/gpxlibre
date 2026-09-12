@@ -24,6 +24,7 @@ struct BlockedPathBannerView: View {
                 Image(systemName: "xmark")
                     .foregroundStyle(.white)
             }
+            .longPressTooltip("Ignorer l'alerte")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -34,18 +35,23 @@ struct BlockedPathBannerView: View {
     }
 }
 
-/// Toujours visible en Ride, gros et utilisable avec des gants.
+/// Toujours visible en Ride, gros et utilisable avec des gants. Action critique (spec
+/// Bloc 2) : label texte permanent, pas seulement un explicateur au long-press.
 struct BlockedPathButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(.red.opacity(0.85))
-                .clipShape(Circle())
+            VStack(spacing: 2) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                Text("Bloqué")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(width: 56, height: 56)
+            .background(.red.opacity(0.85))
+            .clipShape(Circle())
         }
         .accessibilityLabel("Chemin bloqué")
     }

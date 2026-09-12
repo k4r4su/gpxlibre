@@ -17,12 +17,18 @@ struct NavReportButton: View {
                         Button {
                             report(category: category)
                         } label: {
-                            Image(systemName: category.systemImageName)
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Color.red.opacity(0.85))
-                                .clipShape(Circle())
+                            VStack(spacing: 2) {
+                                Image(systemName: category.systemImageName)
+                                    .font(.system(size: 16, weight: .bold))
+                                Text(category.label)
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(Color.red.opacity(0.85))
+                            .clipShape(Circle())
                         }
                         .accessibilityLabel(category.label)
                     }
@@ -32,17 +38,23 @@ struct NavReportButton: View {
                 .clipShape(Capsule())
             }
 
+            // "blocage"/signalement est une action critique (spec Bloc 2) : label texte
+            // permanent, pas seulement un explicateur au long-press.
             Button {
                 withAnimation { isExpanded.toggle() }
             } label: {
-                Image(systemName: isExpanded ? "xmark" : "exclamationmark.bubble.fill")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(Color.red.opacity(0.9))
-                    .clipShape(Circle())
+                VStack(spacing: 2) {
+                    Image(systemName: isExpanded ? "xmark" : "exclamationmark.bubble.fill")
+                        .font(.system(size: 20, weight: .bold))
+                    Text(isExpanded ? "Fermer" : "Signaler")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Color.red.opacity(0.9))
+                .clipShape(Circle())
             }
-            .accessibilityLabel("Signaler")
+            .accessibilityLabel(isExpanded ? "Fermer le menu de signalement" : "Signaler un danger, un bouchon ou un point d'attention")
         }
     }
 

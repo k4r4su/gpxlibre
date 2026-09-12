@@ -79,6 +79,7 @@
 		EB1288DAC9D91775DCA72EEA /* DetourRoutingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD94492CCA8C53965DBDB36E /* DetourRoutingService.swift */; };
 		ED55BFD5B863E12180F1C284 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 0B8E38CDE1439C5E2E06B33A /* MapLibre */; };
 		EEF06EDE0AB369C7B4525E74 /* OfflineConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45900199AF18B7481E52EDA /* OfflineConstants.swift */; };
+		F1120E938FB599529C994C37 /* LongPressTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */; };
 		F84C59B40DA90C8B571ED115 /* TileCacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880511AA5A6E5C4609F0B188 /* TileCacheStore.swift */; };
 		F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */; };
 		FAA066824132C41AD020F6A8 /* RideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5204AEC04322271B21AADF /* RideView.swift */; };
@@ -140,6 +141,7 @@
 		AAD459CD19AEC11BC6AC5299 /* TrafficService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficService.swift; sourceTree = "<group>"; };
 		ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
+		AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongPressTooltip.swift; sourceTree = "<group>"; };
 		B474A0CD23D4910F89D3D0F7 /* CorridorPrecacheEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorPrecacheEstimator.swift; sourceTree = "<group>"; };
 		C1E8B6AF30C01FC1B313F1FD /* WaypointCategoryExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointCategoryExtensions.swift; sourceTree = "<group>"; };
 		C279A8BCAAD91AE23B404DF9 /* WaypointCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointCategory.swift; sourceTree = "<group>"; };
@@ -307,6 +309,7 @@
 			isa = PBXGroup;
 			children = (
 				E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */,
+				AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */,
 				5377D7D96D91B4019D5F0517 /* RootView.swift */,
 				2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */,
 				66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */,
@@ -481,6 +484,7 @@
 				529BEC651A662138BDE3DC6A /* LibraryStore.swift in Sources */,
 				08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */,
 				70E872A1581371D76A198904 /* LocationManager.swift in Sources */,
+				F1120E938FB599529C994C37 /* LongPressTooltip.swift in Sources */,
 				8BAFD67F27C073B255C3DE58 /* MapEngineConstants.swift in Sources */,
 				16318DE3CF7601A2C1F64148 /* MapLibreBootstrap.swift in Sources */,
 				7ACA0383980C1BA59FAA4E7D /* MapLoadStatus.swift in Sources */,
