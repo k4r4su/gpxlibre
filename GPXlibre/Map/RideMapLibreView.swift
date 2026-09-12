@@ -28,6 +28,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let isManualOverrideActive: Bool
     let cameraCommandToken: UUID?
     let detourRoute: DetourRoute?
+    let goToGuidance: GoToGuidance?
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -78,6 +79,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.updateNightMode(traceAppearance.isNightMode && tileSource == .osmStandard)
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
+        updateGoToShape(on: mapView, context: context)
 
         let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
         context.coordinator.lastCameraCommandToken = cameraCommandToken
@@ -102,6 +104,21 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         // Animation courte pour un tap +/- ou un recentrage explicite ; lissage normal sinon.
         let duration = isForcedCommand ? RideConstants.manualZoomAnimationDurationSeconds : RideConstants.cameraAnimationDurationSeconds
         mapView.setCamera(camera, withDuration: duration, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+    }
+
+    /// "Aller à" universel (Bloc 4) — guidage parallèle, jamais un remplacement de la trace
+    /// ou de la route Nav, toujours rendu en pointillés cyan (voir didFinishLoading).
+    private func updateGoToShape(on mapView: MLNMapView, context: Context) {
+        guard let style = mapView.style,
+              let source = style.source(withIdentifier: MapEngineConstants.goToSourceIdentifier) as? MLNShapeSource
+        else { return }
+
+        guard let goToGuidance, goToGuidance.coordinates.count > 1 else {
+            source.shape = nil
+            return
+        }
+        let coordinates = goToGuidance.coordinates
+        source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
     }
 
     private func updateDetourShape(on mapView: MLNMapView, context: Context) {
@@ -239,6 +256,15 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             navRouteLayer.lineColor = NSExpression(forConstantValue: UIColor.systemBlue)
             navRouteLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
 
+            // "Aller à" universel (Bloc 4) : toujours cyan pointillé, jamais confondu avec la
+            // trace (couleur choisie), la route Nav (bleu) ou le détour (rouge).
+            let goToSource = MLNShapeSource(identifier: MapEngineConstants.goToSourceIdentifier, shape: nil, options: nil)
+            style.addSource(goToSource)
+            let goToLayer = MLNLineStyleLayer(identifier: MapEngineConstants.goToLayerIdentifier, source: goToSource)
+            goToLayer.lineColor = NSExpression(forConstantValue: UIColor.systemCyan)
+            goToLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+            goToLayer.lineDashPattern = NSExpression(forConstantValue: [6, 6])
+
             if let track, track.points.count > 1 {
                 let trackCoordinates = track.points.map(\.coordinate)
                 let trackShape = MLNPolyline(coordinates: trackCoordinates, count: UInt(trackCoordinates.count))
@@ -259,9 +285,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 trackColorLayer = colorLayer
             }
 
-            // Détour et route Nav ajoutés après la trace : ils doivent rester visibles au-dessus.
+            // Détour, route Nav et "Aller à" ajoutés après la trace : ils doivent rester
+            // visibles au-dessus.
             style.addLayer(detourLayer)
             style.addLayer(navRouteLayer)
+            style.addLayer(goToLayer)
 
             mapView.addAnnotations(checkpoints.map(CheckpointMLNAnnotation.init))
             mapView.addAnnotations(waypoints.map(RollingWaypointMLNAnnotation.init))

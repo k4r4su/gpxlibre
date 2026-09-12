@@ -43,6 +43,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var recordingTrackID: UUID?
     private var lastRecordedLocation: CLLocation?
     private var lastRecordedDate: Date?
+    @Published private(set) var isRecordingPaused = false
+
+    // MARK: - Aller à universel (Bloc 4) — guidage PARALLÈLE, jamais un remplacement de la
+    // trace sacrée ni de la route Nav principale. Fonctionne en Mode Trace ET Mode Nav.
+    @Published private(set) var goToGuidance: GoToGuidance?
+    @Published private(set) var goToDistanceRemainingMeters: Double?
+    @Published private(set) var isRequestingGoTo = false
+    @Published var goToRequestFailed: String?
+    private var goToTask: Task<Void, Never>?
 
     // MARK: - Mode Nav (guidage A→B, recalcul automatique — jamais en Mode Trace)
     @Published private(set) var navRoute: NavRoute?
@@ -300,12 +309,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
         }
 
+        updateGoToGuidance(from: location)
         recordRideTrack(location: location)
     }
 
     /// Enregistre un point dès que l'un des deux seuils est atteint (5 s OU 15 m, le plus
     /// fréquent des deux) — tourne automatiquement pendant tout le Ride, aucune action requise.
+    /// Suspendu après un Stop (voir stopGuidance()) tant que l'enregistrement n'a pas repris.
     private func recordRideTrack(location: CLLocation) {
+        guard !isRecordingPaused else { return }
         let shouldRecord: Bool
         if let lastDate = lastRecordedDate, let lastLocation = lastRecordedLocation {
             let elapsed = location.timestamp.timeIntervalSince(lastDate)
@@ -334,6 +346,18 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         recordingTrackID = nil
         lastRecordedLocation = nil
         lastRecordedDate = nil
+        isRecordingPaused = false
+    }
+
+    /// Distance totale de la portion enregistrée — sert à décider si un export est proposé
+    /// après un Stop (> 1 km, voir stopGuidance()).
+    var recordedDistanceMeters: Double {
+        guard recordedPoints.count > 1 else { return 0 }
+        var total: Double = 0
+        for i in 1..<recordedPoints.count {
+            total += RoadbookAnalyzer.distanceMeters(recordedPoints[i - 1].coordinate, recordedPoints[i].coordinate)
+        }
+        return total
     }
 
     private func updateRideStats(from location: CLLocation, projection: TrackProjector.Projection?, etaSpeedKmh: Double) {
@@ -601,6 +625,84 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isOverSpeedLimit = false
         lastSpeedLimitLookupDate = nil
         voiceAnnouncer.stop()
+    }
+
+    // MARK: - Aller à universel (Bloc 4)
+
+    /// Lance un guidage "Aller à" PARALLÈLE (pointillés cyan) — fonctionne en Mode Trace
+    /// (la trace sacrée n'est jamais touchée) comme en Mode Nav (à côté de la route
+    /// principale). `.route` réutilise OSRM, `.offroad` est une ligne directe honnête (cap +
+    /// distance, aucune prétention de chemin réel), `.mixed` route jusqu'au point routable le
+    /// plus proche (OSRM snappe naturellement dessus) puis termine à vol d'oiseau.
+    func startGoTo(to destination: CLLocationCoordinate2D, label: String, profile: GoToProfile) {
+        goToTask?.cancel()
+        goToRequestFailed = nil
+
+        guard let origin = currentLocation?.coordinate else {
+            goToRequestFailed = "Position GPS indisponible pour l'instant."
+            return
+        }
+
+        switch profile {
+        case .offroad:
+            goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
+        case .route, .mixed:
+            isRequestingGoTo = true
+            goToTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let route = try await NavRoutingService.route(from: origin, to: destination, destinationLabel: label, networkMonitor: self.networkMonitor)
+                    guard !Task.isCancelled else { return }
+                    var coordinates = route.coordinates
+                    if profile == .mixed, let snappedEnd = coordinates.last {
+                        // OSRM a déjà "snappé" `destination` sur le point routable le plus
+                        // proche : `snappedEnd` EST ce point. On complète juste par une ligne
+                        // droite honnête jusqu'à la vraie destination si elle est plus loin.
+                        let residual = RoadbookAnalyzer.distanceMeters(snappedEnd, destination)
+                        if residual > RideConstants.detourRejoinClearRadiusMeters {
+                            coordinates.append(destination)
+                        }
+                    }
+                    await MainActor.run {
+                        self.goToGuidance = GoToGuidance(coordinates: coordinates, profile: profile, destinationCoordinate: destination, destinationLabel: label)
+                        self.isRequestingGoTo = false
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        self.isRequestingGoTo = false
+                        // Honnête : si le réseau/OSRM échoue, on ne prétend pas avoir un
+                        // itinéraire — fallback automatique en ligne directe (comme .offroad).
+                        self.goToRequestFailed = (error as? LocalizedError)?.errorDescription ?? "Itinéraire impossible — guidage direct."
+                        self.goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
+                    }
+                }
+            }
+        }
+    }
+
+    func stopGoTo() {
+        goToTask?.cancel()
+        goToGuidance = nil
+        goToDistanceRemainingMeters = nil
+        goToRequestFailed = nil
+        isRequestingGoTo = false
+    }
+
+    private func updateGoToGuidance(from location: CLLocation) {
+        guard let guidance = goToGuidance else { return }
+        goToDistanceRemainingMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, guidance.destinationCoordinate)
+    }
+
+    /// Stop universel, visible en Mode Trace ET Mode Nav : état propre en 1 geste
+    /// (confirmation portée par l'appelant, voir RideView). N'efface JAMAIS la trace chargée
+    /// — seulement les guidages actifs (Nav, Aller à, détour) et la caméra forcée (2D).
+    /// L'enregistrement est mis en pause ; l'appelant propose l'export si > 1 km.
+    func stopGuidance() {
+        stopNav()
+        stopGoTo()
+        cancelDetour()
+        isRecordingPaused = true
     }
 
     private func requestNavRoute() {

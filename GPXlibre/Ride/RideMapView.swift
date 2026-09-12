@@ -26,6 +26,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// Détour temporaire (contournement en ligne ou guidage direct) superposé à la trace
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
     let detourRoute: DetourRoute?
+    let goToGuidance: GoToGuidance?
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
     let onLongPress: (CLLocationCoordinate2D) -> Void
@@ -58,6 +59,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
 
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
+        syncGoToOverlay(on: mapView, context: context)
         syncReliefOverlay(on: mapView, context: context)
 
         return mapView
@@ -87,6 +89,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         context.coordinator.onLongPress = onLongPress
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
+        syncGoToOverlay(on: mapView, context: context)
         syncReliefOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
         mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
@@ -158,6 +161,22 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         coordinator.navRouteOverlay = overlay
     }
 
+    /// "Aller à" universel (Bloc 4) — guidage parallèle, jamais un remplacement de la trace
+    /// ou de la route Nav, toujours en pointillés cyan (voir rendererFor overlay:).
+    private func syncGoToOverlay(on mapView: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        guard coordinator.currentGoToComputedAt != goToGuidance?.computedAt else { return }
+
+        if let existing = coordinator.goToOverlay { mapView.removeOverlay(existing) }
+        coordinator.goToOverlay = nil
+        coordinator.currentGoToComputedAt = goToGuidance?.computedAt
+
+        guard let guidance = goToGuidance, guidance.coordinates.count > 1 else { return }
+        let overlay = GoToPolyline(coordinates: guidance.coordinates, count: guidance.coordinates.count)
+        mapView.addOverlay(overlay)
+        coordinator.goToOverlay = overlay
+    }
+
     private func updateDetourOverlay(on mapView: MKMapView, context: Context) {
         if let existing = context.coordinator.detourOverlay {
             mapView.removeOverlay(existing)
@@ -206,6 +225,8 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         var traceColorOverlay: TraceColorPolyline?
         var navRouteOverlay: NavRoutePolyline?
         var currentNavRouteComputedAt: Date?
+        var goToOverlay: GoToPolyline?
+        var currentGoToComputedAt: Date?
 
         @objc func gestureDetected(_ gesture: UIGestureRecognizer) {
             guard gesture.state == .began || gesture.state == .changed else { return }
@@ -241,6 +262,13 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 let renderer = MKPolylineRenderer(polyline: navPolyline)
                 renderer.strokeColor = .systemBlue
                 renderer.lineWidth = traceAppearance.lineWidth
+                return renderer
+            }
+            if let goToPolyline = overlay as? GoToPolyline {
+                let renderer = MKPolylineRenderer(polyline: goToPolyline)
+                renderer.strokeColor = .systemCyan
+                renderer.lineWidth = traceAppearance.lineWidth
+                renderer.lineDashPattern = [6, 6]
                 return renderer
             }
             if let detour = overlay as? DetourPolyline {
@@ -303,6 +331,10 @@ final class TraceColorPolyline: MKPolyline {}
 
 /// Route calculée en Mode Nav — bleu classique, jamais confondue avec la trace sacrée.
 final class NavRoutePolyline: MKPolyline {}
+
+/// "Aller à" universel (Bloc 4) — pointillés cyan, jamais confondu avec la trace, la route
+/// Nav ou le détour.
+final class GoToPolyline: MKPolyline {}
 
 final class CheckpointAnnotation: NSObject, MKAnnotation {
     let checkpoint: Checkpoint

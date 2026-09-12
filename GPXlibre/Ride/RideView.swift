@@ -14,6 +14,10 @@ struct RideView: View {
     @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
     @State private var is2DNorthUp = false
+    @State private var pendingGoToCoordinate: CLLocationCoordinate2D?
+    @State private var pendingGoToLabel = ""
+    @State private var showGoToActionSheet = false
+    @State private var showStopConfirmation = false
     @Environment(\.colorScheme) private var colorScheme
 
     /// "OSM standard" (item #10, défaut) = automatique, suit le mode sombre système (lui-même
@@ -65,8 +69,22 @@ struct RideView: View {
                 .ignoresSafeArea()
 
             VStack {
-                RideModeSegmentedControl(mode: $modeStore.mode)
-                    .padding(.top, 8)
+                HStack {
+                    RideModeSegmentedControl(mode: $modeStore.mode)
+                    Button {
+                        showDestinationSearch = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.35))
+                            .clipShape(Circle())
+                    }
+                    .longPressTooltip("Aller à une adresse ou un lieu")
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 12)
 
                 HStack {
                     OSMAttributionView()
@@ -93,6 +111,16 @@ struct RideView: View {
                     }
                 } else {
                     navStatusBanner
+                }
+
+                if let guidance = session.goToGuidance {
+                    GoToStatusPillView(
+                        guidance: guidance,
+                        distanceMeters: session.goToDistanceRemainingMeters,
+                        isRequesting: session.isRequestingGoTo,
+                        onCancel: { session.stopGoTo() }
+                    )
+                    .padding(.top, 8)
                 }
 
                 Spacer()
@@ -179,6 +207,8 @@ struct RideView: View {
                 Spacer()
                 VStack {
                     Spacer()
+                    // Stop : toujours visible en Mode Nav ET Mode Trace actifs (spec Bloc 4).
+                    RideStopButton { showStopConfirmation = true }
                     if session.isManualOverrideActive {
                         RideRecenterButton { session.recenterCamera() }
                     }
@@ -226,6 +256,28 @@ struct RideView: View {
         } message: {
             Text("La trace d'origine reste affichée telle quelle. Le détour est temporaire.")
         }
+        .confirmationDialog(
+            pendingGoToLabel,
+            isPresented: $showGoToActionSheet,
+            titleVisibility: .visible
+        ) {
+            Button("Itinéraire ici (route)") { commitGoTo(profile: .route) }
+            Button("Y aller à vol d'oiseau") { commitGoTo(profile: .offroad) }
+            Button("Mixte (route + vol d'oiseau)") { commitGoTo(profile: .mixed) }
+            Button("Annuler", role: .cancel) { pendingGoToCoordinate = nil }
+        } message: {
+            Text("La trace chargée n'est jamais modifiée par ce guidage.")
+        }
+        .confirmationDialog(
+            "Arrêter le guidage ?",
+            isPresented: $showStopConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Arrêter", role: .destructive) { commitStop() }
+            Button("Continuer", role: .cancel) {}
+        } message: {
+            Text("La caméra se libère et les panneaux se masquent. L'enregistrement en cours est mis en pause.")
+        }
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
                 trackName: track?.name ?? "Sortie Nav",
@@ -235,8 +287,12 @@ struct RideView: View {
             )
         }
         .sheet(isPresented: $showDestinationSearch) {
-            NavDestinationSearchView { coordinate, label in
-                session.startNav(to: coordinate, label: label)
+            NavDestinationSearchView { coordinate, label, profile in
+                if modeStore.mode == .nav, profile == .route {
+                    session.startNav(to: coordinate, label: label)
+                } else {
+                    session.startGoTo(to: coordinate, label: label, profile: profile)
+                }
             }
         }
         .onAppear { session.start(track: track) }
@@ -266,6 +322,32 @@ struct RideView: View {
         }
         .onChange(of: settings.keepScreenAwakeInRide) { _ in
             session.applyIdleTimerSetting()
+        }
+    }
+
+    /// "Itinéraire ici" en Mode Nav démarre directement le guidage principal (voix +
+    /// tour-par-tour, c'est exactement le rôle du Mode Nav) ; partout ailleurs (Mode Trace,
+    /// ou profils vol d'oiseau/mixte y compris en Nav) c'est un guidage parallèle "Aller à"
+    /// qui ne touche jamais la trace chargée.
+    private func commitGoTo(profile: GoToProfile) {
+        guard let coordinate = pendingGoToCoordinate else { return }
+        let label = pendingGoToLabel
+        pendingGoToCoordinate = nil
+        if modeStore.mode == .nav, profile == .route {
+            session.startNav(to: coordinate, label: label)
+        } else {
+            session.startGoTo(to: coordinate, label: label, profile: profile)
+        }
+    }
+
+    /// Stop universel (spec Bloc 4) : état propre en 1 geste (confirmation déjà passée),
+    /// propose l'export seulement si plus d'1 km a été enregistré.
+    private func commitStop() {
+        let distance = session.recordedDistanceMeters
+        session.stopGuidance()
+        is2DNorthUp = false
+        if distance > 1000 {
+            showEndRideSheet = true
         }
     }
 
@@ -336,11 +418,13 @@ struct RideView: View {
                 isManualOverrideActive: session.isManualOverrideActive,
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
+                goToGuidance: session.goToGuidance,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
-                    guard modeStore.mode == .nav else { return }
-                    session.startNav(to: coordinate, label: "Point sur la carte")
+                    pendingGoToCoordinate = coordinate
+                    pendingGoToLabel = "Point sur la carte"
+                    showGoToActionSheet = true
                 }
             )
         case .mapKit:
@@ -359,11 +443,13 @@ struct RideView: View {
                 isManualOverrideActive: session.isManualOverrideActive,
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
+                goToGuidance: session.goToGuidance,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
-                    guard modeStore.mode == .nav else { return }
-                    session.startNav(to: coordinate, label: "Point sur la carte")
+                    pendingGoToCoordinate = coordinate
+                    pendingGoToLabel = "Point sur la carte"
+                    showGoToActionSheet = true
                 }
             )
         }

@@ -27,6 +27,8 @@ enum MapEngineConstants {
     static let detourLayerIdentifier = "detour-layer"
     static let navRouteSourceIdentifier = "nav-route-source"
     static let navRouteLayerIdentifier = "nav-route-layer"
+    static let goToSourceIdentifier = "goto-source"
+    static let goToLayerIdentifier = "goto-layer"
 
     /// Nom du fichier de style de secours embarqué dans le bundle (GPXlibre/Resources/),
     /// utilisé si le style principal échoue à charger (JSON invalide, timeout) — l'utilisateur

@@ -26,6 +26,9 @@ protocol MapProvider: View {
         /// caméra (animation courte) même pendant la fenêtre d'override manuel.
         cameraCommandToken: UUID?,
         detourRoute: DetourRoute?,
+        /// "Aller à" universel (Bloc 4) : guidage parallèle, jamais un remplacement de la
+        /// trace ou de la route Nav — toujours en pointillés cyan.
+        goToGuidance: GoToGuidance?,
         onManualGesture: @escaping () -> Void,
         onStatusChange: @escaping (MapLoadStatus) -> Void,
         onLongPress: @escaping (CLLocationCoordinate2D) -> Void

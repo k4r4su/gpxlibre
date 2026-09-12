@@ -4,7 +4,7 @@ import CoreLocation
 /// Recherche d'adresse (Nominatim), favoris Domicile/Travail en 1 tap, et point choisi
 /// directement sur la carte (long-press, voir RideView).
 struct NavDestinationSearchView: View {
-    let onSelect: (CLLocationCoordinate2D, String) -> Void
+    let onSelect: (CLLocationCoordinate2D, String, GoToProfile) -> Void
 
     @EnvironmentObject private var favorites: NavFavoritesStore
     @Environment(\.dismiss) private var dismiss
@@ -33,13 +33,29 @@ struct NavDestinationSearchView: View {
                 }
 
                 ForEach(results) { result in
-                    Button {
-                        onSelect(result.coordinate, result.displayName)
-                        dismiss()
-                    } label: {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(result.displayName)
                             .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                        // Chip de profil (Bloc 4) : Route / Offroad / Mixte, sur chaque résultat.
+                        HStack(spacing: 8) {
+                            ForEach(GoToProfile.allCases) { profile in
+                                Button {
+                                    onSelect(result.coordinate, result.displayName, profile)
+                                    dismiss()
+                                } label: {
+                                    Label(profile.label, systemImage: profile.systemImageName)
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.accentColor.opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
             }
             .searchable(text: $query, prompt: "Adresse ou lieu")
@@ -58,7 +74,7 @@ struct NavDestinationSearchView: View {
     private func favoriteButton(title: String, systemImage: String, favorite: NavFavorite?) -> some View {
         Button {
             guard let favorite else { return }
-            onSelect(favorite.coordinate.coordinate, favorite.label)
+            onSelect(favorite.coordinate.coordinate, favorite.label, .route)
             dismiss()
         } label: {
             VStack(spacing: 6) {
