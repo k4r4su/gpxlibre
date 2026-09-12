@@ -15,8 +15,8 @@ struct MapLoadWarningBannerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.red.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .ridePanelStyle(tint: .red, tintOpacity: 0.55)
         .padding(.horizontal)
+        .transition(.ridePanel)
     }
 }

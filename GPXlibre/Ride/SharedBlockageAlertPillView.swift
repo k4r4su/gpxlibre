@@ -34,10 +34,8 @@ struct SharedBlockageAlertPillView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.orange.opacity(0.55))
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .ridePanelStyle(tint: .orange, tintOpacity: 0.5)
         .padding(.horizontal)
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .transition(.ridePanel)
     }
 }

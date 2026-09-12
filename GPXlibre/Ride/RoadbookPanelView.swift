@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Panneau roadbook en bas d'écran (spec "roadbook-declutter") : flèche très grande à gauche,
-/// distance énorme au centre, compteur compact "⚑ N/M" à droite — plus de ligne "Gauche ·
-/// Checkpoint 12/196" redondante (l'icône donne déjà la direction, le badge donne déjà le
-/// compte). Mini preview du virage suivant en dessous, en gris, pour que le motard voie qu'il
-/// y en a un deuxième sans avoir à lire.
+/// Panneau roadbook EN HAUT d'écran, pleine largeur (fix "overlay-layout-grid", Bug 3 — déplacé
+/// du bas, où il se confondait avec la tab bar et masquait la position, Bug 2) : flèche très
+/// grande à gauche, distance énorme au centre, compteur compact "⚑ N/M" à droite — plus de
+/// ligne "Gauche · Checkpoint 12/196" redondante (l'icône donne déjà la direction, le badge
+/// donne déjà le compte). Mini preview du virage suivant en dessous, en gris, pour que le
+/// motard voie qu'il y en a un deuxième sans avoir à lire.
 struct RoadbookPanelView: View {
     let checkpoint: Checkpoint?
     let nextCheckpoint: Checkpoint?
@@ -53,9 +54,8 @@ struct RoadbookPanelView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.black.opacity(0.45))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .padding()
+        .ridePanelStyle()
+        .padding(.horizontal, 12)
     }
 
     private func offTrackDistanceText(_ meters: Double) -> String {
@@ -112,10 +112,10 @@ struct RoadbookPanelView: View {
                 .foregroundStyle(.white.opacity(0.5))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.black.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .padding()
+        .ridePanelStyle()
+        .padding(.horizontal, 12)
     }
 
     private var distanceText: String {

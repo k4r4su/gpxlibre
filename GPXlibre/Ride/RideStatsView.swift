@@ -20,8 +20,13 @@ struct RideStatsBadge: View {
             }
             .foregroundStyle(.white)
             .frame(width: 60, height: 60)
-            .background(.black.opacity(0.6))
+            // Fix "panel-consistency" (Bug 6) : même matériau que les panneaux (ultraThinMaterial
+            // sombre) — la forme reste un cercle (bouton, pas un panneau rectangulaire).
+            .background(Color.black.opacity(0.35))
+            .background(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
             .clipShape(Circle())
+            .shadow(color: .black.opacity(0.28), radius: 10, x: 0, y: 4)
         }
         .accessibilityLabel("Vitesse \(settings.speedUnit.displayString(fromKmh: currentSpeedKmh)), toucher pour plus de mesures")
     }
@@ -77,8 +82,7 @@ struct RideStatsPanel: View {
             .tint(.white)
         }
         .padding(16)
-        .background(.black.opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .ridePanelStyle()
     }
 
     private func stat(_ title: String, _ value: String, unit: String, emphasized: Bool = false) -> some View {

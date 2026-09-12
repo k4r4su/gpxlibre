@@ -34,10 +34,9 @@ struct GoToStatusPillView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.cyan.opacity(0.35))
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .ridePanelStyle(tint: .cyan, tintOpacity: 0.35)
         .padding(.horizontal)
+        .transition(.ridePanel)
     }
 
     private var distanceText: String {

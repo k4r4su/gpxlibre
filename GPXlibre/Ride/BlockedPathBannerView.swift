@@ -28,10 +28,9 @@ struct BlockedPathBannerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.black.opacity(0.75))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .ridePanelStyle()
         .padding(.horizontal)
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .transition(.ridePanel)
     }
 }
 
@@ -84,9 +83,9 @@ struct DetourStatusView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.red.opacity(0.75))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .ridePanelStyle(tint: .red, tintOpacity: 0.5)
         .padding(.horizontal)
+        .transition(.ridePanel)
     }
 
     private var modeLabel: String {

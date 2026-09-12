@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Panneau de guidage tour-par-tour Mode Nav — instruction texte + flèche, distance jusqu'à
-/// la manœuvre. Pendant du RoadbookPanelView côté Trace.
+/// Panneau de guidage tour-par-tour Mode Nav, EN HAUT pleine largeur (fix
+/// "overlay-layout-grid", Bug 3) — instruction texte + flèche, distance jusqu'à la manœuvre.
+/// Pendant du RoadbookPanelView côté Trace, même style (fix "panel-consistency", Bug 6).
 struct NavGuidancePanelView: View {
     let maneuver: NavManeuver?
     let distanceMeters: Double?
@@ -34,9 +35,8 @@ struct NavGuidancePanelView: View {
             }
         }
         .padding(16)
-        .background(.blue.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .padding()
+        .ridePanelStyle(tint: .blue, tintOpacity: 0.45)
+        .padding(.horizontal, 12)
     }
 
     private var distanceText: String {
