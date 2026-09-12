@@ -298,6 +298,27 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 updateNightMode(true)
             }
 
+            // Relief GPU (spec "hillshade-clean") : uniquement sous OSM standard — OpenTopoMap
+            // a déjà son ombrage intégré, en ajouter un second serait redondant. Construit une
+            // seule fois ici (le style entier se recharge de toute façon au changement de
+            // thème, donc pas besoin d'un chemin de mise à jour séparé) ; jamais retouché par
+            // la boucle de position ou de zoom.
+            if currentTileSource == .osmStandard, let rasterLayer {
+                let demOptions: [MLNTileSourceOption: Any] = [
+                    .demEncoding: NSNumber(value: MLNDEMEncoding.terrarium.rawValue),
+                    .maximumZoomLevel: MapEngineConstants.hillshadeMaxZoomLevel,
+                ]
+                let demSource = MLNRasterDEMSource(
+                    identifier: MapEngineConstants.hillshadeSourceIdentifier,
+                    tileURLTemplates: [MapEngineConstants.hillshadeDEMTileURLTemplate],
+                    options: demOptions
+                )
+                style.addSource(demSource)
+                let hillshadeLayer = MLNHillshadeStyleLayer(identifier: MapEngineConstants.hillshadeLayerIdentifier, source: demSource)
+                hillshadeLayer.hillshadeExaggeration = NSExpression(forConstantValue: MapEngineConstants.hillshadeExaggerationDefault)
+                style.insertLayer(hillshadeLayer, above: rasterLayer)
+            }
+
             let detourSource = MLNShapeSource(identifier: MapEngineConstants.detourSourceIdentifier, shape: nil, options: nil)
             style.addSource(detourSource)
             let detourLayer = MLNLineStyleLayer(identifier: MapEngineConstants.detourLayerIdentifier, source: detourSource)

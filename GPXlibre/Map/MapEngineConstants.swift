@@ -35,6 +35,18 @@ enum MapEngineConstants {
     static let userLocationHaloSourceIdentifier = "user-location-halo-source"
     static let userLocationHaloLayerIdentifier = "user-location-halo-layer"
 
+    /// Relief GPU (spec "hillshade-clean") : tuiles DEM Terrarium, gratuites et sans clé
+    /// (AWS Open Data). Ajouté UNE fois au chargement du style (didFinishLoading), jamais
+    /// reconstruit en réponse au zoom/à la position — sous le raster OSM standard uniquement
+    /// (OpenTopoMap a déjà son propre ombrage intégré, l'ajouter dessous serait redondant/
+    /// terne). OpenTopoMap (thème "papier") reste inchangé.
+    static let hillshadeDEMTileURLTemplate = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+    static let hillshadeSourceIdentifier = "hillshade-dem-source"
+    static let hillshadeLayerIdentifier = "hillshade-layer"
+    /// Compromis assumé (spec) : zoom max réduit sur le DEM, cohérent avec le cache hors-ligne.
+    static let hillshadeMaxZoomLevel = 13
+    static let hillshadeExaggerationDefault: Double = 0.4
+
     /// Nom du fichier de style de secours embarqué dans le bundle (GPXlibre/Resources/),
     /// utilisé si le style principal échoue à charger (JSON invalide, timeout) — l'utilisateur
     /// doit toujours voir un fond de carte, même dégradé.
