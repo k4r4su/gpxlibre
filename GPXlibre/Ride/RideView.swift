@@ -23,7 +23,15 @@ struct RideView: View {
         case .osmStandard: return colorScheme == .dark
         case .clair: return false
         case .sombre: return true
+        case .relief: return false
         }
+    }
+
+    /// Relief (#10) = source de tuiles OpenTopoMap, jamais un simple filtre teinté — voir
+    /// TileSource. Le pré-cache doit suivre ce même choix (RideMapLibreView.updateUIView
+    /// recharge tout le style quand ça change, en conservant trace/détour/route Nav).
+    private var activeTileSource: TileSource {
+        TileSource.active(for: settings.mapThemePreset)
     }
 
     /// Épaisseur/couleur lues en direct depuis les Réglages (items #13/14) — un changement
@@ -319,6 +327,7 @@ struct RideView: View {
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
                 traceAppearance: currentTraceAppearance,
+                tileSource: activeTileSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
@@ -341,6 +350,7 @@ struct RideView: View {
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
                 traceAppearance: currentTraceAppearance,
+                tileSource: activeTileSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,

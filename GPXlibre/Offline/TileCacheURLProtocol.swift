@@ -1,12 +1,11 @@
 import Foundation
 
-/// Intercepte les requêtes de tuiles OSM émises par MapLibre (via
-/// `MLNNetworkConfiguration.sessionConfiguration`, voir MapLibreBootstrap) : sert depuis le
-/// cache disque si présent, sinon récupère sur le réseau puis met en cache. En avion / hors
-/// zone, une tuile absente échoue simplement (MapLibre affiche la case vide) — pas de crash,
-/// pas de tentative répétée bloquante.
+/// Intercepte les requêtes de tuiles émises par MapLibre (via
+/// `MLNNetworkConfiguration.sessionConfiguration`, voir MapLibreBootstrap) — OSM standard ET
+/// OpenTopoMap (thème Relief) : sert depuis le cache disque si présent, sinon récupère sur le
+/// réseau puis met en cache. En avion / hors zone, une tuile absente échoue simplement
+/// (MapLibre affiche la case vide) — pas de crash, pas de tentative répétée bloquante.
 final class TileCacheURLProtocol: URLProtocol {
-    private static let host = "tile.openstreetmap.org"
     /// Session dédiée à la récupération réseau de secours — distincte de la configuration
     /// partagée MapLibre pour ne pas se ré-intercepter elle-même.
     private static let fetchSession = URLSession(configuration: .ephemeral)
@@ -14,7 +13,8 @@ final class TileCacheURLProtocol: URLProtocol {
     private var activeTask: URLSessionDataTask?
 
     override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.host == host
+        guard let host = request.url?.host else { return false }
+        return TileSource.matching(host: host) != nil
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -77,14 +77,16 @@ final class TileCacheURLProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    /// URL attendue : https://tile.openstreetmap.org/{z}/{x}/{y}.png
+    /// URL attendue : https://<host>/{z}/{x}/{y}.png — le host détermine la source (osm ou
+    /// opentopo), donc le sous-dossier de cache dans lequel la tuile est rangée/lue.
     private static func parseTile(from url: URL) -> TileCoordinate? {
+        guard let host = url.host, let source = TileSource.matching(host: host) else { return nil }
         let components = url.pathComponents.filter { $0 != "/" }
         guard components.count >= 3,
               let z = Int(components[components.count - 3]),
               let x = Int(components[components.count - 2]),
               let y = Int(components[components.count - 1].replacingOccurrences(of: ".png", with: ""))
         else { return nil }
-        return TileCoordinate(z: z, x: x, y: y)
+        return TileCoordinate(z: z, x: x, y: y, source: source)
     }
 }

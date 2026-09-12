@@ -1,7 +1,9 @@
 import Foundation
 
-/// Cache disque des tuiles raster, structuré `MapTiles/{z}/{x}/{y}.png`. Sert de vérité
-/// locale : une tuile déjà présente n'est jamais re-téléchargée (pas de round-trip réseau).
+/// Cache disque des tuiles raster, structuré `MapTiles/<source>/{z}/{x}/{y}.png` — un
+/// sous-dossier par source (osm/opentopo) pour que le thème Relief et les thèmes OSM
+/// standard ne se marchent jamais dessus. Sert de vérité locale : une tuile déjà présente
+/// n'est jamais re-téléchargée (pas de round-trip réseau).
 final class TileCacheStore {
     static let shared = TileCacheStore()
 
@@ -21,6 +23,7 @@ final class TileCacheStore {
 
     func fileURL(for tile: TileCoordinate) -> URL {
         baseDirectory
+            .appendingPathComponent(tile.source.cacheFolderName, isDirectory: true)
             .appendingPathComponent("\(tile.z)", isDirectory: true)
             .appendingPathComponent("\(tile.x)", isDirectory: true)
             .appendingPathComponent("\(tile.y).png")

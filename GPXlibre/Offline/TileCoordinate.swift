@@ -5,15 +5,24 @@ struct TileCoordinate: Hashable {
     let z: Int
     let x: Int
     let y: Int
+    /// Jamais partagée entre deux sources différentes dans le cache (voir TileSource).
+    let source: TileSource
+
+    init(z: Int, x: Int, y: Int, source: TileSource = .osmStandard) {
+        self.z = z
+        self.x = x
+        self.y = y
+        self.source = source
+    }
 
     var path: String { "\(z)/\(x)/\(y)" }
 
-    static func covering(latitude: Double, longitude: Double, zoom: Int) -> TileCoordinate {
+    static func covering(latitude: Double, longitude: Double, zoom: Int, source: TileSource = .osmStandard) -> TileCoordinate {
         let n = pow(2.0, Double(zoom))
         let x = Int(((longitude + 180) / 360) * n)
         let latRad = latitude * .pi / 180
         let y = Int((1 - log(tan(latRad) + 1 / cos(latRad)) / .pi) / 2 * n)
-        return TileCoordinate(z: zoom, x: max(0, min(Int(n) - 1, x)), y: max(0, min(Int(n) - 1, y)))
+        return TileCoordinate(z: zoom, x: max(0, min(Int(n) - 1, x)), y: max(0, min(Int(n) - 1, y)), source: source)
     }
 
     /// Boîte englobante lat/lon (degrés) d'un point élargi d'un rayon en mètres — utile pour
@@ -27,14 +36,14 @@ struct TileCoordinate: Hashable {
     }
 
     /// Toutes les tuiles couvrant une boîte englobante lat/lon, à un niveau de zoom donné.
-    static func tiles(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int) -> [TileCoordinate] {
-        let topLeft = covering(latitude: maxLat, longitude: minLon, zoom: zoom)
-        let bottomRight = covering(latitude: minLat, longitude: maxLon, zoom: zoom)
+    static func tiles(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int, source: TileSource = .osmStandard) -> [TileCoordinate] {
+        let topLeft = covering(latitude: maxLat, longitude: minLon, zoom: zoom, source: source)
+        let bottomRight = covering(latitude: minLat, longitude: maxLon, zoom: zoom, source: source)
         var result: [TileCoordinate] = []
         guard topLeft.x <= bottomRight.x, topLeft.y <= bottomRight.y else { return result }
         for x in topLeft.x...bottomRight.x {
             for y in topLeft.y...bottomRight.y {
-                result.append(TileCoordinate(z: zoom, x: x, y: y))
+                result.append(TileCoordinate(z: zoom, x: x, y: y, source: source))
             }
         }
         return result

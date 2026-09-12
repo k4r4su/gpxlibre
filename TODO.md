@@ -1,5 +1,47 @@
 # TODO
 
+## Thème Relief : Option A retenue (raster OpenTopoMap), Option B non tentée
+
+**Choix assumé** : Option A (tuiles raster OpenTopoMap toutes prêtes) est implémentée et
+active. Option B (hillshade MapLibre via une source DEM comme les AWS Terrain Tiles /
+`elevation-tiles.openstreetmap.fr`) n'a pas été tentée dans cette session.
+
+### Pourquoi Option A plutôt que B
+
+- Option A fonctionne immédiatement avec l'infrastructure déjà en place (même mécanisme
+  d'interception/cache que les tuiles OSM standard, juste une deuxième `TileSource`) —
+  fiable, zéro nouvelle dépendance, ToS claire (attribution obligatoire, déjà affichée).
+- Option B (hillshade sur un fond OSM standard) est visuellement supérieure en théorie
+  (relief vectoriel superposable à n'importe quel style) mais demande une source DEM dont
+  la fiabilité/gratuité à long terme n'a pas pu être vérifiée dans cette session (la spec
+  elle-même anticipait ce risque : "si la source DEM pose un souci de fiabilité/clé →
+  fallback Option A"). Plutôt que de livrer un hillshade non testé, l'agent a choisi
+  directement le fallback documenté.
+
+### Compromis honnête
+
+- Relief en raster = image pré-rendue : pas de recolorisation possible (contrairement à un
+  hillshade vectoriel qui s'adapterait à un thème sombre par exemple). Le thème Relief
+  ignore volontairement le mode nuit (`isNightModeActive` retourne `false` pour `.relief`
+  dans `RideView`/`TrackDetailView`) plutôt que d'assombrir artificiellement une image qui
+  n'a pas été conçue pour ça.
+- Zoom plafonné à 17 (`TileSource.openTopoMap.maxZoomLevel`) — OpenTopoMap ne sert pas de
+  tuiles au-delà, contrairement à OSM standard (19).
+- MapKit (comparaison, non actif) simule Relief via un simple `MKTileOverlay` sur un seul
+  sous-domaine (`a.tile.opentopomap.org`) — pas de cache disque partagé avec MapLibre côté
+  MapKit, ce chemin n'est pas celui testé/documenté pour l'usage hors-ligne réel.
+
+### Pour tenter Option B plus tard
+
+1. Source DEM candidate : `https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png`
+   (AWS Terrain Tiles, terrarium encoding) — vérifier d'abord la disponibilité/CORS/ToS
+   actuelles (aucune garantie de pérennité, projet tiers).
+2. Ajouter un cas `TileSource` dédié (ex. `.hillshadeDEM`) + une couche
+   `MLNHillshadeStyleLayer` (existe côté MapLibre) par-dessus le raster OSM standard, avec
+   `hillshadeExaggeration`/`hillshadeShadowColor` réglables.
+3. Garder le fallback Option A automatique si le premier fetch DEM échoue (timeout court,
+   ne jamais bloquer l'affichage de la carte).
+
 ## Bloc 4 — Trafic (TomTom) : sauté proprement, activation documentée
 
 **Statut** : non activé. Bloqué par une clé API TomTom que l'agent ne peut pas provisionner

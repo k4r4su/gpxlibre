@@ -76,7 +76,13 @@ final class TileDownloadQueue: ObservableObject {
 
     private func fetch(tile: TileCoordinate) async {
         guard !Task.isCancelled else { return }
-        let urlString = MapEngineConstants.osmTileURLTemplate
+        // Chaque tuile porte sa propre source (osm/opentopo) : le pré-cache suit toujours
+        // le thème actif au moment de l'estimation, jamais un template unique codé en dur.
+        guard let template = tile.source.tileURLTemplates.randomElement() else {
+            await MainActor.run { self.failedCount += 1 }
+            return
+        }
+        let urlString = template
             .replacingOccurrences(of: "{z}", with: "\(tile.z)")
             .replacingOccurrences(of: "{x}", with: "\(tile.x)")
             .replacingOccurrences(of: "{y}", with: "\(tile.y)")

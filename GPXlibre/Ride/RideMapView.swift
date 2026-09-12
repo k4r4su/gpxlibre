@@ -12,6 +12,10 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let waypoints: [RollingWaypoint]
     let navRoute: NavRoute?
     let traceAppearance: TraceAppearance
+    /// MapKit n'a pas de tuiles OpenTopoMap natives : thème Relief rendu via un MKTileOverlay
+    /// qui remplace le fond Apple Plans (canReplaceMapContent) — implémentation de comparaison
+    /// uniquement, MapLibre reste le moteur actif et le vrai chemin testé/mis en cache.
+    let tileSource: TileSource
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -54,8 +58,28 @@ struct RideMapView: UIViewRepresentable, MapProvider {
 
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
+        syncReliefOverlay(on: mapView, context: context)
 
         return mapView
+    }
+
+    /// Relief (comparaison MapKit uniquement) : overlay OpenTopoMap plein écran si le thème
+    /// actif est Relief, retiré sinon.
+    private func syncReliefOverlay(on mapView: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        guard coordinator.currentTileSource != tileSource else { return }
+        coordinator.currentTileSource = tileSource
+
+        if let existing = coordinator.reliefOverlay {
+            mapView.removeOverlay(existing)
+            coordinator.reliefOverlay = nil
+        }
+        guard tileSource == .openTopoMap else { return }
+        let overlay = MKTileOverlay(urlTemplate: "https://a.tile.opentopomap.org/{z}/{x}/{y}.png")
+        overlay.canReplaceMapContent = true
+        overlay.maximumZ = tileSource.maxZoomLevel
+        mapView.addOverlay(overlay, level: .aboveLabels)
+        coordinator.reliefOverlay = overlay
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
@@ -63,6 +87,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         context.coordinator.onLongPress = onLongPress
         syncTrackOverlays(on: mapView, context: context)
         syncNavRouteOverlay(on: mapView, context: context)
+        syncReliefOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
         mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
 
@@ -173,6 +198,8 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
         var detourOverlay: DetourPolyline?
         var traceAppearance = TraceAppearance()
+        var currentTileSource: TileSource = .osmStandard
+        var reliefOverlay: MKTileOverlay?
         var lastCameraCommandToken: UUID?
         var currentTrackID: UUID?
         var traceCasingOverlay: TraceCasingPolyline?
@@ -230,6 +257,9 @@ struct RideMapView: UIViewRepresentable, MapProvider {
                 renderer.strokeColor = UIColor.systemOrange
                 renderer.lineWidth = 5
                 return renderer
+            }
+            if let tileOverlay = overlay as? MKTileOverlay {
+                return MKTileOverlayRenderer(tileOverlay: tileOverlay)
             }
             return MKOverlayRenderer(overlay: overlay)
         }

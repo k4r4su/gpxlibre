@@ -14,11 +14,15 @@ struct DownloadedRegion: Codable, Identifiable {
     let tiles: [TileKey]
     let createdAt: Date
     var isComplete: Bool
+    /// Thème/source au moment du téléchargement (#10) — un corridor OSM standard ne compte
+    /// jamais comme "Relief déjà téléchargé", et vice versa (dossiers de cache distincts).
+    var source: TileSource = .osmStandard
 
     struct TileKey: Codable, Hashable {
         let z: Int, x: Int, y: Int
-        var coordinate: TileCoordinate { TileCoordinate(z: z, x: x, y: y) }
-        init(_ tile: TileCoordinate) { z = tile.z; x = tile.x; y = tile.y }
+        var source: TileSource = .osmStandard
+        var coordinate: TileCoordinate { TileCoordinate(z: z, x: x, y: y, source: source) }
+        init(_ tile: TileCoordinate) { z = tile.z; x = tile.x; y = tile.y; source = tile.source }
     }
 
     var tileCount: Int { tiles.count }
@@ -41,12 +45,12 @@ final class DownloadedRegionStore: ObservableObject {
         load()
     }
 
-    func region(forTrackID trackID: UUID) -> DownloadedRegion? {
-        regions.first { $0.trackID == trackID && $0.kind == .trackCorridor }
+    func region(forTrackID trackID: UUID, source: TileSource) -> DownloadedRegion? {
+        regions.first { $0.trackID == trackID && $0.kind == .trackCorridor && $0.source == source }
     }
 
-    func isTrackFullyOffline(_ trackID: UUID) -> Bool {
-        region(forTrackID: trackID)?.isComplete ?? false
+    func isTrackFullyOffline(_ trackID: UUID, source: TileSource) -> Bool {
+        region(forTrackID: trackID, source: source)?.isComplete ?? false
     }
 
     func upsert(_ region: DownloadedRegion) {

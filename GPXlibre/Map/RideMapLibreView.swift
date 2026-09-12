@@ -19,6 +19,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let waypoints: [RollingWaypoint]
     let navRoute: NavRoute?
     let traceAppearance: TraceAppearance
+    let tileSource: TileSource
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -32,7 +33,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let onLongPress: (CLLocationCoordinate2D) -> Void
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
+        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON(source: tileSource))
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .none
@@ -45,6 +46,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.checkpoints = checkpoints
         context.coordinator.waypoints = waypoints
         context.coordinator.traceAppearance = traceAppearance
+        context.coordinator.currentTileSource = tileSource
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
@@ -61,8 +63,19 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
+
+        if context.coordinator.currentTileSource != tileSource {
+            // Changement de thème carte (#10) : source raster différente (Relief =
+            // OpenTopoMap) — on recharge tout le style, ce qui redéclenche didFinishLoading
+            // et réajoute trace/détour/route Nav automatiquement (code déjà générique).
+            context.coordinator.currentTileSource = tileSource
+            context.coordinator.armLoadWatchdog(for: mapView)
+            onStatusChange(.loading)
+            mapView.styleJSON = MapEngineConstants.buildInitialStyleJSON(source: tileSource)
+        }
+
         context.coordinator.updateTraceAppearance(traceAppearance)
-        context.coordinator.updateNightMode(traceAppearance.isNightMode)
+        context.coordinator.updateNightMode(traceAppearance.isNightMode && tileSource == .osmStandard)
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
 
@@ -125,6 +138,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var waypoints: [RollingWaypoint] = []
         var traceAppearance = TraceAppearance()
         var lastCameraCommandToken: UUID?
+        var currentTileSource: TileSource = .osmStandard
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?

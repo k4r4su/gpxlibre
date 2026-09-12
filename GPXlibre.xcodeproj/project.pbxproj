@@ -18,6 +18,7 @@
 		1DD982743B5BF971AA9D1D04 /* NavDestinationSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FC7B3F636885FB97B34C08 /* NavDestinationSearchView.swift */; };
 		272C29E47921F1289B633B34 /* AppNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */; };
 		2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */; };
+		2C2EC5C62958DA3410C1903A /* TileSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6EBC7F4FD3F2F99ADBDB22 /* TileSource.swift */; };
 		2F059C71ECD7B3EBFFD8BFD3 /* ZoomPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */; };
 		3221BF7F8584B39F70929E3F /* TileDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B395D30C56F450B0CA73BA8 /* TileDownloadQueue.swift */; };
 		353F9A7552DADBF1C5C6D118 /* WaypointConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01B0DE3FE656FC8A6063BDEE /* WaypointConstants.swift */; };
@@ -143,6 +144,7 @@
 		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
 		AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongPressTooltip.swift; sourceTree = "<group>"; };
 		B474A0CD23D4910F89D3D0F7 /* CorridorPrecacheEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorridorPrecacheEstimator.swift; sourceTree = "<group>"; };
+		BD6EBC7F4FD3F2F99ADBDB22 /* TileSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileSource.swift; sourceTree = "<group>"; };
 		C1E8B6AF30C01FC1B313F1FD /* WaypointCategoryExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointCategoryExtensions.swift; sourceTree = "<group>"; };
 		C279A8BCAAD91AE23B404DF9 /* WaypointCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointCategory.swift; sourceTree = "<group>"; };
 		C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStatsView.swift; sourceTree = "<group>"; };
@@ -280,6 +282,7 @@
 				2E6E91693E4BD31C90751CBC /* TileCacheURLProtocol.swift */,
 				A2A5C078CC241E99F42255BE /* TileCoordinate.swift */,
 				6B395D30C56F450B0CA73BA8 /* TileDownloadQueue.swift */,
+				BD6EBC7F4FD3F2F99ADBDB22 /* TileSource.swift */,
 			);
 			path = Offline;
 			sourceTree = "<group>";
@@ -529,6 +532,7 @@
 				4F97AE5F02F6A4D695D4F3DC /* TileCacheURLProtocol.swift in Sources */,
 				701ACF9838732CCF0B6D5395 /* TileCoordinate.swift in Sources */,
 				3221BF7F8584B39F70929E3F /* TileDownloadQueue.swift in Sources */,
+				2C2EC5C62958DA3410C1903A /* TileSource.swift in Sources */,
 				59B7FC960372785CA506FEC9 /* TraceAppearance.swift in Sources */,
 				52EC67B7833280EF322910C7 /* TrackDetailView.swift in Sources */,
 				2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */,

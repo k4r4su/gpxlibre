@@ -15,6 +15,7 @@ struct TrackDetailView: View {
         case .osmStandard: isNightMode = colorScheme == .dark
         case .clair: isNightMode = false
         case .sombre: isNightMode = true
+        case .relief: isNightMode = false
         }
         return TraceAppearance(
             widthPreset: settings.traceWidthPreset,

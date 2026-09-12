@@ -6,6 +6,7 @@ import SwiftUI
 struct RegionDownloadView: View {
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
     @EnvironmentObject private var networkMonitor: NetworkMonitor
+    @EnvironmentObject private var settings: RideSettingsStore
     @StateObject private var queue = TileDownloadQueue()
 
     @State private var visibleBounds: SimpleBounds?
@@ -13,9 +14,16 @@ struct RegionDownloadView: View {
     @State private var wifiOnly = true
     @State private var estimate: PrecacheEstimate?
 
+    /// La zone téléchargée suit toujours le thème carte actif (#10), Relief inclus.
+    private var activeSource: TileSource { TileSource.active(for: settings.mapThemePreset) }
+
     var body: some View {
         List {
             Section("Nouvelle zone") {
+                Text("Thème actif : \(settings.mapThemePreset.label)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 RegionPickerMapView(bounds: $visibleBounds)
                     .frame(height: 220)
                     .listRowInsets(EdgeInsets())
@@ -61,7 +69,7 @@ struct RegionDownloadView: View {
                                 Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
                             }
                         }
-                        Text("\(region.tileCount) tuiles · \(ByteCountFormatter.string(fromByteCount: region.estimatedBytes, countStyle: .file))")
+                        Text("\(region.source == .openTopoMap ? "Relief" : "Standard") · \(region.tileCount) tuiles · \(ByteCountFormatter.string(fromByteCount: region.estimatedBytes, countStyle: .file))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -80,6 +88,7 @@ struct RegionDownloadView: View {
         .navigationTitle("Cartes hors-ligne")
         .onChange(of: visibleBounds) { _ in updateEstimate() }
         .onChange(of: maxZoom) { _ in updateEstimate() }
+        .onChange(of: settings.mapThemePreset) { _ in updateEstimate() }
     }
 
     private var diskUsageRow: some View {
@@ -105,9 +114,10 @@ struct RegionDownloadView: View {
             return
         }
         var tileSet = Set<TileCoordinate>()
-        for zoom in OfflineConstants.regionMinZoomSliderValue...Int(maxZoom) {
+        let cappedMaxZoom = min(Int(maxZoom), activeSource.maxZoomLevel)
+        for zoom in OfflineConstants.regionMinZoomSliderValue...cappedMaxZoom {
             let tiles = TileCoordinate.tiles(
-                minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom
+                minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom, source: activeSource
             )
             tileSet.formUnion(tiles)
         }
@@ -119,12 +129,13 @@ struct RegionDownloadView: View {
         queue.download(tiles: estimate.tiles, wifiOnly: wifiOnly, networkMonitor: networkMonitor) { success in
             let region = DownloadedRegion(
                 id: UUID(),
-                name: "Zone personnalisée",
+                name: "Zone personnalisée (\(settings.mapThemePreset.label))",
                 kind: .customArea,
                 trackID: nil,
                 tiles: estimate.tiles.map(DownloadedRegion.TileKey.init),
                 createdAt: Date(),
-                isComplete: success
+                isComplete: success,
+                source: activeSource
             )
             downloadedRegions.upsert(region)
         }

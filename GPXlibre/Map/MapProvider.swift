@@ -12,6 +12,8 @@ protocol MapProvider: View {
         waypoints: [RollingWaypoint],
         navRoute: NavRoute?,
         traceAppearance: TraceAppearance,
+        /// Fond raster actif (OSM standard ou OpenTopoMap pour le thème Relief, #10).
+        tileSource: TileSource,
         currentLocation: CLLocation?,
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,

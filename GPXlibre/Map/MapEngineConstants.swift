@@ -46,17 +46,21 @@ enum MapEngineConstants {
     /// contient du HTML avec des guillemets, et un ancien template en string interpolé
     /// produisait un JSON invalide (guillemets non échappés) qui faisait échouer tout le
     /// chargement du style, silencieusement — c'était la cause du fond noir muet.
-    static func buildInitialStyleJSON() -> String {
+    ///
+    /// `source` détermine le fond raster (OSM standard ou OpenTopoMap pour le thème Relief) —
+    /// changer de thème recharge entièrement le style (`mapView.styleJSON = ...`), voir
+    /// RideMapLibreView. Les identifiants source/layer restent stables d'un thème à l'autre.
+    static func buildInitialStyleJSON(source: TileSource = .osmStandard) -> String {
         let style: [String: Any] = [
             "version": 8,
             "sources": [
                 rasterSourceIdentifier: [
                     "type": "raster",
-                    "tiles": [osmTileURLTemplate],
+                    "tiles": source.tileURLTemplates,
                     "tileSize": 256,
                     "minzoom": Int(minZoomLevel),
-                    "maxzoom": Int(maxZoomLevel),
-                    "attribution": osmAttributionHTML,
+                    "maxzoom": source.maxZoomLevel,
+                    "attribution": source.attributionHTML,
                 ] as [String: Any],
             ],
             "layers": [

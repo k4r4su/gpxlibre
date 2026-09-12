@@ -8,16 +8,20 @@ struct PrecacheConfirmationView: View {
 
     @EnvironmentObject private var networkMonitor: NetworkMonitor
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
+    @EnvironmentObject private var settings: RideSettingsStore
     @StateObject private var queue = TileDownloadQueue()
     @Environment(\.dismiss) private var dismiss
 
     @State private var estimate: PrecacheEstimate?
     @State private var wifiOnly = true
 
+    /// Le corridor pré-caché DOIT suivre le thème carte actif (#10), Relief inclus.
+    private var activeSource: TileSource { TileSource.active(for: settings.mapThemePreset) }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                if downloadedRegions.isTrackFullyOffline(track.id) {
+                if downloadedRegions.isTrackFullyOffline(track.id, source: activeSource) {
                     Label("Corridor déjà 100% hors-ligne", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                         .font(.headline)
@@ -67,8 +71,13 @@ struct PrecacheConfirmationView: View {
         }
         .onAppear {
             if estimate == nil {
-                estimate = CorridorPrecacheEstimator.estimate(for: track)
+                estimate = CorridorPrecacheEstimator.estimate(for: track, source: activeSource)
             }
+        }
+        .onChange(of: settings.mapThemePreset) { _ in
+            // Le thème a changé pendant que la feuille est ouverte : ré-estimer pour la
+            // nouvelle source plutôt que de proposer un téléchargement obsolète.
+            estimate = CorridorPrecacheEstimator.estimate(for: track, source: activeSource)
         }
     }
 
@@ -76,13 +85,14 @@ struct PrecacheConfirmationView: View {
         guard let estimate else { return }
         queue.download(tiles: estimate.tiles, wifiOnly: wifiOnly, networkMonitor: networkMonitor) { success in
             let region = DownloadedRegion(
-                id: downloadedRegions.region(forTrackID: track.id)?.id ?? UUID(),
+                id: downloadedRegions.region(forTrackID: track.id, source: activeSource)?.id ?? UUID(),
                 name: track.name,
                 kind: .trackCorridor,
                 trackID: track.id,
                 tiles: estimate.tiles.map(DownloadedRegion.TileKey.init),
                 createdAt: Date(),
-                isComplete: success
+                isComplete: success,
+                source: activeSource
             )
             downloadedRegions.upsert(region)
             onFinished()

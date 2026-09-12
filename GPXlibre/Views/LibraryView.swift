@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
+    @EnvironmentObject private var settings: RideSettingsStore
     @State private var isImporting = false
     @State private var renamingTrack: GPXTrack?
     @State private var renameText = ""
@@ -113,7 +114,10 @@ struct LibraryView: View {
         List {
             ForEach(library.tracks) { track in
                 NavigationLink(value: track) {
-                    TrackRow(track: track, isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id))
+                    TrackRow(
+                        track: track,
+                        isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset))
+                    )
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
