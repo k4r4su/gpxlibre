@@ -58,7 +58,7 @@ struct RideView: View {
         Group {
             switch modeStore.mode {
             case .trace:
-                if let track = library.selectedTrack {
+                if let track = library.activeTrack {
                     // Sens A→B/B→A + départ personnalisé (spec "per-track-settings") — appliqués
                     // UNE fois ici, jamais écrits dans le fichier GPX source ; tout le reste
                     // (roadbook, projection, stats, rendu) continue de lire `points` normalement.

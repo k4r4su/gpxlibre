@@ -117,7 +117,15 @@ struct LibraryView: View {
                 NavigationLink(value: track) {
                     TrackRow(
                         track: track,
-                        isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset))
+                        isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
+                        isActive: library.activeTrackID == track.id,
+                        onToggleActive: {
+                            if library.activeTrackID == track.id {
+                                library.setDisplayed(track.id, false)
+                            } else {
+                                library.setActive(track.id)
+                            }
+                        }
                     )
                 }
                 .swipeActions(edge: .trailing) {
@@ -158,28 +166,43 @@ struct LibraryView: View {
 private struct TrackRow: View {
     let track: GPXTrack
     let isFullyOffline: Bool
+    /// Fix "single-source-active-track" (Bloc 1, itération 10) : un seul indicateur, la
+    /// trace active pour le Ride — coché vert. Bascule explicite en tête de ligne, second
+    /// point d'entrée identique dans TrackSettingsView (swipe it8).
+    let isActive: Bool
+    let onToggleActive: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(track.name)
-                    .font(.headline)
-                if isFullyOffline {
-                    Label("100% hors-ligne", systemImage: "checkmark.seal.fill")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.green)
-                        .accessibilityLabel("Carte 100% hors-ligne")
-                }
+        HStack(spacing: 12) {
+            Button(action: onToggleActive) {
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isActive ? .green : .secondary)
             }
-            HStack(spacing: 12) {
-                Label(String(format: "%.1f km", track.totalDistanceKm), systemImage: "ruler")
-                Label("\(track.pointCount) pts", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                if track.elevationGainMeters > 0 {
-                    Label(String(format: "+%.0f m", track.elevationGainMeters), systemImage: "arrow.up.right")
+            .buttonStyle(.plain)
+            .accessibilityLabel(isActive ? "Trace active pour le Ride, toucher pour désactiver" : "Rendre cette trace active pour le Ride")
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(track.name)
+                        .font(.headline)
+                    if isFullyOffline {
+                        Label("100% hors-ligne", systemImage: "checkmark.seal.fill")
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.green)
+                            .accessibilityLabel("Carte 100% hors-ligne")
+                    }
                 }
+                HStack(spacing: 12) {
+                    Label(String(format: "%.1f km", track.totalDistanceKm), systemImage: "ruler")
+                    Label("\(track.pointCount) pts", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    if track.elevationGainMeters > 0 {
+                        Label(String(format: "+%.0f m", track.elevationGainMeters), systemImage: "arrow.up.right")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }

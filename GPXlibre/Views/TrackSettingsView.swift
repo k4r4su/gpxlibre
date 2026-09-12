@@ -9,6 +9,7 @@ struct TrackSettingsView: View {
 
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @EnvironmentObject private var settings: RideSettingsStore
+    @EnvironmentObject private var library: LibraryStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var localSettings = TrackRideSettings.default
@@ -41,6 +42,25 @@ struct TrackSettingsView: View {
                                 .clipShape(Capsule())
                                 .padding(.bottom, 8)
                         }
+                    }
+                }
+
+                Section {
+                    // Fix "single-source-active-track" (Bloc 1, it10) : second point d'entrée
+                    // pour le même état que l'icône de la ligne Biblio — jamais un état
+                    // parallèle, toujours library.setActive/setDisplayed.
+                    Button {
+                        if library.activeTrackID == track.id {
+                            library.setDisplayed(track.id, false)
+                        } else {
+                            library.setActive(track.id)
+                        }
+                    } label: {
+                        Label(
+                            library.activeTrackID == track.id ? "Trace active pour le Ride" : "Rendre active pour le Ride",
+                            systemImage: library.activeTrackID == track.id ? "checkmark.circle.fill" : "circle"
+                        )
+                        .foregroundStyle(library.activeTrackID == track.id ? .green : .primary)
                     }
                 }
 

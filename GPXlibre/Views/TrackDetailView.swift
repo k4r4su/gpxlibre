@@ -44,7 +44,7 @@ struct TrackDetailView: View {
         .sheet(isPresented: $showPrecacheSheet) {
             PrecacheConfirmationView(track: track) {
                 showPrecacheSheet = false
-                library.selectedTrackID = track.id
+                library.setActive(track.id)
                 navigationState.selectedTab = .ride
             }
         }

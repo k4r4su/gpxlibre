@@ -81,10 +81,12 @@
 		C417572521DBCF33B43D3797 /* SpeedLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D76142813552024B2588287 /* SpeedLimitService.swift */; };
 		C725513EBF028CD538ACCD7C /* RideStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5BD775EA4A5D5C651FEB515 /* RideStatsView.swift */; };
 		CA31CA633E50EA52770061C1 /* TrackSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6808327F1B65D8285BCD330D /* TrackSettingsView.swift */; };
+		CB05C80A305A3C453E8525FF /* RideSessionManagerPurgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CD9BA5BA65F63F5BF39E1B /* RideSessionManagerPurgeTests.swift */; };
 		D1FF3BB286CEEC1DDB499C57 /* FlashOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07085FFDE42708E45905658C /* FlashOverlayView.swift */; };
 		D7868CEFDCF45630417F791D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5377D7D96D91B4019D5F0517 /* RootView.swift */; };
 		DA4268BBF0D1120BAA978229 /* DirectionChevronComputerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF7AFFBB5B4ABA6BCF1B3951 /* DirectionChevronComputerTests.swift */; };
 		DB53E62095C847AE12E608B5 /* fallback-style.json in Resources */ = {isa = PBXBuildFile; fileRef = 96C5C16B4B171BEF97E4EF51 /* fallback-style.json */; };
+		DD48A74D0D0A154E0B890DE0 /* LibraryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13681D4EE2A28A5AE4611D53 /* LibraryStoreTests.swift */; };
 		E2488E86DC385FED1FF43AE6 /* SharedBlockageLiveServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */; };
 		E4C60077323F06A1B1902070 /* GPXParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3443FA691B1A989E7E05A8AD /* GPXParser.swift */; };
 		E543A688558412A92AA61E2E /* SharedBlockageSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B05894EAE37DD950673FC01 /* SharedBlockageSyncService.swift */; };
@@ -121,6 +123,7 @@
 		07085FFDE42708E45905658C /* FlashOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashOverlayView.swift; sourceTree = "<group>"; };
 		0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStopButton.swift; sourceTree = "<group>"; };
 		10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageCodingTests.swift; sourceTree = "<group>"; };
+		13681D4EE2A28A5AE4611D53 /* LibraryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStoreTests.swift; sourceTree = "<group>"; };
 		1B05894EAE37DD950673FC01 /* SharedBlockageSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageSyncService.swift; sourceTree = "<group>"; };
 		1D85D3EE795613A3D5CF17F4 /* NavGuidancePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavGuidancePanelView.swift; sourceTree = "<group>"; };
 		1DE8E0D7E7FB50D07B4E617C /* SharedBlockageSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageSyncCoordinator.swift; sourceTree = "<group>"; };
@@ -169,6 +172,7 @@
 		954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationState.swift; sourceTree = "<group>"; };
 		9672B6260BAAEE66466B0E69 /* MapLibreBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreBootstrap.swift; sourceTree = "<group>"; };
 		96C5C16B4B171BEF97E4EF51 /* fallback-style.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "fallback-style.json"; sourceTree = "<group>"; };
+		96CD9BA5BA65F63F5BF39E1B /* RideSessionManagerPurgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManagerPurgeTests.swift; sourceTree = "<group>"; };
 		9A6444548973E3785D1BF242 /* RideMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideMode.swift; sourceTree = "<group>"; };
 		9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomPreset.swift; sourceTree = "<group>"; };
 		9D76142813552024B2588287 /* SpeedLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedLimitService.swift; sourceTree = "<group>"; };
@@ -400,6 +404,8 @@
 			isa = PBXGroup;
 			children = (
 				CF7AFFBB5B4ABA6BCF1B3951 /* DirectionChevronComputerTests.swift */,
+				13681D4EE2A28A5AE4611D53 /* LibraryStoreTests.swift */,
+				96CD9BA5BA65F63F5BF39E1B /* RideSessionManagerPurgeTests.swift */,
 				10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */,
 				BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */,
 			);
@@ -573,6 +579,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				DA4268BBF0D1120BAA978229 /* DirectionChevronComputerTests.swift in Sources */,
+				DD48A74D0D0A154E0B890DE0 /* LibraryStoreTests.swift in Sources */,
+				CB05C80A305A3C453E8525FF /* RideSessionManagerPurgeTests.swift in Sources */,
 				99A66F44AC26ECB625498587 /* SharedBlockageCodingTests.swift in Sources */,
 				E2488E86DC385FED1FF43AE6 /* SharedBlockageLiveServerTests.swift in Sources */,
 			);

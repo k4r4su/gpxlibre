@@ -297,11 +297,21 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         )
     }
 
+    /// Purge explicite (fix "single-source-active-track", it10) : plutôt que de compter sur
+    /// le PROCHAIN `start()`/`switchMode()` pour écraser silencieusement l'état d'une trace
+    /// disparue, on nettoie ici, au moment même où la vue Ride se démonte (trace supprimée,
+    /// onglet quitté). Aucun état fantôme ne doit survivre à un `stop()`.
     func stop() {
         isActive = false
         manager.stopUpdatingLocation()
         UIApplication.shared.isIdleTimerDisabled = false
         detourTask?.cancel()
+        track = nil
+        checkpoints = []
+        currentCheckpointIndex = 0
+        trackCumulativeDistances = []
+        goToGuidance = nil
+        resetBlockedPathState()
     }
 
     private func resetBlockedPathState() {
