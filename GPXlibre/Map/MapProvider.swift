@@ -20,6 +20,9 @@ protocol MapProvider: View {
         /// reste le défaut partout ; ceci force pitch 0 + nord en haut le temps du toggle.
         is2DNorthUp: Bool,
         isManualOverrideActive: Bool,
+        /// Change à chaque tap +/- ou recentrage : force l'application immédiate de la
+        /// caméra (animation courte) même pendant la fenêtre d'override manuel.
+        cameraCommandToken: UUID?,
         detourRoute: DetourRoute?,
         onManualGesture: @escaping () -> Void,
         onStatusChange: @escaping (MapLoadStatus) -> Void,

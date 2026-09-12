@@ -18,6 +18,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     let northUp: Bool
     let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
+    let cameraCommandToken: UUID?
     /// Détour temporaire (contournement en ligne ou guidage direct) superposé à la trace
     /// d'origine, qui reste affichée et n'est jamais modifiée ni retirée.
     let detourRoute: DetourRoute?
@@ -64,7 +65,10 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         syncNavRouteOverlay(on: mapView, context: context)
         updateDetourOverlay(on: mapView, context: context)
         mapView.overrideUserInterfaceStyle = traceAppearance.isNightMode ? .dark : .light
-        guard let currentLocation, !isManualOverrideActive else { return }
+
+        let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
+        context.coordinator.lastCameraCommandToken = cameraCommandToken
+        guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
         let pitch: CLLocationDegrees = is2DNorthUp ? 0 : RideConstants.cameraPitchDegrees
@@ -82,7 +86,9 @@ struct RideMapView: UIViewRepresentable, MapProvider {
             heading: heading
         )
 
-        UIView.animate(withDuration: RideConstants.cameraAnimationDurationSeconds, delay: 0, options: [.allowUserInteraction, .curveEaseInOut]) {
+        // Animation courte pour un tap +/- ou un recentrage explicite ; lissage normal sinon.
+        let duration = isForcedCommand ? RideConstants.manualZoomAnimationDurationSeconds : RideConstants.cameraAnimationDurationSeconds
+        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .curveEaseInOut]) {
             mapView.camera = camera
         }
     }
@@ -167,6 +173,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
         var detourOverlay: DetourPolyline?
         var traceAppearance = TraceAppearance()
+        var lastCameraCommandToken: UUID?
         var currentTrackID: UUID?
         var traceCasingOverlay: TraceCasingPolyline?
         var traceColorOverlay: TraceColorPolyline?

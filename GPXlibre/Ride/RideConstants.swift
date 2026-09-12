@@ -138,4 +138,15 @@ enum RideConstants {
     static let etaSpeedWindowSeconds: Double = 300
     /// En dessous de cette vitesse (km/h), l'ETA est masquée (silencieuse à l'arrêt).
     static let etaSilenceSpeedThresholdKmh: Double = 2
+
+    // MARK: - Contrôles "gants" (zoom manuel +/-, recentrer)
+
+    /// Facteur multiplicatif appliqué à la distance caméra à chaque tap +/-.
+    static let manualZoomStepFactor: Double = 0.7
+    static let manualZoomMinMeters: Double = 120
+    static let manualZoomMaxMeters: Double = 3000
+    /// Animation courte pour un tap +/- ou un recentrage — distincte du lissage auto (1.2 s).
+    static let manualZoomAnimationDurationSeconds: Double = 0.25
+    /// Cible tactile minimale recommandée pour une utilisation gantée.
+    static let glovedTapTargetSize: Double = 56
 }

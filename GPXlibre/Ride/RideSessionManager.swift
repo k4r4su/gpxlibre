@@ -98,9 +98,40 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     var lastManualGestureDate: Date?
 
+    // MARK: - Contrôles "gants" (zoom +/- discret, recentrer)
+    @Published private(set) var manualZoomDistanceMeters: Double?
+    /// Change à chaque tap +/- ou recentrage : force la carte à appliquer la caméra tout de
+    /// suite, même pendant la fenêtre d'override manuel (sinon un tap immédiatement après un
+    /// pinch resterait sans effet visible).
+    @Published private(set) var cameraCommandToken: UUID?
+
     var isManualOverrideActive: Bool {
         guard let date = lastManualGestureDate else { return false }
         return Date().timeIntervalSince(date) < RideConstants.manualZoomOverrideTimeoutSeconds
+    }
+
+    /// Distance caméra effective : le palier manuel prime tant qu'il est actif, sinon l'auto.
+    var effectiveCameraDistanceMeters: Double {
+        manualZoomDistanceMeters ?? cameraDistanceMeters
+    }
+
+    func zoomIn() { adjustManualZoom(factor: RideConstants.manualZoomStepFactor) }
+    func zoomOut() { adjustManualZoom(factor: 1 / RideConstants.manualZoomStepFactor) }
+
+    private func adjustManualZoom(factor: Double) {
+        let base = manualZoomDistanceMeters ?? cameraDistanceMeters
+        let newValue = min(max(base * factor, RideConstants.manualZoomMinMeters), RideConstants.manualZoomMaxMeters)
+        manualZoomDistanceMeters = newValue
+        lastManualGestureDate = Date()
+        cameraCommandToken = UUID()
+    }
+
+    /// Re-snappe la caméra sur la position et repasse en mode suivre-cap immédiatement
+    /// (n'attend pas l'expiration des 5 s d'override).
+    func recenterCamera() {
+        manualZoomDistanceMeters = nil
+        lastManualGestureDate = nil
+        cameraCommandToken = UUID()
     }
 
     var currentCheckpoint: Checkpoint? {

@@ -25,6 +25,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let northUp: Bool
     let is2DNorthUp: Bool
     let isManualOverrideActive: Bool
+    let cameraCommandToken: UUID?
     let detourRoute: DetourRoute?
     let onManualGesture: () -> Void
     let onStatusChange: (MapLoadStatus) -> Void
@@ -65,7 +66,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
 
-        guard let currentLocation, !isManualOverrideActive else { return }
+        let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
+        context.coordinator.lastCameraCommandToken = cameraCommandToken
+        guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
         let pitch: CGFloat = is2DNorthUp ? 0 : CGFloat(RideConstants.cameraPitchDegrees)
@@ -83,7 +86,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             heading: heading
         )
 
-        mapView.setCamera(camera, withDuration: RideConstants.cameraAnimationDurationSeconds, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+        // Animation courte pour un tap +/- ou un recentrage explicite ; lissage normal sinon.
+        let duration = isForcedCommand ? RideConstants.manualZoomAnimationDurationSeconds : RideConstants.cameraAnimationDurationSeconds
+        mapView.setCamera(camera, withDuration: duration, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
     }
 
     private func updateDetourShape(on mapView: MLNMapView, context: Context) {
@@ -119,6 +124,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var checkpoints: [Checkpoint] = []
         var waypoints: [RollingWaypoint] = []
         var traceAppearance = TraceAppearance()
+        var lastCameraCommandToken: UUID?
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?

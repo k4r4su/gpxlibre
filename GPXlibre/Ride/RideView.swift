@@ -170,6 +170,20 @@ struct RideView: View {
             HStack {
                 Spacer()
                 VStack {
+                    Spacer()
+                    if session.isManualOverrideActive {
+                        RideRecenterButton { session.recenterCamera() }
+                    }
+                    RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
+                    Spacer()
+                }
+                .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
+                .padding(.trailing, 12)
+            }
+
+            HStack {
+                Spacer()
+                VStack {
                     if showStatsPanel {
                         RideStatsPanel(
                             currentSpeedKmh: session.smoothedSpeedKmh,
@@ -307,10 +321,11 @@ struct RideView: View {
                 traceAppearance: currentTraceAppearance,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
-                cameraDistanceMeters: session.cameraDistanceMeters,
+                cameraDistanceMeters: session.effectiveCameraDistanceMeters,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
+                cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
@@ -328,10 +343,11 @@ struct RideView: View {
                 traceAppearance: currentTraceAppearance,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
-                cameraDistanceMeters: session.cameraDistanceMeters,
+                cameraDistanceMeters: session.effectiveCameraDistanceMeters,
                 northUp: settings.mapOrientationNorthUp,
                 is2DNorthUp: is2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
+                cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
                 onManualGesture: { session.registerManualGesture() },
                 onStatusChange: { mapLoadStatus = $0 },
