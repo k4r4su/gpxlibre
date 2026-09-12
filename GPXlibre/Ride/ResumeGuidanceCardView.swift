@@ -15,46 +15,44 @@ struct ResumeGuidanceCardView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            if guidance.isRouted {
-                Image(systemName: "location.north.line.fill")
-                    .foregroundStyle(.white)
-                    .rotationEffect(.degrees(0))
-            } else if let relativeBearingDegrees {
-                Image(systemName: "location.north.line.fill")
-                    .foregroundStyle(.white)
-                    .rotationEffect(.degrees(relativeBearingDegrees))
-            } else {
-                Image(systemName: "mappin.circle.fill")
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                if let relativeBearingDegrees, !guidance.isRouted {
+                    Image(systemName: "location.north.line.fill")
+                        .foregroundStyle(.white)
+                        .rotationEffect(.degrees(relativeBearingDegrees))
+                } else {
+                    Image(systemName: guidance.isRouted ? "location.north.line.fill" : "mappin.circle.fill")
+                        .foregroundStyle(.white)
+                }
                 Text(guidance.phase == .active ? "Reprise en cours" : "Reprendre la trace ici ?")
                     .font(.subheadline.bold())
                     .foregroundStyle(.white)
-                Text(infoText)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(2)
+                Spacer()
+                if isRequesting {
+                    ProgressView().tint(.white)
+                }
             }
 
-            Spacer()
+            Text(infoText)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
 
-            if isRequesting {
-                ProgressView().tint(.white)
-            }
-
-            if guidance.phase == .previewing {
-                Button("Reprendre ici", action: onConfirm)
+            HStack {
+                Spacer()
+                if guidance.phase == .previewing {
+                    Button("Reprendre ici", action: onConfirm)
+                        .font(.caption.bold())
+                        .buttonStyle(.borderedProminent)
+                        .tint(.white)
+                        .foregroundStyle(.blue)
+                }
+                Button(guidance.phase == .active ? "Annuler la reprise" : "Annuler", action: onCancel)
                     .font(.caption.bold())
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .tint(.white)
             }
-            Button(guidance.phase == .active ? "Annuler la reprise" : "Annuler", action: onCancel)
-                .font(.caption.bold())
-                .buttonStyle(.bordered)
-                .tint(.white)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
