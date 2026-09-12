@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Grille documentée des zones d'overlays flottants du mode Ride (itération "camera-inset" +
 /// "overlay-grid") — chaque élément flottant a UNE zone fixe assignée ci-dessous, jamais deux
@@ -74,5 +75,19 @@ enum RideOverlayLayout {
             left: side,
             right: side
         )
+    }
+
+    /// La carte ignore la safe area (plein écran, voir RideView.mapLayer) mais les panneaux
+    /// SwiftUI par-dessus continuent de la respecter automatiquement — il faut donc la vraie
+    /// valeur système (encoche/Dynamic Island, tab bar + home indicator) pour le calcul de
+    /// contentInset. `GeometryProxy.safeAreaInsets` ne la donne PAS correctement tant que le
+    /// GeometryReader lui-même n'ignore pas la safe area (sinon elle rapporte 0, cf. essais) —
+    /// plus simple et fiable de la lire directement sur la fenêtre courante.
+    static var systemSafeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets ?? .zero
     }
 }

@@ -75,138 +75,170 @@ struct RideView: View {
         }
     }
 
-    private func rideContent(track: GPXTrack?) -> some View {
-        GeometryReader { geometry in
-            let contentInset = RideOverlayLayout.cameraContentInset(
-                safeAreaTop: geometry.safeAreaInsets.top,
-                safeAreaBottom: geometry.safeAreaInsets.bottom,
-                hasBottomPanel: hasBottomPanel(track: track),
-                isLandscape: geometry.size.width > geometry.size.height
-            )
-            rideContentBody(track: track, contentInset: contentInset)
+    /// Bannières éphémères (spec "overlay-grid") : UNE seule visible à la fois, par priorité —
+    /// évite tout empilement/chevauchement, contrairement à l'ancien code qui pouvait afficher
+    /// blocage + alerte partagée + "Aller à" simultanément.
+    private enum BannerKind {
+        case mapLoadError(String)
+        case blockedPath
+        case detour(DetourRoute)
+        case goTo(GoToGuidance)
+        case sharedBlockageAlert(SharedBlockage)
+        case navChooseDestination
+        case navError(String)
+        case navRouting
+    }
+
+    private func activeBanner(track: GPXTrack?) -> BannerKind? {
+        if case .failed(let message) = mapLoadStatus { return .mapLoadError(message) }
+        switch modeStore.mode {
+        case .trace:
+            if session.isBlockedBannerVisible { return .blockedPath }
+            if let detour = session.detourRoute { return .detour(detour) }
+            if let guidance = session.goToGuidance { return .goTo(guidance) }
+            if let alert = nearbySharedBlockageAlert(track: track) { return .sharedBlockageAlert(alert) }
+            return nil
+        case .nav:
+            if let guidance = session.goToGuidance { return .goTo(guidance) }
+            if session.navRoute == nil { return .navChooseDestination }
+            if let error = session.navRoutingError { return .navError(error) }
+            if session.isRoutingInProgress { return .navRouting }
+            return nil
         }
     }
 
-    private func rideContentBody(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
-        ZStack(alignment: .bottom) {
-            mapLayer(track: track, contentInset: contentInset)
-                .ignoresSafeArea()
+    @ViewBuilder
+    private func bannerView(_ banner: BannerKind?) -> some View {
+        switch banner {
+        case nil:
+            EmptyView()
+        case .mapLoadError(let message):
+            MapLoadWarningBannerView(message: message)
+        case .blockedPath:
+            BlockedPathBannerView(
+                onContourner: { showDetourConfirmation = true },
+                onIgnorer: { session.dismissBlockedPathBanner() }
+            )
+        case .detour(let detour):
+            DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
+        case .goTo(let guidance):
+            GoToStatusPillView(
+                guidance: guidance,
+                distanceMeters: session.goToDistanceRemainingMeters,
+                isRequesting: session.isRequestingGoTo,
+                onCancel: { session.stopGoTo() }
+            )
+        case .sharedBlockageAlert(let alert):
+            SharedBlockageAlertPillView(blockage: alert, onDismiss: { dismissedSharedBlockageAlertID = alert.id })
+        case .navChooseDestination:
+            Button {
+                showDestinationSearch = true
+            } label: {
+                Label("Choisir une destination", systemImage: "magnifyingglass")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.blue.opacity(0.85))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        case .navError(let error):
+            HStack {
+                Text(error)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                Spacer()
+                Button("Fermer") { session.stopNav() }
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.red.opacity(0.85))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal)
+        case .navRouting:
+            HStack(spacing: 8) {
+                ProgressView().tint(.white)
+                Text("Calcul de l'itinéraire…").foregroundStyle(.white).font(.subheadline.bold())
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.blue.opacity(0.85))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
 
-            VStack {
-                HStack {
-                    RideModeSegmentedControl(mode: $modeStore.mode)
-                    Button {
-                        showDestinationSearch = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.black.opacity(0.35))
-                            .clipShape(Circle())
-                    }
-                    .longPressTooltip("Aller à une adresse ou un lieu")
-                }
-                .padding(.top, 8)
-                .padding(.horizontal, 12)
-
-                HStack {
-                    OSMAttributionView()
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
-
-                if case .failed(let message) = mapLoadStatus {
-                    MapLoadWarningBannerView(message: message)
-                        .padding(.top, 8)
-                }
-
-                if modeStore.mode == .trace {
-                    if session.isBlockedBannerVisible {
-                        BlockedPathBannerView(
-                            onContourner: { showDetourConfirmation = true },
-                            onIgnorer: { session.dismissBlockedPathBanner() }
-                        )
-                        .padding(.top, 8)
-                    }
-                    if let alert = nearbySharedBlockageAlert(track: track) {
-                        SharedBlockageAlertPillView(blockage: alert, onDismiss: { dismissedSharedBlockageAlertID = alert.id })
-                            .padding(.top, 8)
-                    }
-                    if let detour = session.detourRoute {
-                        DetourStatusView(detour: detour, isRequesting: session.isRequestingDetour, onCancel: { session.cancelDetour() })
-                    }
-                } else {
-                    navStatusBanner
-                }
-
-                if let guidance = session.goToGuidance {
-                    GoToStatusPillView(
-                        guidance: guidance,
-                        distanceMeters: session.goToDistanceRemainingMeters,
-                        isRequesting: session.isRequestingGoTo,
-                        onCancel: { session.stopGoTo() }
-                    )
-                    .padding(.top, 8)
-                }
-
+    /// Zone "topBar" (spec Bloc 2) : segmented Trace/Nav centré, recherche calée à droite,
+    /// puis au plus une bannière éphémère en dessous (voir activeBanner/bannerView).
+    private func topStackLayer(track: GPXTrack?) -> some View {
+        VStack {
+            HStack {
+                Spacer()
+                RideModeSegmentedControl(mode: $modeStore.mode)
                 Spacer()
             }
-            .animation(.easeInOut(duration: 0.25), value: session.isBlockedBannerVisible)
-
-            if modeStore.mode == .trace, session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
-                RoadbookPanelView(
-                    checkpoint: session.currentCheckpoint,
-                    totalCount: session.checkpoints.count,
-                    distanceMeters: session.distanceToCurrentCheckpointMeters,
-                    isClose: session.isCloseToCheckpoint
-                )
-            }
-
-            if modeStore.mode == .nav, session.navRoute != nil {
-                NavGuidancePanelView(
-                    maneuver: session.currentManeuver,
-                    distanceMeters: session.distanceToCurrentManeuverMeters,
-                    destinationLabel: session.navRoute?.destinationLabel ?? "",
-                    isRecalculating: session.isRecalculatingRoute
-                )
-            }
-
-            if modeStore.mode == .trace {
-                HStack {
-                    Spacer()
-                    VStack {
-                        Spacer()
-                        BlockedPathButton { showDetourConfirmation = true }
-                            .padding(.trailing, 20)
-                            .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
-                    }
+            .overlay(alignment: .trailing) {
+                Button {
+                    showDestinationSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.black.opacity(0.35))
+                        .clipShape(Circle())
                 }
-
-                HStack {
-                    VStack {
-                        Spacer()
-                        WaypointQuickAddButton()
-                            .padding(.leading, 20)
-                            .padding(.bottom, session.currentCheckpoint != nil ? 140 : 24)
-                    }
-                    Spacer()
-                }
-            } else {
-                HStack {
-                    Spacer()
-                    VStack {
-                        Spacer()
-                        NavReportButton()
-                            .padding(.trailing, 20)
-                            .padding(.bottom, session.navRoute != nil ? 140 : 24)
-                    }
-                }
+                .longPressTooltip("Aller à une adresse ou un lieu")
             }
+            .padding(.top, 8)
+            .padding(.horizontal, 12)
 
-            if modeStore.mode == .nav {
-                HStack {
+            HStack {
+                OSMAttributionView()
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+
+            bannerView(activeBanner(track: track))
+                .padding(.top, 8)
+
+            Spacer()
+        }
+        .animation(.easeInOut(duration: 0.25), value: session.isBlockedBannerVisible)
+    }
+
+    @ViewBuilder
+    private var bottomPanelLayer: some View {
+        if modeStore.mode == .trace, session.currentCheckpoint != nil || !session.checkpoints.isEmpty {
+            RoadbookPanelView(
+                checkpoint: session.currentCheckpoint,
+                totalCount: session.checkpoints.count,
+                distanceMeters: session.distanceToCurrentCheckpointMeters,
+                isClose: session.isCloseToCheckpoint
+            )
+        }
+        if modeStore.mode == .nav, session.navRoute != nil {
+            NavGuidancePanelView(
+                maneuver: session.currentManeuver,
+                distanceMeters: session.distanceToCurrentManeuverMeters,
+                destinationLabel: session.navRoute?.destinationLabel ?? "",
+                isRecalculating: session.isRecalculatingRoute
+            )
+        }
+    }
+
+    /// Zone "gauche milieu" (spec Bloc 2) : waypoints rapides en Trace, 2D/3D + limite de
+    /// vitesse en Nav — jamais collé au bas de l'écran (contrairement à l'ancien layout).
+    @ViewBuilder
+    private var leftMiddleLayer: some View {
+        HStack {
+            VStack {
+                Spacer()
+                if modeStore.mode == .trace {
+                    WaypointQuickAddButton()
+                } else {
                     VStack(spacing: 10) {
                         Button {
                             is2DNorthUp.toggle()
@@ -223,56 +255,98 @@ struct RideView: View {
                         if let limit = session.currentSpeedLimitKmh {
                             SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)
                         }
-                        Spacer()
                     }
-                    .padding(.leading, 12)
-                    .padding(.top, 90)
-                    Spacer()
                 }
-            }
-
-            HStack {
                 Spacer()
-                VStack {
-                    Spacer()
-                    // Stop : toujours visible en Mode Nav ET Mode Trace actifs (spec Bloc 4).
-                    RideStopButton { showStopConfirmation = true }
-                    if session.isManualOverrideActive {
-                        RideRecenterButton { session.recenterCamera() }
-                    }
-                    RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
-                    Spacer()
-                }
-                .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
-                .padding(.trailing, 12)
             }
+            .padding(.leading, 20)
+            Spacer()
+        }
+    }
 
-            HStack {
+    /// Zone "droite milieu" + "droite-milieu bas" (spec Bloc 2) : Stop / recentrer / zoom
+    /// empilés avec un espacement de 12 pt, puis le bouton critique (Bloqué en Trace,
+    /// Signaler en Nav) séparé par un espace visuel dédié — jamais mélangé à la même hauteur
+    /// que le badge vitesse (zone topRight, totalement indépendante, voir speedBadgeLayer).
+    @ViewBuilder
+    private var rightMiddleLayer: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: RideOverlayLayout.rightStackSpacing) {
                 Spacer()
-                VStack {
-                    if showStatsPanel {
-                        RideStatsPanel(
-                            currentSpeedKmh: session.smoothedSpeedKmh,
-                            averageSpeedKmh: session.averageSpeedKmh,
-                            maxSpeedKmh: session.maxSpeedKmh,
-                            distanceRemainingMeters: session.distanceRemainingMeters,
-                            percentComplete: session.percentComplete,
-                            estimatedArrivalDate: session.estimatedArrivalDate,
-                            recordedPointsCount: session.recordedPointsCount,
-                            onCollapse: { withAnimation { showStatsPanel = false } },
-                            onEndRide: { showEndRideSheet = true }
-                        )
-                        .frame(width: 230)
-                    } else {
-                        RideStatsBadge(currentSpeedKmh: session.smoothedSpeedKmh) {
-                            withAnimation { showStatsPanel = true }
-                        }
-                    }
-                    Spacer()
+                RideStopButton { showStopConfirmation = true }
+                if session.isManualOverrideActive {
+                    RideRecenterButton { session.recenterCamera() }
                 }
+                RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
+                Spacer().frame(height: 24)
+                if modeStore.mode == .trace {
+                    BlockedPathButton { showDetourConfirmation = true }
+                } else {
+                    NavReportButton()
+                }
+                Spacer()
             }
-            .padding(.top, 90)
+            .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
+            .padding(.trailing, 20)
+        }
+    }
+
+    /// Zone "haut-droite" (spec Bloc 2) : badge vitesse TOUJOURS à sa place fixe, hors zone
+    /// bannières — décalage calculé pour la place PIRE cas (bannière visible), jamais un
+    /// simple magic number, pour garantir zéro chevauchement même quand une bannière apparaît.
+    private var speedBadgeLayer: some View {
+        HStack {
+            Spacer()
+            VStack {
+                if showStatsPanel {
+                    RideStatsPanel(
+                        currentSpeedKmh: session.smoothedSpeedKmh,
+                        averageSpeedKmh: session.averageSpeedKmh,
+                        maxSpeedKmh: session.maxSpeedKmh,
+                        distanceRemainingMeters: session.distanceRemainingMeters,
+                        percentComplete: session.percentComplete,
+                        estimatedArrivalDate: session.estimatedArrivalDate,
+                        recordedPointsCount: session.recordedPointsCount,
+                        onCollapse: { withAnimation { showStatsPanel = false } },
+                        onEndRide: { showEndRideSheet = true }
+                    )
+                    .frame(width: 230)
+                } else {
+                    RideStatsBadge(currentSpeedKmh: session.smoothedSpeedKmh) {
+                        withAnimation { showStatsPanel = true }
+                    }
+                }
+                Spacer()
+            }
+            .padding(.top, RideOverlayLayout.topBarHeight + RideOverlayLayout.bannerHeight + RideOverlayLayout.cameraInsetMarginPoints)
             .padding(.trailing, 12)
+        }
+    }
+
+    private func rideContent(track: GPXTrack?) -> some View {
+        GeometryReader { geometry in
+            let safeArea = RideOverlayLayout.systemSafeAreaInsets
+            let contentInset = RideOverlayLayout.cameraContentInset(
+                safeAreaTop: safeArea.top,
+                safeAreaBottom: safeArea.bottom,
+                hasBottomPanel: hasBottomPanel(track: track),
+                isLandscape: geometry.size.width > geometry.size.height
+            )
+            rideContentBody(track: track, contentInset: contentInset)
+        }
+    }
+
+    private func rideContentBody(track: GPXTrack?, contentInset: RideOverlayLayout.CameraContentInset) -> some View {
+        ZStack(alignment: .bottom) {
+            mapLayer(track: track, contentInset: contentInset)
+                .ignoresSafeArea()
+
+            topStackLayer(track: track)
+            bottomPanelLayer
+            leftMiddleLayer
+            rightMiddleLayer
+            speedBadgeLayer
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
@@ -388,51 +462,6 @@ struct RideView: View {
               nearest.id != dismissedSharedBlockageAlertID
         else { return nil }
         return nearest
-    }
-
-    private var navStatusBanner: some View {
-        Group {
-            if session.navRoute == nil {
-                Button {
-                    showDestinationSearch = true
-                } label: {
-                    Label("Choisir une destination", systemImage: "magnifyingglass")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.blue.opacity(0.85))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .padding(.top, 8)
-            } else if let error = session.navRoutingError {
-                HStack {
-                    Text(error)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Button("Fermer") { session.stopNav() }
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.red.opacity(0.85))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .padding(.horizontal)
-                .padding(.top, 8)
-            } else if session.isRoutingInProgress {
-                HStack(spacing: 8) {
-                    ProgressView().tint(.white)
-                    Text("Calcul de l'itinéraire…").foregroundStyle(.white).font(.subheadline.bold())
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.blue.opacity(0.85))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .padding(.top, 8)
-            }
-        }
     }
 
     /// Bascule entre les deux implémentations conformes à MapProvider — MapLibre est le
