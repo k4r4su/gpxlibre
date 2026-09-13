@@ -45,8 +45,24 @@ GPXlibre/
                    construction des styles raster ET vectoriel), MapSourceSelection (raster/
                    vectorHosted/vectorLocal), MapSourceResolver (pur, priorité de la source
                    de carte effective — voir section dédiée, it11)
+                   ⚠️ SUSPICION NON RÉSOLUE (it13) : les chevrons de direction
+                   (`direction-chevron-layer`, `MLNSymbolStyleLayer`+`MLNShapeSource`)
+                   pourraient ne JAMAIS s'afficher visuellement sur la vraie carte Ride —
+                   trouvé en vérifiant le fix "chevrons-live-refresh" par simulateur (couche
+                   présente/visible, zoom largement suffisant, image enregistrée, source
+                   peuplée avec succès, mais rien ne rend à l'écran sur 6 captures). Cause
+                   NON identifiée (zoom/thème/mémoïsation/icône/rotation tous écartés) — voir
+                   le détail complet et les pistes à creuser dans TODO.md avant de faire
+                   confiance à ce mécanisme. Les checkpoints/waypoints (annotations
+                   MLNPointAnnotation, mécanisme différent) ne sont PAS concernés par cette
+                   suspicion.
   Nav/            Mode Nav (guidage A→B, recalcul automatique) — RideMode/RideModeStore
-                   (Trace vs Nav), NavRoutingService, GoToGuidance ("Aller à" parallèle),
+                   (Trace vs Nav), NavRoutingService, GoToGuidance ("Aller à" parallèle —
+                   `.offroad` route réellement en hors-route depuis it13, spec "offroad-
+                   routing-preference", via DetourRoutingService.route(profile: .offroad)
+                   réutilisé, PLUS une ligne droite ; `.mixed` termine aussi en hors-route
+                   routé plutôt qu'à vol d'oiseau), NavFavoritesStore (Domicile/Travail,
+                   configurables depuis it13 via Settings/FavoriteAddressesView),
                    NavReportButton ("Signaler" — indépendant du POI supprimé en it10).
                    RideModeSegmentedControl n'est plus appelé depuis it12 (spec
                    "hide-nav-tab", Trace seul visible/actif) — fichier intact, tout le code
@@ -60,9 +76,15 @@ GPXlibre/
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
   Recording/      Enregistrement GPS pendant le Ride + export GPX
-  Settings/       RideSettingsStore (réglages globaux persistés), SettingsView
-  Views/          LibraryView (Biblio), TrackDetailView, TrackSettingsView (réglages par
-                   trace), TrackMapView, RootView (TabView)
+  Settings/       RideSettingsStore (réglages globaux persistés), SettingsView,
+                   FavoriteAddressesView (Domicile/Travail, spec "home-work-favorites", it13
+                   — alimente NavFavoritesStore, déjà consommé par NavDestinationSearchView
+                   depuis plus tôt mais jamais configurable avant ce bloc)
+  Views/          LibraryView (Biblio — tap sur une ligne ouvre TrackFullSheetView depuis
+                   it13, spec "biblio-track-fullsheet" : fiche nom/stats + Supprimer/
+                   Renommer/Paramètres ; PLUS TrackDetailView, qui n'a donc plus de point
+                   d'entrée UI mais reste intact, voir TODO.md), TrackDetailView,
+                   TrackSettingsView (réglages par trace), TrackMapView, RootView (TabView)
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure
                    de la trace avec chevrons + pastille de sens, aucune carte interactive.
@@ -106,8 +128,13 @@ OpenTopoMap) reste le moteur historique intact, mais n'est plus la seule option 
 `MapSourceSelection` (`.raster`/`.vectorHosted`/`.vectorLocal`) remplace `TileSource` comme
 paramètre de `MapProvider`. `MapSourceResolver.resolve(...)` (pur, testé) décide LEQUEL
 utiliser, dans cet ordre de priorité STRICT :
-1. Paquet vectoriel local actif (`VectorPackageStore.activeFileURL`) ET présent sur disque →
-   vectoriel local, fonctionne intégralement en mode avion.
+0. Fix "map-theme-binding" (it13) : thème Relief OU Sombre choisi → **raster forcé**
+   (respectivement OpenTopoMap et OSM standard + filtre nuit) AVANT toute autre règle,
+   paquet local actif inclus — ces deux thèmes n'ont pas de variante vectorielle (le style
+   "Liberty" embarqué n'a qu'un rendu clair). Sans cette branche, le thème choisi n'avait
+   AUCUN effet dès que le réseau était joignable (bug terrain corrigé it13).
+1. Sinon, paquet vectoriel local actif (`VectorPackageStore.activeFileURL`) ET présent sur
+   disque → vectoriel local, fonctionne intégralement en mode avion.
 2. Sinon, réseau joignable (`NetworkMonitor.isReachable`) → vectoriel hébergé (OpenFreeMap,
    voir `docs/tuile-sources.md`).
 3. Sinon → **raster existant, inchangé**. Le raster ne part JAMAIS, c'est le filet de sécurité

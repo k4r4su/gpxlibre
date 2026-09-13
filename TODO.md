@@ -1,5 +1,73 @@
 # TODO
 
+## Itération 13 (chevrons-live-refresh / biblio-track-fullsheet / map-theme-binding / zoom-out-unclamped / thick-label-live-thickness / offroad-routing-preference / home-work-favorites / temp-trace-dash-readability)
+
+- **DÉCOUVERTE IMPORTANTE, NON RÉSOLUE : les chevrons de direction pourraient ne jamais
+  s'afficher visuellement sur la VRAIE carte Ride (MapLibre), indépendamment du fix
+  "chevrons-live-refresh" de ce bloc.** Trouvé en vérifiant ce fix par injection d'une trace
+  synthétique (droite, 500 m plein nord, 11 points/50 m) + `simctl location` dans le
+  simulateur (méthode déjà utilisée it12, code jamais commité) : le calque
+  `direction-chevron-layer` existe bien dans le style courant, `isVisible=true`, zoom réel
+  mesuré ≈18.8 (≫ `chevronMinZoom`=14), l'icône est enregistrée (`style.image(forName:)` non
+  nil), et `updateChevronShape` rapporte avoir posé 4 features sur la source (`chevrons=4`,
+  `source.shape` non-nil juste après l'affectation) — pourtant AUCUN triangle n'apparaît à
+  l'écran sur 6 captures successives, avec plusieurs variantes testées sans succès :
+  - Mise en cache de la source (`chevronSourceRef`, même patron que `trackSourceRef` déjà
+    fiable pour la trace) — tentée, puis RETIRÉE (n'a rien changé, gardée hors du commit
+    final pour ne pas ajouter un changement non justifié empiriquement).
+  - Rotation forcée à une constante (0°) au lieu de l'expression `NSExpression(forKeyPath:
+    "bearing")` — aucun changement, écarte un souci lié à l'expression data-driven.
+  - Un lookup FRAIS de la source par identifiant (`style.source(withIdentifier:)`, indépendant
+    du cache du Coordinator) rapporte `.shape == nil` juste après que `updateChevronShape`
+    ait affirmé l'avoir posée avec succès sur SA PROPRE instance — signale une possible
+    incohérence de lecture `.shape` selon l'instance de wrapper `MLNShapeSource`, mais la
+    mise en cache (ci-dessus) n'a pourtant pas résolu le symptôme visuel, donc ce n'est
+    probablement pas (ou pas seulement) la cause réelle.
+  - Écarté : seuil de zoom (14, largement dépassé), thème/fond de carte (reproduit identique
+    en raster ET en vectoriel hébergé), mémoïsation (le fix de ce bloc justement).
+  - **Piste à creuser en priorité la prochaine session** : comparer avec le rendu des
+    ANNOTATIONS (checkpoints/waypoints, `MLNPointAnnotation` via `mapView.addAnnotations`,
+    mécanisme différent qui lui est confirmé fonctionnel visuellement dans des itérations
+    passées) pour isoler si le problème est spécifique aux COUCHES DE STYLE SYMBOL
+    (`MLNSymbolStyleLayer` + `MLNShapeSource`) en général sur cette version de MapLibre/ce
+    simulateur, ou spécifique aux chevrons. Vérifier aussi avec une VRAIE trace importée
+    (pas synthétique) et en conditions device réel (pas seulement simulateur) avant de
+    conclure à un bug plutôt qu'un artefact de simulateur.
+  - Le fix "chevrons-live-refresh" lui-même (mémoïsation par valeur plutôt que par clé
+    aveugle à l'ordre) reste correct et committé tel quel — il corrige un vrai bug de cache
+    indépendant de ce problème de rendu plus profond, mais son bénéfice VISIBLE réel ne
+    pourra être confirmé qu'une fois ce second problème résolu ou infirmé.
+
+- **Bloc 2 (biblio-track-fullsheet), décision de scope assumée** : le tap sur une ligne
+  Biblio n'ouvre plus `TrackDetailView` (carte + "Utiliser pour le Ride" avec précache de
+  tuiles), qui n'a donc plus de point d'entrée dans l'UI. Fichier intact (comme
+  `RideModeSegmentedControl` it12), pas supprimé. "Utiliser pour le Ride" reste accessible
+  (check-mark de ligne, TrackSettingsView) mais sans l'étape de précache. Pas explicitement
+  demandé par le bloc ; à rouvrir un accès si le propriétaire en confirme le besoin.
+
+- **Bloc 7 (home-work-favorites), décision de scope assumée** : pas de sélection "pan sur la
+  carte" pour définir Domicile/Travail (demandée en alternative à la recherche) — recherche
+  d'adresse (Nominatim) + "Utiliser ma position actuelle" couvrent le besoin réel sans
+  construire un nouveau composant carte interactif (MKMapView dédié, iOS 16). À ajouter si
+  réclamé explicitement.
+
+- **Bloc 6 (offroad-routing-preference)** : réutilise le profil `.offroad` déjà documenté de
+  `DetourRoutingService` (OSRM "cycling", seule approximation disponible sans clé ni serveur
+  dédié — aucun profil "moto offroad" public). Alternatives documentées directement dans
+  `DetourRoutingService.swift` (profil "foot", ou BRouter auto-hébergé/embarqué) si ce choix
+  s'avère insuffisant en usage réel (terrain très accidenté, pistes mal cartographiées). Les
+  estimations distance/durée sont des ESTIMATIONS à vitesse moyenne assumée par profil
+  (70/30/50 km/h route/piste/mixte), PAS un ETA OSRM réel (jamais parsé côté service).
+
+- **Vérification de cette itération** : builds simulateur + device + suite de tests (46,
+  0 échec) verts après CHAQUE bloc. Logique pure testée unitairement (MapSourceResolver,
+  GoToGuidance). Les items de la checklist terrain qui demandent une interaction tactile
+  réelle (toggle Sens en Biblio, tap sur une ligne, Picker Thème/Épaisseur, recherche
+  d'adresse) n'ont PAS pu être confirmés visuellement — pas d'automatisation tactile
+  disponible dans cet environnement (limite déjà documentée it9-it12). Seule la vérification
+  chevrons ci-dessus a été tentée par injection de code temporaire (jamais commité), et a
+  débouché sur la découverte non résolue plutôt qu'une confirmation.
+
 ## Itération 12 (progress-marker / lateral-cap-banner / chevrons-100m / biblio-direction / raw-speed-1hz / hide-nav-tab) — idées annexes notées, non traitées
 
 - **Fenêtre d'inflexion fixée à 150 m** (une seule valeur, `bannerInflectionWindowMeters`)
