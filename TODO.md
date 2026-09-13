@@ -1,5 +1,30 @@
 # TODO
 
+## Itération 11 (2d-only / biblio-preview-direction / vector-pmtiles) — idées annexes notées, non traitées
+
+- **Mode avion + paquet `.pmtiles` importé non testé de bout en bout** : `MapSourceResolver`
+  est testé unitairement (4 tests, priorité local > hébergé > raster) et la logique de lecture
+  `pmtiles://file://...` s'appuie sur le support natif MapLibre (vérifié dans les headers
+  vendored), mais il n'existe pas de vrai fichier `region.pmtiles` dans cet environnement pour
+  un test bout-en-bout réel (import → coupure réseau simulateur → vérification visuelle). À
+  faire une fois `docs/generation-tuiles-regionales.md` exécuté sur le NAS et un premier
+  `.pmtiles` réel disponible.
+- **Dimming nuit non implémenté côté fond vectoriel** — décision de scope assumée au commit
+  "vector-pmtiles" : repeindre les ~110 couches du style Liberty pour une variante sombre
+  était hors budget de cette itération. VersaTiles (documenté dans `docs/tuile-sources.md`)
+  fournit déjà des builds clair/sombre prêts à l'emploi — piste la plus rapide si le besoin
+  devient réel, plutôt que de repeindre le style Liberty à la main.
+- **Pas d'empreinte région (bbox/zoom) affichée pour un paquet vectoriel** dans
+  `VectorPackagesView` — lire l'en-tête PMTiles côté Swift aurait demandé soit une dépendance
+  supplémentaire, soit un parseur maison du format d'en-tête PMTiles (magic bytes + métadonnées
+  compressées) ; l'écran affiche taille/date/nom uniquement. À revisiter si le propriétaire
+  gère plusieurs paquets régionaux et a besoin de les distinguer sans les renommer à la main.
+- **Attribution OpenTopoMap corrigée en passant** (bug pré-existant, pas une regression de
+  cette itération) : `OSMAttributionView` affichait toujours le texte OSM générique, y compris
+  sous le thème Relief (OpenTopoMap, qui a sa propre exigence d'attribution SRTM/CC-BY-SA) —
+  corrigé au même endroit que le câblage de l'attribution vectorielle, voir commit
+  "vector-pmtiles".
+
 ## Itération 10 — idées annexes notées, non traitées
 
 - **Test "sans réseau" pour resume-at-point non fiable à écrire tel quel** :
