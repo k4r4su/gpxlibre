@@ -12,7 +12,10 @@ enum TraceWidthPreset: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .fine: return "Fine"
         case .normale: return "Normale"
-        case .gantsEpais: return "Gants-épais"
+        // Renommé "Gants-épais" → "Épais" (fix "thick-label-live-thickness", it13, terrain :
+        // libellé jugé confus). rawValue Codable inchangé ("gantsEpais") pour ne pas casser la
+        // persistance existante (UserDefaults/JSON par trace) — seul le LABEL affiché change.
+        case .gantsEpais: return "Épais"
         }
     }
 
