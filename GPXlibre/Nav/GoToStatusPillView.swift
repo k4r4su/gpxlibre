@@ -21,6 +21,13 @@ struct GoToStatusPillView: View {
                     .font(.subheadline.bold())
                     .foregroundStyle(.white)
                     .monospacedDigit()
+                // Estimations distance/durée du TRACÉ (spec "offroad-routing-preference", it13)
+                // — distinctes de la ligne ci-dessus (distance RESTANTE à vol d'oiseau jusqu'à
+                // la destination, qui continue de baisser en roulant).
+                Text(routeSummaryText)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .monospacedDigit()
             }
             Spacer()
             if isRequesting {
@@ -42,5 +49,13 @@ struct GoToStatusPillView: View {
     private var distanceText: String {
         guard let distanceMeters else { return "—" }
         return distanceMeters < 1000 ? "\(Int(distanceMeters.rounded())) m à vol d'oiseau" : String(format: "%.1f km à vol d'oiseau", distanceMeters / 1000)
+    }
+
+    /// Estimation simple (vitesse moyenne par profil, PAS un ETA OSRM réel — voir
+    /// GoToGuidance.estimatedDurationMinutes) de la longueur totale du tracé affiché.
+    private var routeSummaryText: String {
+        let distance = guidance.routeDistanceMeters
+        let distanceText = distance < 1000 ? "\(Int(distance.rounded())) m" : String(format: "%.1f km", distance / 1000)
+        return "Itinéraire ≈ \(distanceText) · ~\(max(Int(guidance.estimatedDurationMinutes.rounded()), 1)) min"
     }
 }

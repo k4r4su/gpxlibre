@@ -4,6 +4,18 @@ import CoreLocation
 /// Simplification assumée : l'API publique OSRM ne propose pas de profil "moto offroad".
 /// "Route" utilise le profil voiture (routes revêtues), "Piste" utilise le profil vélo
 /// (favorise les chemins/pistes) — le plus proche disponible sans clé ni hébergement.
+///
+/// Réutilisé pour le routing "hors-route" d'Aller à (spec "offroad-routing-preference", it13)
+/// — remplace l'ancienne ligne droite ("vol d'oiseau") de GoToProfile.offroad, voir
+/// RideSessionManager.startGoTo. Alternatives documentées si ce profil s'avère insuffisant en
+/// usage réel (terrain très accidenté, pistes non cartographiées en highway=track/path sur
+/// OSM) : (1) profil "foot" (piéton) du même serveur OSRM public — favorise encore plus les
+/// sentiers/chemins, interdit totalement les grands axes, au prix d'une vitesse de référence
+/// plus lente dans le calcul ; (2) une instance BRouter (auto-hébergée ou profils "trekking"/
+/// "shortest" côté client) offre un vrai profil "moto trail"-like avec pondération fine par
+/// type de surface (highway=track + tracktype + surface), mais demande soit un serveur dédié,
+/// soit la lib BRouter embarquée (calcul local, pas d'API réseau) — piste à explorer si le
+/// volume d'usage ou les retours terrain justifient l'investissement.
 enum DetourProfile: String, CaseIterable {
     case route
     case offroad
@@ -61,7 +73,10 @@ enum DetourRoutingService {
         throw DetourRoutingError.network(lastError ?? DetourRoutingError.noReachableCandidate)
     }
 
-    private static func route(
+    /// Point-à-point simple (PAS de recherche multi-candidats comme `requestRoute` ci-dessus) —
+    /// réutilisé par RideSessionManager.startGoTo pour le profil hors-route d'Aller à (spec
+    /// "offroad-routing-preference", it13), donc internal plutôt que private désormais.
+    static func route(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
         profile: DetourProfile

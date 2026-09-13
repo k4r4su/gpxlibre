@@ -482,8 +482,10 @@ struct RideView: View {
             titleVisibility: .visible
         ) {
             Button("Itinéraire ici (route)") { commitGoTo(profile: .route) }
-            Button("Y aller à vol d'oiseau") { commitGoTo(profile: .offroad) }
-            Button("Mixte (route + vol d'oiseau)") { commitGoTo(profile: .mixed) }
+            // Renommés (spec "offroad-routing-preference", it13) : .offroad route désormais
+            // réellement en hors-route (pistes/chemins), ce n'est plus une ligne droite.
+            Button("Itinéraire piste (hors-route)") { commitGoTo(profile: .offroad) }
+            Button("Mixte (route + piste)") { commitGoTo(profile: .mixed) }
             Button("Annuler", role: .cancel) { pendingGoToCoordinate = nil }
         } message: {
             Text("La trace chargée n'est jamais modifiée par ce guidage.")
@@ -552,7 +554,7 @@ struct RideView: View {
 
     /// "Itinéraire ici" en Mode Nav démarre directement le guidage principal (voix +
     /// tour-par-tour, c'est exactement le rôle du Mode Nav) ; partout ailleurs (Mode Trace,
-    /// ou profils vol d'oiseau/mixte y compris en Nav) c'est un guidage parallèle "Aller à"
+    /// ou profils piste/mixte y compris en Nav) c'est un guidage parallèle "Aller à"
     /// qui ne touche jamais la trace chargée.
     private func commitGoTo(profile: GoToProfile) {
         guard let coordinate = pendingGoToCoordinate else { return }

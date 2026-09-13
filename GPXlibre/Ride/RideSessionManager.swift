@@ -1018,9 +1018,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     /// Lance un guidage "Aller à" PARALLÈLE (pointillés cyan) — fonctionne en Mode Trace
     /// (la trace sacrée n'est jamais touchée) comme en Mode Nav (à côté de la route
-    /// principale). `.route` réutilise OSRM, `.offroad` est une ligne directe honnête (cap +
-    /// distance, aucune prétention de chemin réel), `.mixed` route jusqu'au point routable le
-    /// plus proche (OSRM snappe naturellement dessus) puis termine à vol d'oiseau.
+    /// principale). `.route` réutilise OSRM (profil voiture), `.offroad` réutilise le MÊME
+    /// moteur avec le profil hors-route déjà documenté dans DetourRoutingService (spec
+    /// "offroad-routing-preference", it13 — remplace l'ancienne ligne droite "vol d'oiseau"),
+    /// `.mixed` route jusqu'au point routable le plus proche (OSRM snappe naturellement
+    /// dessus) puis termine en hors-route plutôt qu'à vol d'oiseau ("route rapide d'approche →
+    /// pistes dès que possible"). Si le réseau/OSRM échoue pour N'IMPORTE quel profil, repli
+    /// honnête en ligne directe (jamais de faux semblant d'itinéraire).
     func startGoTo(to destination: CLLocationCoordinate2D, label: String, profile: GoToProfile) {
         goToTask?.cancel()
         goToRequestFailed = nil
@@ -1030,41 +1034,61 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             return
         }
 
-        switch profile {
-        case .offroad:
-            goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
-        case .route, .mixed:
-            isRequestingGoTo = true
-            goToTask = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    let route = try await NavRoutingService.route(from: origin, to: destination, destinationLabel: label, networkMonitor: self.networkMonitor)
-                    guard !Task.isCancelled else { return }
-                    var coordinates = route.coordinates
-                    if profile == .mixed, let snappedEnd = coordinates.last {
-                        // OSRM a déjà "snappé" `destination` sur le point routable le plus
-                        // proche : `snappedEnd` EST ce point. On complète juste par une ligne
-                        // droite honnête jusqu'à la vraie destination si elle est plus loin.
-                        let residual = RoadbookAnalyzer.distanceMeters(snappedEnd, destination)
-                        if residual > RideConstants.detourRejoinClearRadiusMeters {
-                            coordinates.append(destination)
-                        }
-                    }
-                    await MainActor.run {
-                        self.goToGuidance = GoToGuidance(coordinates: coordinates, profile: profile, destinationCoordinate: destination, destinationLabel: label)
-                        self.isRequestingGoTo = false
-                    }
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        self.isRequestingGoTo = false
-                        // Honnête : si le réseau/OSRM échoue, on ne prétend pas avoir un
-                        // itinéraire — fallback automatique en ligne directe (comme .offroad).
-                        self.goToRequestFailed = (error as? LocalizedError)?.errorDescription ?? "Itinéraire impossible — guidage direct."
-                        self.goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
-                    }
+        isRequestingGoTo = true
+        goToTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let coordinates = try await Self.resolvedGoToCoordinates(
+                    from: origin, to: destination, label: label, profile: profile, networkMonitor: self.networkMonitor
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.goToGuidance = GoToGuidance(coordinates: coordinates, profile: profile, destinationCoordinate: destination, destinationLabel: label)
+                    self.isRequestingGoTo = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.isRequestingGoTo = false
+                    // Honnête : si le réseau/OSRM échoue, on ne prétend pas avoir un
+                    // itinéraire — fallback automatique en ligne directe.
+                    self.goToRequestFailed = (error as? LocalizedError)?.errorDescription ?? "Itinéraire impossible — guidage direct."
+                    self.goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
                 }
             }
+        }
+    }
+
+    /// Extrait de startGoTo (fonction pure côté réseau, testable indépendamment de l'état de
+    /// session) — un throw remonte tel quel au catch de l'appelant, qui gère le repli commun.
+    private static func resolvedGoToCoordinates(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        label: String,
+        profile: GoToProfile,
+        networkMonitor: NetworkMonitor
+    ) async throws -> [CLLocationCoordinate2D] {
+        switch profile {
+        case .offroad:
+            return try await DetourRoutingService.route(from: origin, to: destination, profile: .offroad)
+        case .route:
+            let route = try await NavRoutingService.route(from: origin, to: destination, destinationLabel: label, networkMonitor: networkMonitor)
+            return route.coordinates
+        case .mixed:
+            let route = try await NavRoutingService.route(from: origin, to: destination, destinationLabel: label, networkMonitor: networkMonitor)
+            var coordinates = route.coordinates
+            if let snappedEnd = coordinates.last {
+                // OSRM a déjà "snappé" `destination` sur le point routable le plus proche côté
+                // route : `snappedEnd` EST ce point. Le tronçon final se termine désormais en
+                // HORS-ROUTE (routé, pas une ligne droite) si la destination réelle est encore
+                // loin de ce point — "route rapide d'approche → pistes dès que possible".
+                let residual = RoadbookAnalyzer.distanceMeters(snappedEnd, destination)
+                if residual > RideConstants.detourRejoinClearRadiusMeters {
+                    let offroadTail = try await DetourRoutingService.route(from: snappedEnd, to: destination, profile: .offroad)
+                    coordinates.append(contentsOf: offroadTail.dropFirst())
+                }
+            }
+            return coordinates
         }
     }
 
