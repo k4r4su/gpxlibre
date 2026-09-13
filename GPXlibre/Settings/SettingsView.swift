@@ -76,6 +76,14 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Trafic", isOn: $settings.trafficEnabled)
+                    // Nouvel écran (spec "home-work-favorites", it13) : "Domicile"/"Travail"
+                    // étaient déjà suggérés par la recherche Ride, sans nulle part où les
+                    // définir — voir FavoriteAddressesView.
+                    NavigationLink {
+                        FavoriteAddressesView()
+                    } label: {
+                        Label("Adresses favoris", systemImage: "house.and.flag.fill")
+                    }
                 }
 
                 Section("Trace") {
