@@ -404,14 +404,21 @@ struct RideView: View {
     @ViewBuilder
     private var lateralCapBannerLayer: some View {
         if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
+            // Même patron que leftMiddleLayer : le ZStack parent est aligné .bottom, donc sans
+            // ce sandwich Spacer/contenu/Spacer la bannière tomberait en bas de l'écran au lieu
+            // d'être centrée verticalement (bug vu en capture, corrigé avant tout livrable).
             HStack {
                 Spacer()
-                LateralCapBannerView(
-                    direction: inflection.direction,
-                    distanceMeters: distance,
-                    sequenceIndex: inflection.sequenceIndex,
-                    totalCount: session.inflectionPoints.count
-                )
+                VStack {
+                    Spacer()
+                    LateralCapBannerView(
+                        direction: inflection.direction,
+                        distanceMeters: distance,
+                        sequenceIndex: inflection.sequenceIndex,
+                        totalCount: session.inflectionPoints.count
+                    )
+                    Spacer()
+                }
                 .padding(.trailing, 16)
             }
             .transition(.move(edge: .trailing).combined(with: .opacity))
