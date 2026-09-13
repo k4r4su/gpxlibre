@@ -205,9 +205,12 @@ struct RideView: View {
     /// automatiquement l'encoche/Dynamic Island, comme n'importe quelle vue SwiftUI normale.
     private func topStackLayer(track: GPXTrack?) -> some View {
         VStack {
+            // Nav masqué du contrôle visuel (spec "hide-nav-tab", it12) — Trace actif par
+            // défaut (RideModeStore.mode), case vide à dessein là où vivait le Picker. Code
+            // Nav (RideMode.nav, RideModeSegmentedControl, tout le branchement .nav ci-dessous)
+            // intact : sera relancé dans une itération future, après la trace door-to-door.
             HStack {
                 Spacer()
-                RideModeSegmentedControl(mode: $modeStore.mode)
                 Spacer()
             }
             .overlay(alignment: .trailing) {
@@ -672,8 +675,7 @@ struct RideView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            RideModeSegmentedControl(mode: $modeStore.mode)
-                .padding(.bottom, 8)
+            // Nav masqué (spec "hide-nav-tab", it12) — voir topStackLayer.
             Image(systemName: "location.slash")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
