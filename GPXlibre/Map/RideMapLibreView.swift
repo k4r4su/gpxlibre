@@ -311,7 +311,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             navRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             navRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
             detourLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
-            goToLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+            goToLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.goToLineWidth)
             // "Reprendre ici" (Bloc 3) : même classe de poids visuel que le détour.
             resumeRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
             resumeRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
@@ -543,8 +543,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             style.addSource(goToSource)
             let goToLayer = MLNLineStyleLayer(identifier: MapEngineConstants.goToLayerIdentifier, source: goToSource)
             goToLayer.lineColor = NSExpression(forConstantValue: UIColor.systemCyan)
-            goToLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
-            goToLayer.lineDashPattern = NSExpression(forConstantValue: [6, 6])
+            goToLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.goToLineWidth)
+            // Fix "temp-trace-dash-readability" (it13, terrain : "dashes trop espacés...
+            // illisible de loin") : motif resserré ratio ~2:1 (était [6,6], ratio 1:1, et ces
+            // unités multiplient la largeur de trait — un espacement énorme à l'écran).
+            goToLayer.lineDashPattern = NSExpression(forConstantValue: [2, 1])
             goToLayerRef = goToLayer
 
             // "Reprendre la trace ici" (Bloc 3) : bleu pointillé distinct de la trace, du

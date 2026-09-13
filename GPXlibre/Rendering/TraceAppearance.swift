@@ -72,4 +72,10 @@ struct TraceAppearance: Equatable {
     /// Le détour reste toujours rouge, pointillé, et 50 % plus épais que la trace — il doit
     /// être plus visible qu'elle, c'est lui qui sauve la balade.
     var detourLineWidth: CGFloat { lineWidth * 1.5 }
+
+    /// Fix "temp-trace-dash-readability" (it13) : "Aller à" (route/piste/mixte)
+    /// légèrement plus épais que la trace principale pour rester lisible de loin, mais moins
+    /// que le détour (plus urgent) — reste distinct par couleur (cyan) et motif (pointillé
+    /// serré, voir MapEngineConstants/RideMapLibreView), jamais par l'épaisseur seule.
+    var goToLineWidth: CGFloat { lineWidth * 1.2 }
 }
