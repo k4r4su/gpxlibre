@@ -1,5 +1,29 @@
 # TODO
 
+## Itération 12 (progress-marker / lateral-cap-banner / chevrons-100m / biblio-direction / raw-speed-1hz / hide-nav-tab) — idées annexes notées, non traitées
+
+- **Fenêtre d'inflexion fixée à 150 m** (une seule valeur, `bannerInflectionWindowMeters`)
+  plutôt que "100-150 m" comme deux seuils distincts — décision de scope assumée : une vraie
+  "split" nette déclenche de toute façon largement dans une fenêtre de 150 m (tout l'angle
+  tombe dans un petit sous-segment), donc une seule valeur couvre déjà les deux cas demandés
+  (validé par test, voir RoadbookInflectionTests). À revisiter seulement si un virage réel
+  s'avère mal détecté en usage (fenêtre trop courte ou trop longue pour un cas précis).
+- **Validation paysage de la bannière latérale non faite** — même limite déjà documentée pour
+  it9 (pas d'automatisation de rotation dans cet environnement), pas spécifique à ce bloc.
+- **Fix "biblio-direction-live-refresh" vérifié par lecture de code + connaissance d'un bug
+  SwiftUI documenté** (Canvas figé dans une List/Form), pas par confirmation visuelle
+  simulateur (pas d'automatisation tactile pour actionner le Picker "Sens"). Logique de
+  données déjà prouvée correcte avant le fix ; à confirmer par le propriétaire au prochain
+  test terrain.
+- **Captures AVANT/APRÈS bannière latérale (300/200/100/90/80 m) obtenues via injection de
+  trace synthétique + `simctl location`** (pas de trace réelle, pas de tap UI possible) —
+  méthode temporaire (code jamais commité, voir historique de session), donc pas une trace
+  GPX réelle importée par l'utilisateur. À reconfirmer en conditions réelles (vraie trace,
+  vrai déplacement) dès que possible. Note technique : `simctl location set` répété
+  rapidement (quelques secondes d'écart) peut accumuler un décalage/une animation résiduelle
+  de la position affichée — un seul `set` par position + attente ~4 s avant capture donne un
+  résultat exact ; utile à savoir pour toute capture future du même genre.
+
 ## Itération 11 (2d-only / biblio-preview-direction / vector-pmtiles) — idées annexes notées, non traitées
 
 - **Mode avion + paquet `.pmtiles` importé non testé de bout en bout** : `MapSourceResolver`

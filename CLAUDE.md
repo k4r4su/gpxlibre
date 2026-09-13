@@ -31,7 +31,15 @@ GPXlibre/
                    vérité layout), RoadbookAnalyzer/TrackProjector/Checkpoint (géométrie
                    pure), DetourRoutingService (OSRM), ResumeGuidance* (feat it10),
                    RidePanelStyle (styles partagés), RideConstants (toutes les constantes
-                   tunables du module Ride)
+                   tunables du module Ride). RoadbookPanelView ne gère plus QUE l'alerte
+                   "hors trace" (EN HAUT, pleine largeur) depuis it12 — le cas "virage à
+                   venir" est porté par LateralCapBannerView (latérale, translucide, calque
+                   ZStack isolé donc hors de hasDirectionPanel/computeMapInsets), piloté par
+                   RoadbookAnalyzer.buildInflectionPoints : détection SÉPARÉE des checkpoints
+                   (angle cumulé signé sur fenêtre glissante ~150 m, seuil 40°, constantes
+                   `banner*` de RideConstants) — deux listes indépendantes
+                   (checkpoints/inflectionPoints), deux compteurs "N" distincts, ne jamais les
+                   confondre ni faire dépendre l'un de l'autre.
   Map/            RideMapLibreView (moteur actif, voir ci-dessous), MapProvider (protocole
                    commun), MapEngineConstants (identifiants sources/couches + couleurs +
                    construction des styles raster ET vectoriel), MapSourceSelection (raster/
@@ -39,7 +47,11 @@ GPXlibre/
                    de carte effective — voir section dédiée, it11)
   Nav/            Mode Nav (guidage A→B, recalcul automatique) — RideMode/RideModeStore
                    (Trace vs Nav), NavRoutingService, GoToGuidance ("Aller à" parallèle),
-                   NavReportButton ("Signaler" — indépendant du POI supprimé en it10)
+                   NavReportButton ("Signaler" — indépendant du POI supprimé en it10).
+                   RideModeSegmentedControl n'est plus appelé depuis it12 (spec
+                   "hide-nav-tab", Trace seul visible/actif) — fichier intact, tout le code
+                   Nav reste en place tel quel, ne PAS le supprimer : sera relancé dans une
+                   itération future, après la trace door-to-door.
   Offline/        Téléchargement de tuiles raster par région, cache, précalcul de taille ;
                    VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
                    régionaux (import/téléchargement, un seul actif à la fois)
@@ -53,7 +65,12 @@ GPXlibre/
                    trace), TrackMapView, RootView (TabView)
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure
-                   de la trace avec chevrons + pastille de sens, aucune carte interactive
+                   de la trace avec chevrons + pastille de sens, aucune carte interactive.
+                   Gotcha (fix "biblio-direction-live-refresh", it12) : un `Canvas` dans une
+                   `Form`/`List` peut rester visuellement figé après un changement de state
+                   tant qu'aucun scroll/layout ne force le redessin de la cellule hôte — voir
+                   `.id(...)` sur TrackThumbnailView dans TrackSettingsView, contournement
+                   standard, pas une correction de la logique d'état (qui était déjà correcte)
   Onboarding/     Écran d'accueil première ouverture
 GPXlibreTests/    XCTest, @MainActor, @testable import GPXlibre — voir conventions plus bas
 server/           Backend FastAPI+SQLite pour SharedBlockage (Docker, `docker compose up`)
@@ -132,6 +149,17 @@ qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour 
 Même patron appliqué à `VectorPackageStore` (Offline/, it11) : `activePackageID: UUID?`, un
 seul paquet vectoriel actif à la fois, `setActive(_:)` seul point d'écriture — pas de fusion
 multi-région, pas d'état parallèle dans `VectorPackagesView`.
+
+## Vitesse affichée vs vitesse utilisée (spec "raw-speed-1hz", it12)
+
+`RideSessionManager` expose DEUX valeurs de vitesse, jamais interchangeables :
+`smoothedSpeedKmh` (moyenne glissante `speedSmoothingWindowSeconds`, 10 s) reste la SEULE
+source pour tout ce qui doit rester stable — zoom auto (`updateZoomBucket`), contexte route
+rapide/piste (`updateRideContext`), dépassement de limite de vitesse (`isOverSpeedLimit`).
+`rawSpeedKmh` (`location.speed` brut, throttlé à 1 Hz au moment du PUBLISHED uniquement — le
+GPS continue d'être consommé à la cadence normale) alimente UNIQUEMENT le speedo
+(RideStatsBadge/RideStatsPanel). Demande terrain explicite pour le speedo seul ("m'enfou que
+ça oscille") : ne jamais brancher `rawSpeedKmh` sur une décision automatique.
 
 ## Règles absolues (non négociables, violées = régression critique)
 
