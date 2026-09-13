@@ -143,8 +143,10 @@ enum RideConstants {
     // MARK: - Chevrons de direction par trace (spec "per-track-settings")
 
     /// DIRECTION_ARROW_SPACING_M — espacement par défaut des chevrons de direction le long de
-    /// la trace, réglable par trace (100 / 200 / 500 / 1000 m).
-    static let directionArrowSpacingMetersDefault: Double = 500
+    /// la trace, réglable par trace (100 / 200 / 500 / 1000 m). Défaut réduit 500 → 100 m
+    /// (it12, retour terrain) : chevrons plus fréquents, plus utile pour lire le sens sans
+    /// avoir à zoomer. Le slider garde toutes les valeurs précédentes.
+    static let directionArrowSpacingMetersDefault: Double = 100
     static let directionArrowSpacingMetersOptions: [Double] = [100, 200, 500, 1000]
     /// Distance sous laquelle un point de départ personnalisé "capture" le tap sur la carte
     /// d'aperçu (spec "Choisir le début").
