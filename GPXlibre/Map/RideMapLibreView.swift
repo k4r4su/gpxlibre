@@ -241,11 +241,25 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private weak var resumePinLayerRef: MLNCircleStyleLayer?
         private weak var rasterLayer: MLNRasterStyleLayer?
         fileprivate weak var chevronLayerRef: MLNSymbolStyleLayer?
-        /// Clé (trackID, nombre de points, espacement) — évite tout recalcul des chevrons
-        /// tant que ni la trace ni l'espacement n'ont réellement changé (Bloc 6, performance :
-        /// "jamais de rebuild en réponse aux updates CoreLocation").
-        private var currentChevronKey: String?
+        /// Fix "chevrons-live-refresh" (it13, bug terrain critique) : comparaison par VALEUR
+        /// complète (même patron que `updateTrackShape`/`newTrack != track`), jamais une clé
+        /// string — l'ancienne clé `"\(id)-\(points.count)-\(spacing)"` était aveugle à l'ORDRE
+        /// des points : un toggle de sens (A→B/B→A) ou un nouveau départ personnalisé ne change
+        /// ni l'id, ni le nombre de points, ni l'espacement, donc les chevrons ne se
+        /// recalculaient JAMAIS après un changement de sens sur la carte réelle (seule la
+        /// miniature Bibliothèque, fix "biblio-direction-live-refresh" it12, était concernée —
+        /// la carte Ride elle-même ne l'avait jamais été, non vérifiée tactilement avant ce
+        /// retour terrain). `GPXTrack: Hashable` compare `points` en entier, donc sensible à
+        /// l'ordre — exactement ce qu'il faut ici.
+        private var currentChevronTrack: GPXTrack?
+        private var currentChevronSpacing: Double?
         private var isNightMode = false
+        /// Référence faible au style courant (fix "chevrons-live-refresh") : permet de
+        /// régénérer l'icône chevron (couleur) depuis `updateTraceAppearance`, qui n'avait
+        /// auparavant aucun moyen d'atteindre `style.setImage` — l'icône restait figée dans
+        /// l'ancienne couleur après un changement de couleur de trace, même si la ligne
+        /// elle-même se mettait à jour en direct.
+        private weak var styleRef: MLNStyle?
 
         private var loadWatchdog: Timer?
         private var didAttemptFallback = false
@@ -281,6 +295,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         /// couche pour appliquer un nouveau réglage — Bloc 3, "appliqué en direct".
         func updateTraceAppearance(_ appearance: TraceAppearance) {
             guard appearance != traceAppearance else { return }
+            // Fix "chevrons-live-refresh" (it13) : l'icône chevron est une image bitmap générée
+            // une fois (didFinishLoading) — un changement de COULEUR ne la régénère jamais
+            // autrement, contrairement aux couches de ligne ci-dessous (mutées en direct).
+            let colorChanged = appearance.colorPreset != traceAppearance.colorPreset
             traceAppearance = appearance
             trackCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
             trackCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
@@ -298,6 +316,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             resumeRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
             resumeRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             resumeRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
+            if colorChanged {
+                styleRef?.setImage(Self.chevronImage(color: appearance.color), forName: MapEngineConstants.chevronIconName)
+            }
         }
 
         private func applyTrackShape(_ track: GPXTrack?, to source: MLNShapeSource) {
@@ -356,16 +377,17 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             else { return }
 
             guard let track, track.points.count > 1 else {
-                if currentChevronKey != nil {
-                    currentChevronKey = nil
+                if currentChevronTrack != nil {
+                    currentChevronTrack = nil
+                    currentChevronSpacing = nil
                     source.shape = nil
                 }
                 return
             }
 
-            let key = "\(track.id.uuidString)-\(track.points.count)-\(spacingMeters)"
-            guard key != currentChevronKey else { return }
-            currentChevronKey = key
+            guard track != currentChevronTrack || spacingMeters != currentChevronSpacing else { return }
+            currentChevronTrack = track
+            currentChevronSpacing = spacingMeters
 
             let chevrons = DirectionChevronComputer.chevrons(for: track.points, spacingMeters: spacingMeters)
             let features = chevrons.map { chevron -> MLNPointFeature in
@@ -443,6 +465,13 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             loadWatchdog?.invalidate()
             print("[MapLibre] Style chargé avec succès (\(style.sources.count) source(s)).")
             onStatusChange?(.loaded)
+            styleRef = style
+            // Fix "chevrons-live-refresh" (it13) : un rechargement de style (changement de
+            // thème/fond de carte) recrée la source chevron VIDE ci-dessous — sans ce reset, la
+            // mémoisation (track+espacement inchangés) aurait fait sauter le premier
+            // `updateChevronShape` qui suit, laissant la couche nouvellement créée vide.
+            currentChevronTrack = nil
+            currentChevronSpacing = nil
 
             rasterLayer = style.layer(withIdentifier: MapEngineConstants.rasterLayerIdentifier) as? MLNRasterStyleLayer
             if traceAppearance.isNightMode {
