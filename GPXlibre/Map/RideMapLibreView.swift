@@ -102,6 +102,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         context.coordinator.updateTraceAppearance(traceAppearance)
         context.coordinator.updateNightMode(traceAppearance.isNightMode && tileSource == .osmStandard)
+        context.coordinator.updateTrackShape(track, on: mapView)
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
@@ -237,6 +238,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         var onLongPress: ((CLLocationCoordinate2D) -> Void)?
         var onTrackTap: ((CLLocationCoordinate2D, Double) -> Void)?
 
+        private weak var trackSourceRef: MLNShapeSource?
         private weak var trackCasingLayer: MLNLineStyleLayer?
         private weak var trackColorLayer: MLNLineStyleLayer?
         private weak var navRouteCasingLayer: MLNLineStyleLayer?
@@ -303,6 +305,31 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             resumeRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
             resumeRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             resumeRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
+        }
+
+        private func applyTrackShape(_ track: GPXTrack?, to source: MLNShapeSource) {
+            guard let track, track.points.count > 1 else {
+                source.shape = nil
+                return
+            }
+            let coordinates = track.points.map(\.coordinate)
+            source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
+        }
+
+        /// Trace principale (Mode Trace) — pur consommateur réactif de `track`, donc de
+        /// `activeTrackID`/`isDisplayed` (fix "trace-render-state-channel") : mutation directe
+        /// de `.shape` à chaque update, jamais de rebuild de source/couche. Dédupliqué sur
+        /// l'égalité de valeur de `GPXTrack` (Hashable) — `RideView` reconstruit un `GPXTrack`
+        /// via `reordered(using:)` à CHAQUE update de position, mais son contenu ne change que
+        /// si la trace active ou son réglage de sens/départ change réellement, donc ce garde
+        /// évite de reconstruire un `MLNPolyline` à chaque fix GPS.
+        func updateTrackShape(_ newTrack: GPXTrack?, on mapView: MLNMapView) {
+            guard let style = mapView.style,
+                  let source = trackSourceRef ?? (style.source(withIdentifier: MapEngineConstants.trackSourceIdentifier) as? MLNShapeSource)
+            else { return }
+            guard newTrack != track else { return }
+            track = newTrack
+            applyTrackShape(newTrack, to: source)
         }
 
         /// Mode nuit : assombrit le fond raster OSM (pas de tuiles sombres dédiées, gratuites,
@@ -518,25 +545,33 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             style.addLayer(resumePinLayer)
             resumePinLayerRef = resumePinLayer
 
-            if let track, track.points.count > 1 {
-                let trackCoordinates = track.points.map(\.coordinate)
-                let trackShape = MLNPolyline(coordinates: trackCoordinates, count: UInt(trackCoordinates.count))
-                let trackSource = MLNShapeSource(identifier: MapEngineConstants.trackSourceIdentifier, shape: trackShape, options: nil)
-                style.addSource(trackSource)
+            // Source/couches TOUJOURS créées, même sans trace au premier chargement du style
+            // (ex : premier montage en Mode Nav) — fix "trace-render-state-channel" : avant ce
+            // fix, tout ce bloc était sauté si `track` était nil à CE moment précis, et plus
+            // aucun mécanisme ne recréait la source ensuite. Résultat : une trace activée APRÈS
+            // coup (retour Mode Trace, ou changement de trace active) ne s'affichait jamais,
+            // silencieusement — carte vide ou ancienne trace figée. `updateTrackShape` (appelée
+            // depuis `updateUIView`) est désormais le SEUL point qui peuple `.shape`, en pur
+            // consommateur réactif de `track` (donc de `activeTrackID`/`isDisplayed` via
+            // RideView) — jamais de reconstruction de source/couche après ce premier chargement.
+            let trackSource = MLNShapeSource(identifier: MapEngineConstants.trackSourceIdentifier, shape: nil, options: nil)
+            style.addSource(trackSource)
+            trackSourceRef = trackSource
 
-                // Casing d'abord (dessous), couleur ensuite (dessus) — lisibilité par contraste.
-                let casingLayer = MLNLineStyleLayer(identifier: "\(MapEngineConstants.trackLayerIdentifier)-casing", source: trackSource)
-                casingLayer.lineColor = NSExpression(forConstantValue: traceAppearance.casingColor)
-                casingLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.casingWidth)
-                style.addLayer(casingLayer)
-                trackCasingLayer = casingLayer
+            // Casing d'abord (dessous), couleur ensuite (dessus) — lisibilité par contraste.
+            let casingLayer = MLNLineStyleLayer(identifier: "\(MapEngineConstants.trackLayerIdentifier)-casing", source: trackSource)
+            casingLayer.lineColor = NSExpression(forConstantValue: traceAppearance.casingColor)
+            casingLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.casingWidth)
+            style.addLayer(casingLayer)
+            trackCasingLayer = casingLayer
 
-                let colorLayer = MLNLineStyleLayer(identifier: MapEngineConstants.trackLayerIdentifier, source: trackSource)
-                colorLayer.lineColor = NSExpression(forConstantValue: traceAppearance.color)
-                colorLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
-                style.addLayer(colorLayer)
-                trackColorLayer = colorLayer
-            }
+            let colorLayer = MLNLineStyleLayer(identifier: MapEngineConstants.trackLayerIdentifier, source: trackSource)
+            colorLayer.lineColor = NSExpression(forConstantValue: traceAppearance.color)
+            colorLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+            style.addLayer(colorLayer)
+            trackColorLayer = colorLayer
+
+            applyTrackShape(track, to: trackSource)
 
             // Halo de contraste sous le point de position natif (spec "fab-contrast") : disque
             // blanc cerné d'un trait sombre, lisible sur fond clair ET sur fond sombre — le
