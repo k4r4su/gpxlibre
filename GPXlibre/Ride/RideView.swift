@@ -361,7 +361,7 @@ struct RideView: View {
                 Spacer()
                 if showStatsPanel {
                     RideStatsPanel(
-                        currentSpeedKmh: session.smoothedSpeedKmh,
+                        currentSpeedKmh: session.rawSpeedKmh,
                         averageSpeedKmh: session.averageSpeedKmh,
                         maxSpeedKmh: session.maxSpeedKmh,
                         distanceRemainingMeters: session.distanceRemainingMeters,
@@ -373,7 +373,7 @@ struct RideView: View {
                     )
                     .frame(width: 230)
                 } else {
-                    RideStatsBadge(currentSpeedKmh: session.smoothedSpeedKmh) {
+                    RideStatsBadge(currentSpeedKmh: session.rawSpeedKmh) {
                         withAnimation { showStatsPanel = true }
                     }
                 }

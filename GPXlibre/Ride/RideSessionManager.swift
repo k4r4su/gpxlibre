@@ -14,6 +14,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var currentLocation: CLLocation?
     @Published private(set) var headingDegrees: CLLocationDirection = 0
     @Published private(set) var smoothedSpeedKmh: Double = 0
+    /// Vitesse brute affichée au speedo (spec "raw-speed-1hz", it12) — DISTINCT de
+    /// `smoothedSpeedKmh` ci-dessus (moyenne glissante 10 s, inchangée, continue d'alimenter
+    /// zoom auto/contexte route rapide/limite de vitesse) : ici `location.speed` brut, sans
+    /// lissage ni moyenne, juste throttlé à 1 Hz (voir handle(location:)) — demande terrain
+    /// explicite ("m'enfou que ça oscille"), lecture brute de la loi GPS.
+    @Published private(set) var rawSpeedKmh: Double = 0
+    private var lastRawSpeedDisplayDate: Date?
     @Published private(set) var cameraDistanceMeters: Double
     @Published private(set) var rideContext: RideContext = .normal
     @Published private(set) var checkpoints: [Checkpoint] = []
@@ -418,6 +425,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         currentLocation = location
 
         let speedMps = max(location.speed, 0)
+
+        // Speedo en 1 Hz brut (spec "raw-speed-1hz") : le GPS continue d'être consommé à sa
+        // cadence normale (manager.distanceFilter inchangé) — seul le DISPLAY est throttlé,
+        // jamais le calcul (smoothedSpeedKmh ci-dessous tourne à chaque fix, comme avant).
+        if location.timestamp.timeIntervalSince(lastRawSpeedDisplayDate ?? .distantPast) >= 1.0 {
+            lastRawSpeedDisplayDate = location.timestamp
+            rawSpeedKmh = speedMps * 3.6
+        }
+
         speedSamples.append((location.timestamp, speedMps))
         // Fenêtre la plus large des deux besoins (zoom auto 10 s, ETA 5 min) ; chacune
         // re-filtre ensuite ce même buffer sur sa propre durée.
