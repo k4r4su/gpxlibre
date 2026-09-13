@@ -9,6 +9,9 @@ struct LibraryView: View {
     @State private var renamingTrack: GPXTrack?
     @State private var renameText = ""
     @State private var trackToConfigure: GPXTrack?
+    /// Fiche complète (spec "biblio-track-fullsheet", it13) — tap sur une ligne, voir
+    /// TrackFullSheetView.
+    @State private var trackForFullSheet: GPXTrack?
 
     private static let gpxType = UTType(filenameExtension: "gpx") ?? .xml
 
@@ -122,7 +125,16 @@ struct LibraryView: View {
     private var trackList: some View {
         List {
             ForEach(library.tracks) { track in
-                NavigationLink(value: track) {
+                // Fix "biblio-track-fullsheet" (it13, terrain : "Tap sur une ligne trace = fiche
+                // complète") — le tap n'ouvre plus TrackDetailView (carte + "Utiliser pour le
+                // Ride" avec précache) mais une fiche de gestion légère (nom/longueur/infos +
+                // Supprimer/Renommer/Paramètres). Décision de scope assumée : TrackDetailView
+                // reste intact mais n'a plus de point d'entrée depuis cette liste (voir
+                // TODO.md) — "Utiliser pour le Ride" reste accessible via le check-mark de
+                // ligne et via TrackSettingsView, "voir la trace" via l'aperçu dans Paramètres.
+                Button {
+                    trackForFullSheet = track
+                } label: {
                     TrackRow(
                         track: track,
                         isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
@@ -136,6 +148,7 @@ struct LibraryView: View {
                         }
                     )
                 }
+                .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         library.delete(track)
@@ -162,11 +175,28 @@ struct LibraryView: View {
                 }
             }
         }
-        .navigationDestination(for: GPXTrack.self) { track in
-            TrackDetailView(track: track)
-        }
         .sheet(item: $trackToConfigure) { track in
             TrackSettingsView(track: track)
+        }
+        .sheet(item: $trackForFullSheet) { track in
+            TrackFullSheetView(
+                track: track,
+                isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
+                isActive: library.activeTrackID == track.id,
+                onDelete: {
+                    library.delete(track)
+                    trackForFullSheet = nil
+                },
+                onRename: {
+                    renameText = track.name
+                    renamingTrack = track
+                    trackForFullSheet = nil
+                },
+                onConfigure: {
+                    trackForFullSheet = nil
+                    trackToConfigure = track
+                }
+            )
         }
     }
 }

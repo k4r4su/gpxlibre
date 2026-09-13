@@ -73,6 +73,7 @@
 		9D3F41FDAB5DBBF96D3A0357 /* RollingWaypoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80F0D27D6D77CD532EF2F94 /* RollingWaypoint.swift */; };
 		9E455F6B99F7D30CD1F45158 /* RideMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A6444548973E3785D1BF242 /* RideMode.swift */; };
 		9FB49F793CD05F24C2340F52 /* MapThemePreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83ABB0A48BB466F2958FEC61 /* MapThemePreset.swift */; };
+		A0F475905AD91EC3C46500DA /* TrackFullSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E060D0D1BA1FF825888EE35 /* TrackFullSheetView.swift */; };
 		A5C8848C2C31EE8C476F7D0C /* SharedBlockageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B6DF158578C2F052AB468D /* SharedBlockageStore.swift */; };
 		A69615C3B7888222BD02DDA9 /* GoToStatusPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA367A3EE73A3BBE788A6EF5 /* GoToStatusPillView.swift */; };
 		A6A7BA1FB4E8A4D41C6F4769 /* PrecacheConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6F6ACEFE13A55FAA120D3D /* PrecacheConfirmationView.swift */; };
@@ -164,6 +165,7 @@
 		45B74ED338BF91B332800AAB /* Checkpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkpoint.swift; sourceTree = "<group>"; };
 		47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXPoint.swift; sourceTree = "<group>"; };
 		4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSettingsStore.swift; sourceTree = "<group>"; };
+		4E060D0D1BA1FF825888EE35 /* TrackFullSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFullSheetView.swift; sourceTree = "<group>"; };
 		50F6B4CC1371445701229DA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		52E7A97540684CC96DCBEE99 /* BlockageLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockageLogStore.swift; sourceTree = "<group>"; };
 		5377D7D96D91B4019D5F0517 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -408,6 +410,7 @@
 				5377D7D96D91B4019D5F0517 /* RootView.swift */,
 				B238FC05037A7D406FCCCCCB /* TabBarAppearance.swift */,
 				2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */,
+				4E060D0D1BA1FF825888EE35 /* TrackFullSheetView.swift */,
 				66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */,
 				6808327F1B65D8285BCD330D /* TrackSettingsView.swift */,
 			);
@@ -725,6 +728,7 @@
 				2C2EC5C62958DA3410C1903A /* TileSource.swift in Sources */,
 				59B7FC960372785CA506FEC9 /* TraceAppearance.swift in Sources */,
 				52EC67B7833280EF322910C7 /* TrackDetailView.swift in Sources */,
+				A0F475905AD91EC3C46500DA /* TrackFullSheetView.swift in Sources */,
 				2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */,
 				FD3611964B492E902B2F92DC /* TrackProjector.swift in Sources */,
 				26635BA37D9C8B5C400CECCD /* TrackRideSettings.swift in Sources */,
