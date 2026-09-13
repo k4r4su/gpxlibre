@@ -65,6 +65,18 @@ struct TrackSettingsView: View {
                 }
 
                 Section {
+                    // Miniature directionnelle (spec "biblio-preview-direction", it11) : pure
+                    // géométrie en mémoire (track.reordered, déjà pur), se redessine à chaque
+                    // bascule du Picker ci-dessous sans rescan GPS — voir TrackThumbnailView.
+                    TrackThumbnailView(
+                        track: reorderedTrack,
+                        appearance: previewAppearance,
+                        chevronSpacingMeters: localSettings.chevronSpacingMeters,
+                        isReversed: localSettings.isReversed
+                    )
+                    .frame(height: 110)
+                    .listRowInsets(EdgeInsets())
+
                     if track.isLoop {
                         Label("Boucle détectée — ordre du fichier conservé par défaut", systemImage: "arrow.triangle.2.circlepath")
                             .font(.caption)
@@ -160,6 +172,14 @@ struct TrackSettingsView: View {
                 localSettings = trackRideSettings.settings(for: track.id)
             }
         }
+    }
+
+    /// Réutilisé par la miniature ET, à terme, par tout aperçu qui doit refléter le sens
+    /// actif — jamais un nouvel algorithme, juste `GPXTrack.reordered(using:)` (pur, ne
+    /// modifie jamais `track`) appliqué aux réglages en cours d'édition (`localSettings`),
+    /// pas encore enregistrés.
+    private var reorderedTrack: GPXTrack {
+        track.reordered(using: localSettings)
     }
 
     private var previewAppearance: TraceAppearance {
