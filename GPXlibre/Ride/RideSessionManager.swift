@@ -20,6 +20,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var currentCheckpointIndex: Int = 0
     @Published private(set) var distanceToCurrentCheckpointMeters: Double?
     @Published private(set) var isCloseToCheckpoint: Bool = false
+    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) — liste SÉPARÉE des
+    /// checkpoints ci-dessus (voir RoadbookAnalyzer.buildInflectionPoints), sans index à
+    /// avancer/resynchroniser : `currentInflection` est recalculé sans état propre à chaque fix
+    /// (voir updateInflectionBanner), donc toujours correct même après un hors-trace/reprise.
+    @Published private(set) var inflectionPoints: [Checkpoint] = []
+    @Published private(set) var currentInflection: Checkpoint?
+    @Published private(set) var distanceToCurrentInflectionMeters: Double?
     /// Bloc 2 "resync-hysteresis" : roadbook en pause (hors trace) — direction/distance vers
     /// le checkpoint courant gelées, remplacées par un indicateur "hors trace" + point de
     /// reprise, tant que la position n'est pas stable ON trace pendant resyncHysteresisSeconds
@@ -234,6 +241,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             trackCumulativeDistances = []
             checkpoints = []
+            inflectionPoints = []
+            currentInflection = nil
+            distanceToCurrentInflectionMeters = nil
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
             resumeTask?.cancel()
@@ -276,6 +286,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         } else {
             trackCumulativeDistances = []
             checkpoints = []
+            inflectionPoints = []
+            currentInflection = nil
+            distanceToCurrentInflectionMeters = nil
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
             resumeTask?.cancel()
@@ -324,6 +337,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         track = nil
         checkpoints = []
         currentCheckpointIndex = 0
+        inflectionPoints = []
+        currentInflection = nil
+        distanceToCurrentInflectionMeters = nil
         trackCumulativeDistances = []
         goToGuidance = nil
         resetBlockedPathState()
@@ -371,6 +387,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isCloseToCheckpoint = false
         flashedCheckpointIDs.removeAll()
         hapticCheckpointIDs.removeAll()
+
+        inflectionPoints = RoadbookAnalyzer.buildInflectionPoints(
+            for: track,
+            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
+            windowMeters: RideConstants.bannerInflectionWindowMeters,
+            mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
+        )
+        currentInflection = nil
+        distanceToCurrentInflectionMeters = nil
     }
 
     func registerManualGesture() {
@@ -433,6 +458,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
             updateRoadbookProgress(from: location, projection: projection)
+            updateInflectionBanner(projection: projection)
             updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
         case .nav:
             updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
@@ -659,6 +685,29 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private func checkpointCumulativeDistanceMeters(_ checkpoint: Checkpoint) -> Double {
         trackCumulativeDistances.indices.contains(checkpoint.sourcePointIndex)
             ? trackCumulativeDistances[checkpoint.sourcePointIndex]
+            : .infinity
+    }
+
+    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) : SANS état propre
+    /// (pas d'index à avancer) — reprend juste la première inflexion dont la distance cumulée
+    /// dépasse la position curviligne actuelle. S'auto-corrige seul à chaque fix (hors-trace,
+    /// reprise, retour en arrière GPS) sans dupliquer l'hystérésis du roadbook : la bannière
+    /// est purement indicative, aucun flash/voix/haptique associé.
+    private func updateInflectionBanner(projection: TrackProjector.Projection?) {
+        guard let projection,
+              let next = inflectionPoints.first(where: { inflectionCumulativeDistanceMeters($0) > projection.cumulativeDistanceMeters })
+        else {
+            currentInflection = nil
+            distanceToCurrentInflectionMeters = nil
+            return
+        }
+        currentInflection = next
+        distanceToCurrentInflectionMeters = max(inflectionCumulativeDistanceMeters(next) - projection.cumulativeDistanceMeters, 0)
+    }
+
+    private func inflectionCumulativeDistanceMeters(_ point: Checkpoint) -> Double {
+        trackCumulativeDistances.indices.contains(point.sourcePointIndex)
+            ? trackCumulativeDistances[point.sourcePointIndex]
             : .infinity
     }
 

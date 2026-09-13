@@ -78,14 +78,16 @@ struct RideView: View {
         }
     }
 
-    /// La trace/le guidage Nav occupent la zone `directionPanelLayer` (RoadbookPanelView /
-    /// NavGuidancePanelView, EN HAUT — fix "overlay-layout-grid") — quand c'est le cas, la
-    /// caméra doit réserver cette hauteur côté haut (fix "position-anchor"), sinon le calcul
-    /// d'ancrage de la position serait faux. Reflète EXACTEMENT la condition d'affichage de
-    /// `directionPanelLayer` (y compris l'indicateur "hors trace").
+    /// Le guidage Nav / l'alerte "hors trace" occupent la zone `directionPanelLayer`
+    /// (NavGuidancePanelView / RoadbookPanelView, EN HAUT — fix "overlay-layout-grid") — quand
+    /// c'est le cas, la caméra doit réserver cette hauteur côté haut (fix "position-anchor"),
+    /// sinon le calcul d'ancrage de la position serait faux. Reflète EXACTEMENT la condition
+    /// d'affichage de `directionPanelLayer`. Le cas "virage à venir" (Mode Trace, on-track) est
+    /// désormais porté par la bannière LATÉRALE (spec "lateral-cap-banner-countdown", it12,
+    /// voir lateralCapBannerLayer) — isolée de ce calcul par construction, donc absente d'ici.
     private func hasDirectionPanel(track: GPXTrack?) -> Bool {
         switch modeStore.mode {
-        case .trace: return session.currentCheckpoint != nil || !session.checkpoints.isEmpty || session.isOffTrackPaused
+        case .trace: return session.isOffTrackPaused
         case .nav: return session.navRoute != nil
         }
     }
@@ -248,18 +250,12 @@ struct RideView: View {
 
     /// Panneau de direction (fix "overlay-layout-grid", Bug 3) : EN HAUT, pleine largeur —
     /// jamais en bas, où il se confondait avec la tab bar et masquait la position (Bug 2).
+    /// Trace : uniquement l'alerte "hors trace" désormais (le cas "virage à venir" est porté
+    /// par la bannière latérale, voir lateralCapBannerLayer et hasDirectionPanel ci-dessus).
     @ViewBuilder
     private var directionPanelLayer: some View {
-        if modeStore.mode == .trace,
-           session.currentCheckpoint != nil || !session.checkpoints.isEmpty || session.isOffTrackPaused {
-            RoadbookPanelView(
-                checkpoint: session.currentCheckpoint,
-                nextCheckpoint: session.nextCheckpoint,
-                totalCount: session.checkpoints.count,
-                distanceMeters: session.distanceToCurrentCheckpointMeters,
-                isClose: session.isCloseToCheckpoint,
-                offTrackInfo: offTrackPanelInfo
-            )
+        if modeStore.mode == .trace, session.isOffTrackPaused, let offTrackInfo = offTrackPanelInfo {
+            RoadbookPanelView(offTrackInfo: offTrackInfo)
         }
         if modeStore.mode == .nav, session.navRoute != nil {
             NavGuidancePanelView(
@@ -388,6 +384,37 @@ struct RideView: View {
         }
     }
 
+    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) — visible uniquement
+    /// pour une VRAIE inflexion dure (angle cumulé > `bannerInflectionThresholdDegrees` sur
+    /// `bannerInflectionWindowMeters`, voir RoadbookAnalyzer.buildInflectionPoints), à moins de
+    /// `bannerAlertStartMeters`, et jamais pendant l'alerte "hors trace" (message déjà donné en
+    /// haut, pas de double message). N'entre JAMAIS dans `hasDirectionPanel`/
+    /// `computeMapInsets` — calque isolé, zéro remontée d'ancre/zoom (fix "overlay-never-
+    /// pushes").
+    private var isLateralBannerVisible: Bool {
+        modeStore.mode == .trace
+            && !session.isOffTrackPaused
+            && session.currentInflection != nil
+            && (session.distanceToCurrentInflectionMeters ?? .infinity) <= RideConstants.bannerAlertStartMeters
+    }
+
+    @ViewBuilder
+    private var lateralCapBannerLayer: some View {
+        if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
+            HStack {
+                Spacer()
+                LateralCapBannerView(
+                    direction: inflection.direction,
+                    distanceMeters: distance,
+                    sequenceIndex: inflection.sequenceIndex,
+                    totalCount: session.inflectionPoints.count
+                )
+                .padding(.trailing, 16)
+            }
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+
     /// Point d'entrée : mesure la VRAIE safe area (encoche/Dynamic Island en haut ; tab bar +
     /// home indicator combinés en bas) par comparaison de coordonnées GLOBALES plutôt que via
     /// `GeometryProxy.safeAreaInsets` — cette dernière s'est avérée peu fiable ici : un
@@ -426,9 +453,11 @@ struct RideView: View {
             leftMiddleLayer
             bottomRightColumn
             bottomLeftBadge
+            lateralCapBannerLayer
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
+        .animation(.ridePanel, value: isLateralBannerVisible)
         .confirmationDialog("Chemin bloqué", isPresented: $showDetourConfirmation, titleVisibility: .visible) {
             Button("Contourner (route)") { session.requestDetour(profile: .route) }
             Button("Contourner (piste)") { session.requestDetour(profile: .offroad) }

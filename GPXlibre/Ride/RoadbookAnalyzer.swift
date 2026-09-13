@@ -37,6 +37,63 @@ enum RoadbookAnalyzer {
         return mergeNearby(raw, minDistanceMeters: turnMergeMinDistanceMeters)
     }
 
+    /// Inflexions pour la bannière latérale (spec "lateral-cap-banner-countdown", it12) —
+    /// DISTINCT de `buildCheckpoints` ci-dessus : au lieu d'un seuil ponctuel (angle
+    /// avant/après un point, lissé sur ±`bearingLookaroundMeters`), on somme le cap SIGNÉ de
+    /// segment en segment sur une fenêtre glissante de `windowMeters` à partir de chaque point.
+    /// Un virage "dur" progressif (aucun point isolé au-delà du seuil ponctuel, mais qui tourne
+    /// net sur 100-150 m) déclenche donc ici alors qu'il ne générerait AUCUN checkpoint — c'est
+    /// précisément le cas que `buildCheckpoints` ne couvre pas. Une vraie "split" nette continue
+    /// de déclencher aussi (tout l'angle tombe dans un petit sous-segment de la fenêtre).
+    /// N'affecte JAMAIS `checkpoints`/le roadbook (flash/voix/haptique) : liste strictement
+    /// séparée, consommée uniquement par la bannière.
+    static func buildInflectionPoints(
+        for track: GPXTrack,
+        thresholdDegrees: Double,
+        windowMeters: Double,
+        mergeMinDistanceMeters: Double
+    ) -> [Checkpoint] {
+        let points = track.points
+        guard points.count > 2, windowMeters > 0 else { return [] }
+
+        var segmentBearings: [Double] = []
+        segmentBearings.reserveCapacity(points.count - 1)
+        for i in 0..<(points.count - 1) {
+            segmentBearings.append(bearing(from: points[i].coordinate, to: points[i + 1].coordinate))
+        }
+
+        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
+
+        for i in 0..<segmentBearings.count {
+            var cumulativeDistance: Double = 0
+            var cumulativeTurn: Double = 0
+            var j = i
+            while j < segmentBearings.count, cumulativeDistance < windowMeters {
+                if j > i {
+                    cumulativeTurn += signedAngleDifference(from: segmentBearings[j - 1], to: segmentBearings[j])
+                }
+                cumulativeDistance += distanceMeters(points[j].coordinate, points[j + 1].coordinate)
+                j += 1
+            }
+
+            let absTurn = abs(cumulativeTurn)
+            guard absTurn >= thresholdDegrees else { continue }
+
+            let direction: TurnDirection
+            if absTurn >= RideConstants.uTurnThresholdDegrees {
+                direction = .uTurn
+            } else if cumulativeTurn > 0 {
+                direction = .right
+            } else {
+                direction = .left
+            }
+
+            raw.append((points[i].coordinate, absTurn, direction, i))
+        }
+
+        return mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
+    }
+
     /// Fusionne les points de virage trop rapprochés (même épingle détectée sur plusieurs
     /// points consécutifs de la trace, ou piste qui zigzague) en gardant celui à l'angle le
     /// plus marqué — le total affiché (X/Y) reflète donc toujours la liste FUSIONNÉE, jamais
