@@ -299,14 +299,17 @@ struct RideView: View {
                         Button {
                             is2DNorthUp.toggle()
                         } label: {
-                            Text(is2DNorthUp ? "3D" : "2D")
-                                .font(.caption.bold())
+                            // Spec "2d-only" (it11) : plus de notion de 3D à afficher (la
+                            // carte a toujours été plate depuis ce fix) — l'icône reflète
+                            // l'orientation réelle du toggle, cap-en-haut vs nord-en-haut.
+                            Image(systemName: is2DNorthUp ? "location.north.circle.fill" : "location.north.line.fill")
+                                .font(.title3)
                                 .foregroundStyle(.white)
                                 .frame(width: 40, height: 40)
                                 .background(.black.opacity(0.6))
                                 .clipShape(Circle())
                         }
-                        .accessibilityLabel(is2DNorthUp ? "Revenir à la vue cap-en-haut" : "Vue 2D nord-en-haut")
+                        .accessibilityLabel(is2DNorthUp ? "Revenir à la vue cap-en-haut" : "Vue nord-en-haut")
 
                         if let limit = session.currentSpeedLimitKmh {
                             SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)

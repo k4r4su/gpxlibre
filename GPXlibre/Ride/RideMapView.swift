@@ -1,9 +1,11 @@
 import SwiftUI
 import MapKit
 
-/// Caméra Ride en perspective : pitch fixe, la position est décalée vers le bas de l'écran
-/// (regard vers l'avant), cap en haut par défaut. Le pinch manuel est détecté et remonté
-/// via `onManualGesture` pour suspendre temporairement le zoom auto (voir RideSessionManager).
+/// Caméra Ride 2D (spec "2d-only", it11 — plus de perspective/pitch nulle part) : cap en haut
+/// par défaut, position réelle centrée (l'ancrage vertical vient de RideOverlayLayout côté
+/// MapLibre ; MapKit n'a pas d'équivalent persistant, voir cameraContentInset* ci-dessous).
+/// Le pinch manuel est détecté et remonté via `onManualGesture` pour suspendre temporairement
+/// le zoom auto (voir RideSessionManager).
 /// Implémentation MapKit — conservée intacte pour comparaison (voir MapProvider).
 /// MapLibre (RideMapLibreView) est le moteur actif par défaut depuis l'axe maplibre-migration.
 struct RideMapView: UIViewRepresentable, MapProvider {
@@ -60,6 +62,9 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         mapView.showsCompass = false
         mapView.showsScale = false
         mapView.pointOfInterestFilter = .excludingAll
+        // Spec "2d-only" (it11) : même nettoyage que côté MapLibre (pitchEnabled = false) —
+        // pas de geste natif à deux doigts qui inclinerait la caméra.
+        mapView.isPitchEnabled = false
 
         mapView.addAnnotations(checkpoints.map(CheckpointAnnotation.init))
         mapView.addAnnotations(waypoints.map(RollingWaypointAnnotation.init))
@@ -129,18 +134,12 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
-        let pitch: CLLocationDegrees = is2DNorthUp ? 0 : RideConstants.cameraPitchDegrees
-        let offsetRatio = is2DNorthUp ? 0 : RideConstants.cameraCenterOffsetRatio
-        let lookAheadCenter = Self.lookAheadCoordinate(
-            from: currentLocation.coordinate,
-            headingDegrees: heading,
-            forwardDistance: cameraDistanceMeters * offsetRatio
-        )
-
+        // Spec "2d-only" (it11) : plus de pitch, plus de décalage "regarder devant soi" —
+        // lookingAtCenter est toujours la position réelle, comme côté MapLibre.
         let camera = MKMapCamera(
-            lookingAtCenter: lookAheadCenter,
+            lookingAtCenter: currentLocation.coordinate,
             fromDistance: cameraDistanceMeters,
-            pitch: pitch,
+            pitch: 0,
             heading: heading
         )
 
@@ -250,28 +249,6 @@ struct RideMapView: UIViewRepresentable, MapProvider {
         mapView.removeAnnotations(coordinator.sharedBlockageAnnotations)
         coordinator.sharedBlockageAnnotations = sharedBlockages.map(SharedBlockageAnnotation.init)
         mapView.addAnnotations(coordinator.sharedBlockageAnnotations)
-    }
-
-    /// Point projeté à `forwardDistance` mètres dans la direction `headingDegrees`,
-    /// utilisé comme centre caméra pour que la position réelle apparaisse plus bas à l'écran.
-    static func lookAheadCoordinate(
-        from coordinate: CLLocationCoordinate2D,
-        headingDegrees: Double,
-        forwardDistance: Double
-    ) -> CLLocationCoordinate2D {
-        let earthRadiusMeters = 6_371_000.0
-        let bearing = headingDegrees * .pi / 180
-        let lat1 = coordinate.latitude * .pi / 180
-        let lon1 = coordinate.longitude * .pi / 180
-        let angularDistance = forwardDistance / earthRadiusMeters
-
-        let lat2 = asin(sin(lat1) * cos(angularDistance) + cos(lat1) * sin(angularDistance) * cos(bearing))
-        let lon2 = lon1 + atan2(
-            sin(bearing) * sin(angularDistance) * cos(lat1),
-            cos(angularDistance) - sin(lat1) * sin(lat2)
-        )
-
-        return CLLocationCoordinate2D(latitude: lat2 * 180 / .pi, longitude: lon2 * 180 / .pi)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

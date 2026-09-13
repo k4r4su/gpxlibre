@@ -28,8 +28,10 @@ protocol MapProvider: View {
         cameraContentInsetLeft: Double,
         cameraContentInsetRight: Double,
         northUp: Bool,
-        /// Vue alternative 2D nord-en-haut (Bloc 2, Mode Nav) — le cap-en-haut perspective
-        /// reste le défaut partout ; ceci force pitch 0 + nord en haut le temps du toggle.
+        /// Vue alternative nord-en-haut (Bloc 2, Mode Nav) — le cap-en-haut reste le défaut
+        /// partout ; ceci force nord en haut (et l'ancrage centré, `positionAnchorRatio2D`)
+        /// le temps du toggle. Depuis "2d-only" (it11), la caméra est TOUJOURS plate (pitch 0)
+        /// des deux côtés du toggle — seule l'orientation (cap vs nord) change, plus le pitch.
         is2DNorthUp: Bool,
         isManualOverrideActive: Bool,
         /// Change à chaque tap +/- ou recentrage : force l'application immédiate de la

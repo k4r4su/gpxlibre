@@ -51,6 +51,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         mapView.showsScale = false
         mapView.showsAttributionButton = true
         mapView.logoView.isHidden = true
+        // Spec "2d-only" (it11) : plus de vue perspective nulle part — on désactive le geste
+        // natif à deux doigts qui inclinerait la caméra, pas seulement la valeur par défaut.
+        mapView.isPitchEnabled = false
 
         context.coordinator.track = track
         context.coordinator.checkpoints = checkpoints
@@ -120,7 +123,8 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
-        let pitch: CGFloat = is2DNorthUp ? 0 : CGFloat(RideConstants.cameraPitchDegrees)
+        // Spec "2d-only" (it11) : la vue reste TOUJOURS plate, plus de pitch pilotable — la
+        // carte ne bascule plus jamais en perspective, y compris en Ride cap-en-haut.
         // Fix "position-anchor" (Bug 2) : plus de décalage géographique heuristique vers
         // l'avant — lookingAtCenter est TOUJOURS la position réelle ; tout l'ancrage vertical
         // (POSITION_ANCHOR_RATIO) vient de `contentInset.top`, déjà appliqué via
@@ -128,7 +132,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         let camera = MLNMapCamera(
             lookingAtCenter: currentLocation.coordinate,
             acrossDistance: cameraDistanceMeters,
-            pitch: pitch,
+            pitch: 0,
             heading: heading
         )
 
@@ -260,8 +264,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private var didAttemptFallback = false
         private var didFinishLoadingOnce = false
 
+        // Spec "2d-only" (it11) : plus de .gestureTilt — le pitch est désactivé
+        // (mapView.pitchEnabled = false), cette raison ne peut plus jamais se produire.
         private static let gestureReasonMask: MLNCameraChangeReason = [
-            .gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn, .gestureZoomOut, .gestureOneFingerZoom, .gestureTilt,
+            .gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn, .gestureZoomOut, .gestureOneFingerZoom,
         ]
 
         @objc func longPressDetected(_ gesture: UILongPressGestureRecognizer) {

@@ -61,21 +61,14 @@ enum RideConstants {
     /// Durée pendant laquelle le zoom manuel (pinch) prend le pas sur le zoom auto.
     static let manualZoomOverrideTimeoutSeconds: Double = 5
 
-    // MARK: - Caméra Ride (perspective)
-
-    static let cameraPitchDegrees: Double = 55
-
-    /// MapKit UNIQUEMENT (comparaison, non actif) — décalage géographique heuristique vers
-    /// l'avant, seul outil disponible en l'absence d'équivalent à MLNMapView.contentInset.
-    /// Côté MapLibre (moteur actif), voir `positionAnchorRatio` + RideOverlayLayout à la
-    /// place : ancrage EXACT via contentInset, pas une heuristique de décalage.
-    static let cameraCenterOffsetRatio: Double = 0.33
+    // MARK: - Caméra Ride (2D, cap-en-haut ou nord-en-haut — plus de pitch, spec "2d-only")
 
     /// POSITION_ANCHOR_RATIO (fix "position-anchor", Bug 2) — ratio, depuis le HAUT de la
-    /// zone visible libre, auquel la position s'ancre en mode 3D pitché. Constante fixe
+    /// zone visible libre, auquel la position s'ancre en cap-en-haut. Constante fixe
     /// (itération "stabilisation UI" : aucun nouveau réglage), dans la fourchette 60-65%
-    /// demandée. En 2D (nord en haut, sans pitch), la position reste au centre géométrique
-    /// (0.5) — pas de biais "regarder devant soi" pertinent sans perspective.
+    /// demandée. En vue nord-en-haut, la position reste au centre géométrique (0.5) — pas de
+    /// biais "regarder devant soi" pertinent en cap-en-haut non plus depuis l'abandon du
+    /// pitch (spec "2d-only", it11), mais gardé distinct par cohérence avec l'existant.
     static let positionAnchorRatio: Double = 0.625
     static let positionAnchorRatio2D: Double = 0.5
 
