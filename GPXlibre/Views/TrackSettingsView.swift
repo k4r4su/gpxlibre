@@ -76,6 +76,14 @@ struct TrackSettingsView: View {
                     )
                     .frame(height: 110)
                     .listRowInsets(EdgeInsets())
+                    // Fix "biblio-direction-live-refresh" (it12) : un `Canvas` dans une
+                    // `Form`/`List` peut rester visuellement figé après un changement d'état
+                    // tant qu'aucun scroll/layout ne force le redessin de la cellule hôte (bug
+                    // terrain : le toggle de sens ne se voyait qu'après avoir "recommencé le
+                    // pan"). `.id(...)` force SwiftUI à recréer la cellule plutôt que de
+                    // patcher en place, donc à redessiner immédiatement — clé = tout ce qui
+                    // change visuellement la miniature (sens, départ, espacement chevrons).
+                    .id("thumbnail-\(localSettings.isReversed)-\(localSettings.customStartPointIndex ?? -1)-\(localSettings.chevronSpacingMeters)")
 
                     if track.isLoop {
                         Label("Boucle détectée — ordre du fichier conservé par défaut", systemImage: "arrow.triangle.2.circlepath")
