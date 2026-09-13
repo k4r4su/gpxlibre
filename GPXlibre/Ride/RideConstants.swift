@@ -187,7 +187,15 @@ enum RideConstants {
     /// Facteur multiplicatif appliqué à la distance caméra à chaque tap +/-.
     static let manualZoomStepFactor: Double = 0.7
     static let manualZoomMinMeters: Double = 120
-    static let manualZoomMaxMeters: Double = 3000
+    /// Fix "zoom-out-unclamped" (it13, Bloc 4) : le zoom − était bridé artificiellement à
+    /// 3000 m (à peine plus loin qu'un palier auto "rapide" normal, 1500 m) — le motard ne
+    /// pouvait jamais consulter la carte à l'échelle région/pays. Relevé à l'échelle pays
+    /// entier (~2000 km de portée caméra, correspond à peu près au zoom 3-4 demandé). Aucune
+    /// protection par contexte (route/piste) ajoutée : cette portée n'est utilisée QUE pendant
+    /// la consultation manuelle (tant que `manualZoomDistanceMeters` est non-nil) — le zoom
+    /// auto qui suit le cap (paliers vitesse, voir zoomBuckets*) reste plafonné à 1500 m comme
+    /// avant, totalement indépendant de cette constante.
+    static let manualZoomMaxMeters: Double = 2_000_000
     /// Animation courte pour un tap +/- ou un recentrage — distincte du lissage auto (1.2 s).
     static let manualZoomAnimationDurationSeconds: Double = 0.25
     /// Cible tactile minimale recommandée pour une utilisation gantée.
