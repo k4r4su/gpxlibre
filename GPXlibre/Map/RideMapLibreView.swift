@@ -19,7 +19,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let waypoints: [RollingWaypoint]
     let navRoute: NavRoute?
     let traceAppearance: TraceAppearance
-    let tileSource: TileSource
+    let mapSource: MapSourceSelection
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -43,7 +43,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
     let onTrackTap: (CLLocationCoordinate2D, Double) -> Void
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON(source: tileSource))
+        let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildStyleJSON(for: mapSource))
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .none
@@ -59,7 +59,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.checkpoints = checkpoints
         context.coordinator.waypoints = waypoints
         context.coordinator.traceAppearance = traceAppearance
-        context.coordinator.currentTileSource = tileSource
+        context.coordinator.currentMapSource = mapSource
         context.coordinator.onManualGesture = onManualGesture
         context.coordinator.onStatusChange = onStatusChange
         context.coordinator.onLongPress = onLongPress
@@ -93,18 +93,23 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         context.coordinator.onLongPress = onLongPress
         context.coordinator.onTrackTap = onTrackTap
 
-        if context.coordinator.currentTileSource != tileSource {
-            // Changement de thème carte (#10) : source raster différente (Relief =
-            // OpenTopoMap) — on recharge tout le style, ce qui redéclenche didFinishLoading
-            // et réajoute trace/détour/route Nav automatiquement (code déjà générique).
-            context.coordinator.currentTileSource = tileSource
+        if context.coordinator.currentMapSource != mapSource {
+            // Changement de fond de carte (thème raster #10 OU bascule raster/vectoriel,
+            // spec "vector-pmtiles" it11) — on recharge tout le style, ce qui redéclenche
+            // didFinishLoading et réajoute trace/détour/route Nav automatiquement (code déjà
+            // générique). La caméra (position/zoom) n'est JAMAIS touchée par ce bloc — aucun
+            // risque de saut, même garantie que le changement de thème existant.
+            context.coordinator.currentMapSource = mapSource
             context.coordinator.armLoadWatchdog(for: mapView)
             onStatusChange(.loading)
-            mapView.styleJSON = MapEngineConstants.buildInitialStyleJSON(source: tileSource)
+            mapView.styleJSON = MapEngineConstants.buildStyleJSON(for: mapSource)
         }
 
         context.coordinator.updateTraceAppearance(traceAppearance)
-        context.coordinator.updateNightMode(traceAppearance.isNightMode && tileSource == .osmStandard)
+        // Décision de scope (it11) : le dimming nuit (filtre luminosité/saturation) ne
+        // s'applique qu'au raster OSM standard — le style vectoriel embarqué n'a qu'une
+        // variante claire pour l'instant (voir docs/tuile-sources.md).
+        context.coordinator.updateNightMode(traceAppearance.isNightMode && mapSource == .raster(.osmStandard))
         context.coordinator.updateTrackShape(track, on: mapView)
         updateDetourShape(on: mapView, context: context)
         updateNavRouteShape(on: mapView, context: context)
@@ -235,7 +240,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private var sharedBlockageAnnotations: [SharedBlockageMLNAnnotation] = []
         var traceAppearance = TraceAppearance()
         var lastCameraCommandToken: UUID?
-        var currentTileSource: TileSource = .osmStandard
+        var currentMapSource: MapSourceSelection = .raster(.osmStandard)
         private var currentContentInset: UIEdgeInsets?
         var onManualGesture: (() -> Void)?
         var onStatusChange: ((MapLoadStatus) -> Void)?
@@ -463,12 +468,22 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 updateNightMode(true)
             }
 
-            // Relief GPU (spec "hillshade-clean") : uniquement sous OSM standard — OpenTopoMap
-            // a déjà son ombrage intégré, en ajouter un second serait redondant. Construit une
-            // seule fois ici (le style entier se recharge de toute façon au changement de
-            // thème, donc pas besoin d'un chemin de mise à jour séparé) ; jamais retouché par
-            // la boucle de position ou de zoom.
-            if currentTileSource == .osmStandard, let rasterLayer {
+            // Relief GPU (spec "hillshade-clean", étendu "vector-pmtiles" it11) : sous OSM
+            // standard ET sous le fond vectoriel (contours/relief lisibles, demandé) —
+            // JAMAIS sous OpenTopoMap, qui a déjà son propre ombrage intégré (redondant/terne
+            // sinon). Ancre d'insertion différente selon le fond : juste au-dessus du calque
+            // raster côté raster, juste au-dessus du calque "background" du style vectoriel
+            // (avant tout landuse/route) côté vectoriel. Construit une seule fois ici (le
+            // style entier se recharge de toute façon au changement de fond) ; jamais retouché
+            // par la boucle de position ou de zoom.
+            let hillshadeAnchorLayer: MLNStyleLayer? = {
+                switch currentMapSource {
+                case .raster(.osmStandard): return rasterLayer
+                case .raster(.openTopoMap): return nil
+                case .vectorHosted, .vectorLocal: return style.layer(withIdentifier: MapEngineConstants.vectorBackgroundLayerIdentifier)
+                }
+            }()
+            if let hillshadeAnchorLayer {
                 let demOptions: [MLNTileSourceOption: Any] = [
                     .demEncoding: NSNumber(value: MLNDEMEncoding.terrarium.rawValue),
                     .maximumZoomLevel: MapEngineConstants.hillshadeMaxZoomLevel,
@@ -481,7 +496,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 style.addSource(demSource)
                 let hillshadeLayer = MLNHillshadeStyleLayer(identifier: MapEngineConstants.hillshadeLayerIdentifier, source: demSource)
                 hillshadeLayer.hillshadeExaggeration = NSExpression(forConstantValue: MapEngineConstants.hillshadeExaggerationDefault)
-                style.insertLayer(hillshadeLayer, above: rasterLayer)
+                style.insertLayer(hillshadeLayer, above: hillshadeAnchorLayer)
             }
 
             let detourSource = MLNShapeSource(identifier: MapEngineConstants.detourSourceIdentifier, shape: nil, options: nil)

@@ -17,7 +17,15 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// MapKit n'a pas de tuiles OpenTopoMap natives : thème Relief rendu via un MKTileOverlay
     /// qui remplace le fond Apple Plans (canReplaceMapContent) — implémentation de comparaison
     /// uniquement, MapLibre reste le moteur actif et le vrai chemin testé/mis en cache.
-    let tileSource: TileSource
+    /// Spec "vector-pmtiles" (it11) : MapKit n'a pas d'équivalent vectoriel PMTiles — un
+    /// `mapSource` vectoriel (hébergé ou local) retombe ici sur le raster OSM standard
+    /// (`comparisonTileSource`), décision de scope assumée (comparaison uniquement, jamais
+    /// obligée à la parité, voir CLAUDE.md).
+    let mapSource: MapSourceSelection
+    private var comparisonTileSource: TileSource {
+        if case .raster(let tileSource) = mapSource { return tileSource }
+        return .osmStandard
+    }
     let currentLocation: CLLocation?
     let headingDegrees: CLLocationDirection
     let cameraDistanceMeters: Double
@@ -102,6 +110,7 @@ struct RideMapView: UIViewRepresentable, MapProvider {
     /// actif est Relief, retiré sinon.
     private func syncReliefOverlay(on mapView: MKMapView, context: Context) {
         let coordinator = context.coordinator
+        let tileSource = comparisonTileSource
         guard coordinator.currentTileSource != tileSource else { return }
         coordinator.currentTileSource = tileSource
 

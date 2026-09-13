@@ -11,6 +11,8 @@ struct RideView: View {
     @EnvironmentObject private var modeStore: RideModeStore
     @EnvironmentObject private var sharedBlockages: SharedBlockageSyncCoordinator
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
+    @EnvironmentObject private var vectorPackages: VectorPackageStore
+    @EnvironmentObject private var networkMonitor: NetworkMonitor
     @State private var showDetourConfirmation = false
     @State private var dismissedSharedBlockageAlertID: String?
     @State private var showStatsPanel = false
@@ -35,11 +37,15 @@ struct RideView: View {
         }
     }
 
-    /// Relief (#10) = source de tuiles OpenTopoMap, jamais un simple filtre teinté — voir
-    /// TileSource. Le pré-cache doit suivre ce même choix (RideMapLibreView.updateUIView
-    /// recharge tout le style quand ça change, en conservant trace/détour/route Nav).
-    private var activeTileSource: TileSource {
-        TileSource.active(for: settings.mapThemePreset)
+    /// Fond de carte effectif (spec "vector-pmtiles", it11) — résolu par `MapSourceResolver`
+    /// (pur, testable) : paquet vectoriel local actif > vectoriel hébergé (en ligne) > raster
+    /// existant (mode avion sans paquet, comportement inchangé). Le raster ne part pas.
+    private var activeMapSource: MapSourceSelection {
+        MapSourceResolver.resolve(
+            activeVectorPackageFileURL: vectorPackages.activeFileURL,
+            isNetworkReachable: networkMonitor.isReachable,
+            themePreset: settings.mapThemePreset
+        )
     }
 
     /// Épaisseur/couleur lues en direct depuis les Réglages (items #13/14) — un changement
@@ -219,7 +225,7 @@ struct RideView: View {
             .padding(.horizontal, 12)
 
             HStack {
-                OSMAttributionView()
+                OSMAttributionView(mapSource: activeMapSource)
                 Spacer()
             }
             .padding(.horizontal, 8)
@@ -555,7 +561,7 @@ struct RideView: View {
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
                 traceAppearance: traceAppearance(for: track),
-                tileSource: activeTileSource,
+                mapSource: activeMapSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,
@@ -590,7 +596,7 @@ struct RideView: View {
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 navRoute: session.navRoute,
                 traceAppearance: traceAppearance(for: track),
-                tileSource: activeTileSource,
+                mapSource: activeMapSource,
                 currentLocation: session.currentLocation,
                 headingDegrees: session.headingDegrees,
                 cameraDistanceMeters: session.effectiveCameraDistanceMeters,

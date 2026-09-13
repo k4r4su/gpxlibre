@@ -13,6 +13,7 @@ struct GPXlibreApp: App {
     @StateObject private var navFavorites = NavFavoritesStore()
     @StateObject private var sharedBlockages: SharedBlockageSyncCoordinator
     @StateObject private var trackRideSettings = TrackRideSettingsStore()
+    @StateObject private var vectorPackages = VectorPackageStore()
 
     init() {
         MapLibreBootstrap.configure()
@@ -42,6 +43,7 @@ struct GPXlibreApp: App {
                 .environmentObject(navFavorites)
                 .environmentObject(sharedBlockages)
                 .environmentObject(trackRideSettings)
+                .environmentObject(vectorPackages)
                 .onOpenURL { url in
                     library.importTrack(from: url)
                 }

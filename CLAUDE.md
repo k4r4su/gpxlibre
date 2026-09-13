@@ -33,11 +33,16 @@ GPXlibre/
                    RidePanelStyle (styles partagés), RideConstants (toutes les constantes
                    tunables du module Ride)
   Map/            RideMapLibreView (moteur actif, voir ci-dessous), MapProvider (protocole
-                   commun), MapEngineConstants (identifiants sources/couches + couleurs)
+                   commun), MapEngineConstants (identifiants sources/couches + couleurs +
+                   construction des styles raster ET vectoriel), MapSourceSelection (raster/
+                   vectorHosted/vectorLocal), MapSourceResolver (pur, priorité de la source
+                   de carte effective — voir section dédiée, it11)
   Nav/            Mode Nav (guidage A→B, recalcul automatique) — RideMode/RideModeStore
                    (Trace vs Nav), NavRoutingService, GoToGuidance ("Aller à" parallèle),
                    NavReportButton ("Signaler" — indépendant du POI supprimé en it10)
-  Offline/        Téléchargement de tuiles par région, cache, précalcul de taille
+  Offline/        Téléchargement de tuiles raster par région, cache, précalcul de taille ;
+                   VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
+                   régionaux (import/téléchargement, un seul actif à la fois)
   Waypoints/      RollingWaypoint(Store) — sert uniquement à "Signaler" (Nav) depuis it10 ;
                    le bouton "Point" (POI rapide Essence/Eau/Bivouac) a été supprimé pour de
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
@@ -46,10 +51,15 @@ GPXlibre/
   Settings/       RideSettingsStore (réglages globaux persistés), SettingsView
   Views/          LibraryView (Biblio), TrackDetailView, TrackSettingsView (réglages par
                    trace), TrackMapView, RootView (TabView)
-  Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible)
+  Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
+                   TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure
+                   de la trace avec chevrons + pastille de sens, aucune carte interactive
   Onboarding/     Écran d'accueil première ouverture
 GPXlibreTests/    XCTest, @MainActor, @testable import GPXlibre — voir conventions plus bas
 server/           Backend FastAPI+SQLite pour SharedBlockage (Docker, `docker compose up`)
+docs/             Docs livrables pour le propriétaire (pas du pense-bête interne) :
+                   tuile-sources.md (sources vectorielles évaluées), generation-tuiles-
+                   regionales.md (manuel Planetiler/osmium à exécuter sur le NAS)
 ```
 
 `project.yml` (xcodegen) est la source de vérité du projet Xcode. **Après tout ajout ou
@@ -58,13 +68,50 @@ suppression de fichier Swift, lancer `xcodegen generate`** avant de builder — 
 
 ## Moteur de carte
 
-`MapEngineConstants.active` = `.mapLibre` (MapLibre Native iOS, tuiles OSM raster,
-hors-ligne). `RideMapView` (MapKit) est conservé **intact pour comparaison**, conforme au
-même protocole `MapProvider` — ne jamais le supprimer, mais ne pas se sentir obligé de lui
-donner une parité parfaite sur les features avancées (ex : chevrons de direction non
-implémentés côté MapKit, documenté comme tel). Toujours vérifier les signatures MapLibre
-contre les headers vendored réels avant utilisation (jamais deviner une API) :
+`MapEngineConstants.active` = `.mapLibre` (MapLibre Native iOS, hors-ligne). `RideMapView`
+(MapKit) est conservé **intact pour comparaison**, conforme au même protocole `MapProvider`
+— ne jamais le supprimer, mais ne pas se sentir obligé de lui donner une parité parfaite sur
+les features avancées (chevrons, fond vectoriel : retombe sur raster OSM standard côté
+MapKit, documenté comme tel). Toujours vérifier les signatures MapLibre contre les headers
+vendored réels avant utilisation (jamais deviner une API) :
 `~/Library/Developer/Xcode/DerivedData/.../MapLibre.framework/Headers/`.
+
+**2D uniquement (spec "2d-only", it11)** — la vue caméra en perspective (pitch) a été
+abandonnée définitivement, partout, y compris en Ride cap-en-haut : `RideConstants.
+cameraPitchDegrees` a été supprimé, `pitch: 0` est câblé en dur côté MapLibre ET MapKit, et
+`mapView.isPitchEnabled = false` désactive aussi le geste natif à deux doigts. Le toggle
+`is2DNorthUp` (cap-en-haut ↔ nord-en-haut) reste, mais n'a plus rien à voir avec le pitch —
+c'est une bascule d'orientation pure. Ne JAMAIS réintroduire un pitch non-nul, même
+conditionnel.
+
+**Fond vectoriel PMTiles (spec "vector-pmtiles", it11)** — le raster (OSM standard/
+OpenTopoMap) reste le moteur historique intact, mais n'est plus la seule option :
+`MapSourceSelection` (`.raster`/`.vectorHosted`/`.vectorLocal`) remplace `TileSource` comme
+paramètre de `MapProvider`. `MapSourceResolver.resolve(...)` (pur, testé) décide LEQUEL
+utiliser, dans cet ordre de priorité STRICT :
+1. Paquet vectoriel local actif (`VectorPackageStore.activeFileURL`) ET présent sur disque →
+   vectoriel local, fonctionne intégralement en mode avion.
+2. Sinon, réseau joignable (`NetworkMonitor.isReachable`) → vectoriel hébergé (OpenFreeMap,
+   voir `docs/tuile-sources.md`).
+3. Sinon → **raster existant, inchangé**. Le raster ne part JAMAIS, c'est le filet de sécurité
+   mode avion sans paquet préparé.
+
+Découverte clé (vérifiée dans les headers vendored, pas devinée) : MapLibre Native supporte
+NATIVEMENT le schéma d'URL `pmtiles://` (local `pmtiles://file://...` et distant
+`pmtiles://https://...`) depuis la version 6.10, bien avant la version épinglée du projet
+(6.31.0) — **zéro dépendance SPM supplémentaire** n'a donc été ajoutée pour lire des
+`.pmtiles`, contrairement à ce qu'un premier coup d'œil au besoin aurait suggéré. Le style
+vectoriel est un JSON embarqué en bundle (`GPXlibre/Resources/vector-style-liberty.json`,
+dérivé du style "Liberty" d'OpenFreeMap, patché pour la prominence moto/piste), dont on ne
+mute QUE le champ `sources.openmaptiles.url` selon la source (voir
+`MapEngineConstants.buildVectorStyleJSON`) — jamais tout le style, jamais par interpolation
+de string. Un paquet `.pmtiles` régional pour ce style DOIT respecter le schéma OpenMapTiles
+(généré via Planetiler, profil par défaut — voir `docs/generation-tuiles-regionales.md`),
+sinon les noms de couches ne correspondent à rien et le fond reste vide.
+
+Décision de scope assumée : le dimming nuit (filtre luminosité/saturation) ne s'applique
+qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour l'instant (voir
+`docs/tuile-sources.md` pour une piste future, VersaTiles fournit déjà clair+sombre).
 
 ## Source de vérité des états (fix "single-source-active-track", it10)
 
@@ -81,6 +128,10 @@ contre les headers vendored réels avant utilisation (jamais deviner une API) :
 - `RideSessionManager.stop()` purge explicitement (checkpoints, index, track, détour,
   resume) — ne jamais compter sur un futur `start()` pour nettoyer un état fantôme.
 - Ne JAMAIS réintroduire un `selectedTrackID` parallèle dans une vue ou un autre store.
+
+Même patron appliqué à `VectorPackageStore` (Offline/, it11) : `activePackageID: UUID?`, un
+seul paquet vectoriel actif à la fois, `setActive(_:)` seul point d'écriture — pas de fusion
+multi-région, pas d'état parallèle dans `VectorPackagesView`.
 
 ## Règles absolues (non négociables, violées = régression critique)
 

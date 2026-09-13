@@ -73,6 +73,87 @@ enum MapEngineConstants {
     static let chevronIconName = "direction-chevron-icon"
     static let chevronMinZoom: Double = 14
 
+    // MARK: - Fond vectoriel PMTiles (spec "vector-pmtiles", it11)
+
+    /// Style embarqué en bundle (GPXlibre/Resources/) — dérivé du style "Liberty" d'OpenFreeMap
+    /// (proche OSM Americana/Positron), patché pour la prominence moto/piste (voir
+    /// docs/tuile-sources.md pour la liste des couches modifiées). Embarqué plutôt que
+    /// re-téléchargé à chaque lancement : contrôle total, pas de dépendance à la disponibilité
+    /// du endpoint de style JSON — seule la source de TUILES (`vectorSourceIdentifier` ci-
+    /// dessous) reste distante (étape 1) ou locale (étape 2).
+    static let vectorStyleResourceName = "vector-style-liberty"
+
+    /// Identifiant EXACT de la source vectorielle dans le style embarqué (schéma OpenMapTiles)
+    /// — c'est la clé qu'on mute pour basculer hébergé/local, jamais une reconstruction du
+    /// style entier.
+    static let vectorSourceIdentifier = "openmaptiles"
+
+    /// Étape 1 — CDN vectoriel ouvert, sans clé, sans compte (voir docs/tuile-sources.md pour
+    /// les alternatives documentées). `url` (TileJSON), PAS `tiles` : laisse MapLibre lire les
+    /// bornes zoom réelles depuis l'en-tête plutôt que de supposer maxzoom 22 par défaut.
+    static let vectorHostedTilesURL = "https://tiles.openfreemap.org/planet"
+    static let vectorHostedAttributionPlainText = "© OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors"
+
+    enum VectorStyleSource: Equatable {
+        case hosted
+        case local(fileURL: URL)
+    }
+
+    /// Construit le style vectoriel en repartant du JSON embarqué et en mutant UNIQUEMENT le
+    /// champ `url` de la source `vectorSourceIdentifier` — jamais par interpolation de string
+    /// (même discipline que `buildInitialStyleJSON`). `.local` utilise le schéma `pmtiles://`
+    /// supporté nativement par MapLibre Native depuis 6.10 (confirmé dans les headers vendored
+    /// de la version épinglée 6.31.0) : `pmtiles://` + l'URL `file://` du `.pmtiles` régional.
+    /// En cas d'échec (ressource manquante/invalide — ne devrait jamais arriver, embarquée au
+    /// build), retombe sur le raster standard plutôt que sur un écran noir muet.
+    static func buildVectorStyleJSON(source: VectorStyleSource) -> String {
+        guard let resourceURL = Bundle.main.url(forResource: vectorStyleResourceName, withExtension: "json"),
+              let data = try? Data(contentsOf: resourceURL),
+              var style = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var sources = style["sources"] as? [String: Any],
+              var vectorSource = sources[vectorSourceIdentifier] as? [String: Any]
+        else {
+            assertionFailure("buildVectorStyleJSON: \(vectorStyleResourceName).json introuvable/invalide dans le bundle")
+            return buildInitialStyleJSON()
+        }
+
+        switch source {
+        case .hosted:
+            vectorSource["url"] = vectorHostedTilesURL
+        case .local(let fileURL):
+            vectorSource["url"] = "pmtiles://" + fileURL.absoluteString
+        }
+        sources[vectorSourceIdentifier] = vectorSource
+        style["sources"] = sources
+
+        guard let patchedData = try? JSONSerialization.data(withJSONObject: style),
+              let json = String(data: patchedData, encoding: .utf8)
+        else {
+            assertionFailure("buildVectorStyleJSON: échec de sérialisation, ne devrait jamais arriver")
+            return buildInitialStyleJSON()
+        }
+        return json
+    }
+
+    /// Point d'entrée unique de construction de style, quel que soit le fond choisi — voir
+    /// `MapSourceResolver` pour la logique qui décide LEQUEL utiliser.
+    static func buildStyleJSON(for mapSource: MapSourceSelection) -> String {
+        switch mapSource {
+        case .raster(let tileSource):
+            return buildInitialStyleJSON(source: tileSource)
+        case .vectorHosted:
+            return buildVectorStyleJSON(source: .hosted)
+        case .vectorLocal(let fileURL):
+            return buildVectorStyleJSON(source: .local(fileURL: fileURL))
+        }
+    }
+
+    /// Identifiant du calque de fond du style vectoriel embarqué (premier calque, id
+    /// "background" dans le style Liberty/OpenMapTiles) — sert d'ancre pour insérer le
+    /// hillshade juste au-dessus, avant tout landuse/route, même esprit que l'ancrage sur
+    /// `rasterLayerIdentifier` côté raster.
+    static let vectorBackgroundLayerIdentifier = "background"
+
     /// Nom du fichier de style de secours embarqué dans le bundle (GPXlibre/Resources/),
     /// utilisé si le style principal échoue à charger (JSON invalide, timeout) — l'utilisateur
     /// doit toujours voir un fond de carte, même dégradé.

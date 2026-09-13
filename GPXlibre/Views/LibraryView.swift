@@ -31,6 +31,14 @@ struct LibraryView: View {
                     }
                     .longPressTooltip("Cartes hors-ligne")
                 }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    NavigationLink {
+                        VectorPackagesView()
+                    } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .longPressTooltip("Paquets vectoriels")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {

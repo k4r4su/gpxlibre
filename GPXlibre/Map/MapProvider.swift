@@ -12,8 +12,11 @@ protocol MapProvider: View {
         waypoints: [RollingWaypoint],
         navRoute: NavRoute?,
         traceAppearance: TraceAppearance,
-        /// Fond raster actif (OSM standard ou OpenTopoMap pour le thème Relief, #10).
-        tileSource: TileSource,
+        /// Fond de carte actif (spec "vector-pmtiles", it11) — raster (OSM standard ou
+        /// OpenTopoMap pour le thème Relief, #10), vectoriel hébergé (OpenFreeMap) ou
+        /// vectoriel local (`.pmtiles` régional). Résolu par `MapSourceResolver`, jamais
+        /// construit à la main dans une vue.
+        mapSource: MapSourceSelection,
         currentLocation: CLLocation?,
         headingDegrees: CLLocationDirection,
         cameraDistanceMeters: Double,
