@@ -67,6 +67,29 @@ enum RideConstants {
     /// visible réel.
     static let rideAnchorYFractionRange: ClosedRange<Double> = 0.55...0.85
 
+    // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
+
+    /// DEFAULT_RIDE_ZOOM : mesuré comme "4 taps zoom-arrière" (manualZoomStepFactor appliqué 4
+    /// fois, DEHORS) depuis l'ancien point de départ fixe (zoomBucketsNormal, palier le plus
+    /// serré, 280 m — voir RideSessionManager.init, avant it14) — valeur RÉELLE persistée telle
+    /// quelle plutôt que recalculée à chaque lancement, réglable ensuite (slider + aperçu,
+    /// Réglages > Navigation > Zoom par défaut).
+    static let manualZoomBackTapsForDefaultRideZoom = 4
+    static let defaultRideZoomCameraMetersDefault: Double = {
+        let startMeters = zoomBucketsNormal.first?.cameraDistanceMeters ?? 280
+        return startMeters / pow(manualZoomStepFactor, Double(manualZoomBackTapsForDefaultRideZoom))
+    }()
+    static let defaultRideZoomRange: ClosedRange<Double> = 300...6000
+
+    // MARK: - Zoom automatique vitesse (spec "auto-zoom-speed-curve", it14, Bloc 7)
+
+    /// Bornes réglables (ON/OFF géré par `RideSettingsStore.autoZoomEnabled`) — appliquées en
+    /// clamp final sur `cameraDistanceMeters` calculé par `updateZoomBucket()`, quel que soit
+    /// le preset actif.
+    static let autoZoomMinMetersDefault: Double = 150
+    static let autoZoomMaxMetersDefault: Double = 2000
+    static let autoZoomBoundsRange: ClosedRange<Double> = 100...3000
+
     // MARK: - Paliers de zoom (distance caméra en mètres) par preset, selon la vitesse (km/h)
 
     struct ZoomBucket { let speedUpToKmh: Double; let cameraDistanceMeters: Double }
