@@ -78,10 +78,13 @@ private struct RideAnchorSettingsView: View {
     @EnvironmentObject private var settings: RideSettingsStore
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        // Fix "settings-preview-panel-hides-anchor-dot" (bug terrain, it16) : le panneau était
+        // ancré en BAS — exactement où se dessine le point (AnchorFractionOverlay) à 75 % de
+        // hauteur, donc caché derrière sa propre carte de réglage. Panneau remonté en haut.
+        ZStack(alignment: .top) {
             CameraPreviewMapView(track: track, spanMeters: 900)
                 .overlay { AnchorFractionOverlay(fraction: settings.rideAnchorYFraction) }
-                .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea(edges: .bottom)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Position point bleu")
@@ -118,9 +121,9 @@ private struct DefaultRideZoomSettingsView: View {
     @State private var hasSaved = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .top) {
             CameraPreviewMapView(track: track, spanMeters: localValue)
-                .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea(edges: .bottom)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Zoom par défaut")
@@ -173,9 +176,9 @@ private struct AutoZoomSettingsView: View {
     @State private var hasChanges = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .top) {
             CameraPreviewMapView(track: track, spanMeters: previewSpan)
-                .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea(edges: .bottom)
                 .onTapGesture { skipPreview() }
 
             VStack(alignment: .leading, spacing: 10) {
