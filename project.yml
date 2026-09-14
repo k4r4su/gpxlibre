@@ -22,19 +22,32 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
     sources:
+      # Les CLAUDE.md par-dossier (Ride/Map/Offline/Settings) sont exclus explicitement ci-
+      # dessous : sans excludes, xcodegen les traite comme des ressources à copier dans le
+      # bundle, et Xcode refuse de builder (4 fichiers différents nommés "CLAUDE.md" entrent
+      # en collision sur le même chemin de sortie dans l'app). Si un futur CLAUDE.md est ajouté
+      # dans un nouveau sous-dossier listé ici, lui ajouter le même excludes.
       - path: GPXlibre/App
       - path: GPXlibre/Config
       - path: GPXlibre/Models
       - path: GPXlibre/Services
       - path: GPXlibre/Views
       - path: GPXlibre/Ride
+        excludes:
+          - CLAUDE.md
       - path: GPXlibre/Map
+        excludes:
+          - CLAUDE.md
       - path: GPXlibre/Offline
+        excludes:
+          - CLAUDE.md
       - path: GPXlibre/Waypoints
       - path: GPXlibre/Recording
       - path: GPXlibre/Nav
       - path: GPXlibre/Rendering
       - path: GPXlibre/Settings
+        excludes:
+          - CLAUDE.md
       - path: GPXlibre/Onboarding
       - path: GPXlibre/Sync
       - path: GPXlibre/Resources

@@ -139,55 +139,9 @@ suppression de fichier Swift, lancer `xcodegen generate`** avant de builder — 
 
 ## Moteur de carte
 
-`MapEngineConstants.active` = `.mapLibre` (MapLibre Native iOS, hors-ligne). `RideMapView`
-(MapKit) est conservé **intact pour comparaison**, conforme au même protocole `MapProvider`
-— ne jamais le supprimer, mais ne pas se sentir obligé de lui donner une parité parfaite sur
-les features avancées (chevrons, fond vectoriel : retombe sur raster OSM standard côté
-MapKit, documenté comme tel). Toujours vérifier les signatures MapLibre contre les headers
-vendored réels avant utilisation (jamais deviner une API) :
-`~/Library/Developer/Xcode/DerivedData/.../MapLibre.framework/Headers/`.
-
-**2D uniquement (spec "2d-only", it11)** — la vue caméra en perspective (pitch) a été
-abandonnée définitivement, partout, y compris en Ride cap-en-haut : `RideConstants.
-cameraPitchDegrees` a été supprimé, `pitch: 0` est câblé en dur côté MapLibre ET MapKit, et
-`mapView.isPitchEnabled = false` désactive aussi le geste natif à deux doigts. Le toggle
-`is2DNorthUp` (cap-en-haut ↔ nord-en-haut) reste, mais n'a plus rien à voir avec le pitch —
-c'est une bascule d'orientation pure. Ne JAMAIS réintroduire un pitch non-nul, même
-conditionnel.
-
-**Fond vectoriel PMTiles (spec "vector-pmtiles", it11)** — le raster (OSM standard/
-OpenTopoMap) reste le moteur historique intact, mais n'est plus la seule option :
-`MapSourceSelection` (`.raster`/`.vectorHosted`/`.vectorLocal`) remplace `TileSource` comme
-paramètre de `MapProvider`. `MapSourceResolver.resolve(...)` (pur, testé) décide LEQUEL
-utiliser, dans cet ordre de priorité STRICT :
-0. Fix "map-theme-binding" (it13) : thème Relief OU Sombre choisi → **raster forcé**
-   (respectivement OpenTopoMap et OSM standard + filtre nuit) AVANT toute autre règle,
-   paquet local actif inclus — ces deux thèmes n'ont pas de variante vectorielle (le style
-   "Liberty" embarqué n'a qu'un rendu clair). Sans cette branche, le thème choisi n'avait
-   AUCUN effet dès que le réseau était joignable (bug terrain corrigé it13).
-1. Sinon, paquet vectoriel local actif (`VectorPackageStore.activeFileURL`) ET présent sur
-   disque → vectoriel local, fonctionne intégralement en mode avion.
-2. Sinon, réseau joignable (`NetworkMonitor.isReachable`) → vectoriel hébergé (OpenFreeMap,
-   voir `docs/tuile-sources.md`).
-3. Sinon → **raster existant, inchangé**. Le raster ne part JAMAIS, c'est le filet de sécurité
-   mode avion sans paquet préparé.
-
-Découverte clé (vérifiée dans les headers vendored, pas devinée) : MapLibre Native supporte
-NATIVEMENT le schéma d'URL `pmtiles://` (local `pmtiles://file://...` et distant
-`pmtiles://https://...`) depuis la version 6.10, bien avant la version épinglée du projet
-(6.31.0) — **zéro dépendance SPM supplémentaire** n'a donc été ajoutée pour lire des
-`.pmtiles`, contrairement à ce qu'un premier coup d'œil au besoin aurait suggéré. Le style
-vectoriel est un JSON embarqué en bundle (`GPXlibre/Resources/vector-style-liberty.json`,
-dérivé du style "Liberty" d'OpenFreeMap, patché pour la prominence moto/piste), dont on ne
-mute QUE le champ `sources.openmaptiles.url` selon la source (voir
-`MapEngineConstants.buildVectorStyleJSON`) — jamais tout le style, jamais par interpolation
-de string. Un paquet `.pmtiles` régional pour ce style DOIT respecter le schéma OpenMapTiles
-(généré via Planetiler, profil par défaut — voir `docs/generation-tuiles-regionales.md`),
-sinon les noms de couches ne correspondent à rien et le fond reste vide.
-
-Décision de scope assumée : le dimming nuit (filtre luminosité/saturation) ne s'applique
-qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour l'instant (voir
-`docs/tuile-sources.md` pour une piste future, VersaTiles fournit déjà clair+sombre).
+Déplacé dans `GPXlibre/Map/CLAUDE.md` (chargé automatiquement quand une session travaille
+sous ce dossier) — 2D-only, fond vectoriel PMTiles, priorité MapSourceResolver, découverte
+`pmtiles://` native.
 
 ## Source de vérité des états (fix "single-source-active-track", it10)
 
@@ -209,81 +163,17 @@ Même patron appliqué à `VectorPackageStore` (Offline/, it11) : `activePackage
 seul paquet vectoriel actif à la fois, `setActive(_:)` seul point d'écriture — pas de fusion
 multi-région, pas d'état parallèle dans `VectorPackagesView`.
 
-## Vitesse affichée vs vitesse utilisée (spec "raw-speed-1hz", it12)
+## Vitesse affichée, `isGuidanceStopped`, hors-trace
 
-`RideSessionManager` expose DEUX valeurs de vitesse, jamais interchangeables :
-`smoothedSpeedKmh` (moyenne glissante `speedSmoothingWindowSeconds`, 10 s) reste la SEULE
-source pour tout ce qui doit rester stable — zoom auto (`updateZoomBucket`), contexte route
-rapide/piste (`updateRideContext`), dépassement de limite de vitesse (`isOverSpeedLimit`).
-`rawSpeedKmh` (`location.speed` brut, throttlé à 1 Hz au moment du PUBLISHED uniquement — le
-GPS continue d'être consommé à la cadence normale) alimente UNIQUEMENT le speedo
-(RideStatsBadge/RideStatsPanel). Demande terrain explicite pour le speedo seul ("m'enfou que
-ça oscille") : ne jamais brancher `rawSpeedKmh` sur une décision automatique.
+Déplacé dans `GPXlibre/Ride/CLAUDE.md` (chargé automatiquement quand une session travaille
+sous ce dossier) — vitesse affichée vs utilisée (raw-speed-1hz), `isGuidanceStopped` vs
+`isRecordingPaused` (Pause/Stop défini), seuil hors-trace à hystérésis.
 
-## `isGuidanceStopped` vs `isRecordingPaused` (spec "stop-guidance-semantics", it14 ; bouton
-## toggle Pause/Play, "guidance-toggle-stop-pause-play", it15, Bloc 3)
+## Réglages stagés, sheets translucides
 
-DEUX états distincts sur `RideSessionManager`, ne jamais les confondre :
-`isRecordingPaused` (préexistant) suspend l'ENREGISTREMENT de la session (le tracé parcouru
-n'avance plus), typiquement via le bouton pause de l'écran d'enregistrement libre.
-`isGuidanceStopped` (bouton toggle de la colonne de contrôles) arrête uniquement le GUIDAGE
-actif : la trace chargée reste affichée, le roadbook/bannières latérales se rétractent
-(`hasDirectionPanel`/`isLateralBannerVisible` passent à `false` tant que `isGuidanceStopped`),
-la vitesse continue d'être affichée, on reste sur l'écran Ride — la session de suivi/
-enregistrement, elle, N'EST PAS arrêtée.
-
-Deux façons d'atteindre CE MÊME état depuis it15, mutation factorisée dans
-`haltActiveGuidance()` (stopNav/stopGoTo/cancelDetour/`isGuidanceStopped = true`), seule la
-présentation diffère :
-- **Pause** (`pauseGuidance()`, tap court sur `RideGuidanceToggleButton`) : haptique LÉGÈRE
-  (`UIImpactFeedbackGenerator .light`), PAS de toast — une pause de routine.
-- **Stop défini** (`stopGuidance()`, item destructif du menu contextuel du même bouton, appui
-  long) : haptique FORTE (`UINotificationFeedbackGenerator`), toast "Guidage arrêté"
-  (`.rideToast`, déclenché côté RideView, pas dans le manager).
-
-Pourquoi un menu contextuel plutôt qu'un second geste sur le bouton : l'appui long est déjà,
-dans toute l'app, la convention de `longPressTooltip` (infobulle explicative + haptique légère)
-sur tout bouton à icône SEULE — réutiliser ce même geste pour déclencher un arrêt aurait cassé
-ce réflexe partout ailleurs. `RideGuidanceToggleButton` garde un label texte permanent
-(Pause/Reprendre), il n'a donc jamais fait partie de cette convention, d'où l'absence de
-conflit à y poser un `.contextMenu`. Décision tranchée avec le propriétaire avant codage
-(prompt it15 la laissait explicitement ouverte).
-
-Reprise (`resumeGuidanceAfterStop()`, identique dans les deux cas) : tap sur le bouton toggle
-quand il affiche Play, tap sur une nouvelle trace, ou recentrage (`recenterCamera()`) —
-`isGuidanceStopped` repasse à `false` et le roadbook/bannière réapparaissent naturellement
-(aucun état d'index à resynchroniser, voir section roadbook ci-dessus).
-
-`RideConstants.guidanceButtonMode` (`GUIDANCE_BUTTON_MODE`, défaut `.toggle`) : l'ancien
-comportement it14 à 2 boutons empilés (Stop + icône Play séparée, avec
-`confirmationDialog`) est conservé intact derrière `.twoButtons` — filet de secours si le
-bouton unique s'avère mal compris sur le terrain, pas du code mort à supprimer sans y penser.
-
-## Seuil hors-trace à hystérésis (spec "offtrace-threshold-hysteresis", it14, Bloc 8)
-
-Bug terrain observé par photo (bannière "Hors trace – Reprise à 16,3 km" restée affichée alors
-que le trajet était proche de la trace) : un seuil unique oscillait autour de sa valeur.
-Remplacé par un DOUBLE seuil avec hystérésis, porté par `RideConstants.horsTraceEnterMeters`
-(30 m — au-delà, `isOffTrackPaused` passe à `true`) et `RideConstants.horsTraceExitMeters`
-(25 m — en-deçà, repasse à `false`) ; les anciennes constantes `resyncHysteresisSeconds`/
-`resyncMinConsecutiveStableFixes` ont été retirées, ce mécanisme de resync par temps/fixes
-consécutifs n'existe plus, remplacé par cette comparaison directe de distance dans
-`updateRoadbookProgress`. Comme avant, cet état reste NON bloquant : la trace reste visible,
-rien d'autre ne change. Se valide via le mode replay debug (voir section roadbook ci-dessus),
-pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
-
-## Réglages stagés (non live) — exception documentée
-
-Convention par défaut de l'app : tout réglage s'applique EN DIRECT dès qu'on le touche, jamais
-besoin de bouton Sauvegarder. Deux réglages dérogent explicitement à cette règle depuis it14,
-parce que le prompt d'itération le demandait noir sur blanc (Bloc 6 : "Sauvegarder = applique"
-; Bloc 7 : "non persistant tant que non validé") : Réglages > Navigation > **Zoom par défaut**
-(`DefaultRideZoomSettingsView`, bouton "Sauvegarder") et **Zoom automatique**
-(`AutoZoomSettingsView`, bouton "Valider"). Dans les deux cas, un `@State` local pilote
-l'aperçu carte pendant l'ajustement (`CameraPreviewMapView`) et seul le tap sur le bouton
-écrit dans `RideSettingsStore` (`settings.defaultRideZoomCameraMeters`/`settings.autoZoomEnabled`
-etc.). Ne pas généraliser ce patron à un nouveau réglage sans qu'une spec future le demande
-explicitement — c'est une exception, pas le nouveau défaut.
+Déplacé dans `GPXlibre/Settings/CLAUDE.md` (chargé automatiquement quand une session
+travaille sous ce dossier) — exception "réglages stagés (non live)", fond translucide des
+sheets à aperçu carte live.
 
 ## Horodatage Biblio (spec "biblio-date-display", it15, Bloc 1)
 
@@ -297,37 +187,11 @@ trie par `displayDate` décroissante puis alpha en repli, appelé après import/
 chargement — piloté par `LibraryConstants.sortKey`/`dateDisplayEnabled`
 (BIBLIO_SORT_KEY/BIBLIO_DATE_DISPLAY, toggles de code, pas de réglage UI).
 
-## Sheets à aperçu carte live : fond translucide (spec "translucent-settings-preview-sheets",
-## it15, Bloc 2)
+## Compter avant d'énumérer : bbox de tuiles
 
-Les 3 sheets Réglages > Navigation qui montrent une carte en direct derrière un slider
-(Position point bleu, Zoom par défaut, Zoom automatique) utilisent
-`translucentPreviewBackground()` (View extension privée, `NavigationSettingsView.swift`) —
-teinte noire 0.45 + `.ultraThinMaterial` (le blur seul peut se faire "laver" par un fond de
-carte très clair, illisible en plein soleil) + `.environment(\.colorScheme, .dark)` forcé sur
-la carte pour que `.primary`/`.secondary` restent clairs dessus quel que soit le mode système
-— même patron que RideStatsBadge/Panel pour un calque posé sur la carte. Réservé à CES 3
-sheets précisément ; un réglage administratif classique (nom/version...) reste en sheet opaque
-standard — ne pas généraliser sans qu'une spec future le demande.
-
-## Compter avant d'énumérer : bbox de tuiles (fix "region-picker-huge-bbox-crash", it16)
-
-Piège vécu (crash terrain réel, pas théorique) : `RegionPickerMapView` (MLNMapView) démarre
-SANS caméra initiale — MapLibre part alors en vue "monde" (zoom ~0), et le tout premier
-`visibleCoordinateBounds` rapporté peut couvrir la planète entière AVANT que l'utilisateur
-n'ait pu cadrer sa vraie zone. `RegionDownloadView.updateEstimate()` énumérait directement
-cette zone jusqu'au zoom max (`TileCoordinate.tiles`, deux boucles imbriquées) sur le thread
-principal — pour une bbox quasi mondiale, ça représente des milliards d'éléments, thread
-bloqué jusqu'à ce que le watchdog iOS tue l'app (~10 s d'absence de réponse).
-
-Règle à appliquer PARTOUT où une bbox géographique arbitraire (pas une bbox déjà bornée par un
-tracé réel, comme `CorridorPrecacheEstimator`) pilote une énumération de tuiles : calculer
-D'ABORD le COMPTE en O(1) (`TileCoordinate.tileCount`, arithmétique de plage sur
-topLeft/bottomRight, jamais de boucle) et comparer à un plafond dur
-(`OfflineConstants.regionTileCountHardCap`) AVANT d'appeler `tiles(...)` qui matérialise la
-liste réelle. Donner une caméra initiale raisonnable à une carte de sélection est un confort,
-PAS une protection suffisante — un utilisateur peut toujours pincer manuellement jusqu'au zoom
-monde, le garde-fou de compte reste la seule protection qui couvre tous les cas.
+Déplacé dans `GPXlibre/Offline/CLAUDE.md` (chargé automatiquement quand une session
+travaille sous ce dossier) — piège vécu du crash "region-picker-huge-bbox-crash" (it16) et
+la règle à appliquer partout où une bbox arbitraire pilote une énumération de tuiles.
 
 ## Règles absolues (non négociables, violées = régression critique)
 
