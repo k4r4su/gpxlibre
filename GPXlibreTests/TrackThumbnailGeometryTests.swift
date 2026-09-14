@@ -54,4 +54,40 @@ final class TrackThumbnailGeometryTests: XCTestCase {
         let delta = abs(forwardBearing - reversedBearing).truncatingRemainder(dividingBy: 360)
         XCTAssertEqual(min(delta, 360 - delta), 180, accuracy: 1)
     }
+
+    /// Fix "biblio-chevrono-cap" (it14, Bloc 9) : une trace longue avec l'espacement carte
+    /// pleine (100 m, défaut it12) produirait des dizaines de chevrons sur la miniature — cap
+    /// à 10 maximum, sous-échantillonnés en couvrant TOUTE la trace (pas concentrés au début).
+    func testLongTrackCapsChevronCountAndSpreadsEvenly() {
+        // ~5 km plein est, 51 points à 100 m — 100 m d'espacement produit ~50 chevrons bruts.
+        var points: [GPXPoint] = []
+        for i in 0...50 {
+            points.append(GPXPoint(latitude: 45.0, longitude: Double(i) * 0.00127))
+        }
+        let projection = TrackThumbnailGeometry.project(points: points, chevronSpacingMeters: 100)
+
+        XCTAssertLessThanOrEqual(projection.chevrons.count, 10)
+        XCTAssertGreaterThanOrEqual(projection.chevrons.count, 5)
+        // Répartition sur toute la longueur : le premier chevron doit rester proche du DÉBUT
+        // de la trace (x proche de 0) et le dernier proche de la FIN (x proche de 1), pas tous
+        // regroupés au départ (ce qu'un simple `prefix(8)` aurait produit).
+        guard let first = projection.chevrons.first, let last = projection.chevrons.last else {
+            return XCTFail("chevrons attendus sur une trace de 5 km")
+        }
+        XCTAssertLessThan(first.point.x, 0.3)
+        XCTAssertGreaterThan(last.point.x, 0.7)
+    }
+
+    func testShortTrackBelowCapIsUnaffected() {
+        let points = [
+            GPXPoint(latitude: 45.0, longitude: 0.0),
+            GPXPoint(latitude: 45.0, longitude: 0.0127),
+        ]
+        let projection = TrackThumbnailGeometry.project(points: points, chevronSpacingMeters: 250)
+        // Même géométrie que DirectionChevronComputerTests.
+        // testChevronsAreEvenlySpacedAlongAStraightEastwardSegment (4 chevrons bruts, ~1000 m
+        // à 250 m d'espacement) — sous le cap de 10 : liste inchangée, pas de padding
+        // artificiel jusqu'à un minimum de 5.
+        XCTAssertEqual(projection.chevrons.count, 4)
+    }
 }

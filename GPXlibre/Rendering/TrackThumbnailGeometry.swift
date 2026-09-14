@@ -54,9 +54,36 @@ enum TrackThumbnailGeometry {
         }
 
         let points = trackPoints.map { normalize($0.coordinate) }
-        let chevrons = DirectionChevronComputer.chevrons(for: trackPoints, spacingMeters: chevronSpacingMeters)
+        let allChevrons = DirectionChevronComputer.chevrons(for: trackPoints, spacingMeters: chevronSpacingMeters)
             .map { ProjectedChevron(point: normalize($0.coordinate), bearingDegrees: $0.bearingDegrees) }
+        let chevrons = capChevrons(allChevrons)
 
         return Projection(points: points, chevrons: chevrons)
+    }
+
+    /// Fix "biblio-chevrono-cap" (it14, Bloc 9) : sur la miniature UNIQUEMENT, la densité carte
+    /// pleine (espacement réel de la trace, it12 — inchangée ici, voir `project`) produirait des
+    /// dizaines de chevrons illisibles sur une image de quelques dizaines de points. Cap à
+    /// `maxChevronCount` (10), sous-échantillonné à INDICES ÉGALEMENT RÉPARTIS le long de la
+    /// liste déjà ordonnée par parcours de la trace — jamais un simple `prefix`, qui
+    /// concentrerait tout au DÉBUT de la trace. En dessous du cap, la trace n'a pas assez de
+    /// chevrons pour poser problème : liste inchangée telle quelle (pas de remplissage
+    /// artificiel jusqu'à un minimum).
+    private static let maxChevronCount = 10
+    private static let targetChevronCountWhenCapping = 8
+
+    private static func capChevrons(_ chevrons: [ProjectedChevron]) -> [ProjectedChevron] {
+        guard chevrons.count > maxChevronCount else { return chevrons }
+        let target = targetChevronCountWhenCapping
+        guard target > 1 else { return [chevrons[0]] }
+        let step = Double(chevrons.count - 1) / Double(target - 1)
+        var seenIndices = Set<Int>()
+        var sampled: [ProjectedChevron] = []
+        for i in 0..<target {
+            let index = min(Int((Double(i) * step).rounded()), chevrons.count - 1)
+            guard seenIndices.insert(index).inserted else { continue }
+            sampled.append(chevrons[index])
+        }
+        return sampled
     }
 }

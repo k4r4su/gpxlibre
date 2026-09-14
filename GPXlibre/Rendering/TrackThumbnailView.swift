@@ -13,8 +13,10 @@ struct TrackThumbnailView: View {
 
     private static let casingWidth: CGFloat = 3.5
     private static let lineWidth: CGFloat = 1.6
-    private static let chevronLength: CGFloat = 8
     private static let inset: CGFloat = 14
+    /// Fix "biblio-chevrono-cap" (it14, Bloc 9) : opacité 0.85 demandée — distingue les
+    /// chevrons (indicatifs) du tracé plein (casing+couleur, opaques).
+    private static let chevronOpacity: Double = 0.85
 
     var body: some View {
         Canvas { context, size in
@@ -57,27 +59,32 @@ struct TrackThumbnailView: View {
         context.stroke(path, with: .color(Color(appearance.casingColor)), style: StrokeStyle(lineWidth: Self.casingWidth, lineCap: .round, lineJoin: .round))
         context.stroke(path, with: .color(Color(appearance.color)), style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, lineJoin: .round))
 
+        // Fix "biblio-chevrono-cap" (it14, Bloc 9) : taille proportionnée à la miniature
+        // (fraction de sa plus petite dimension) plutôt qu'une constante fixe en points —
+        // reste lisible et cohérent si ce Canvas est un jour affiché à une autre taille que
+        // les 110pt actuels de TrackSettingsView.
+        let chevronLength = min(size.width, size.height) * 0.09
         for chevron in projection.chevrons {
-            drawChevron(chevron, in: &context, screenPoint: screenPoint)
+            drawChevron(chevron, length: chevronLength, in: &context, screenPoint: screenPoint)
         }
     }
 
     /// Même convention que `RideMapLibreView.Coordinator.chevronImage` : un triangle plein
     /// dessiné pointant vers le HAUT au repos (0°), tourné en degrés horaires depuis le nord
     /// — cohérent avec le cap boussole (`bearingDegrees`) sans décalage de 90°.
-    private func drawChevron(_ chevron: TrackThumbnailGeometry.ProjectedChevron, in context: inout GraphicsContext, screenPoint: (CGPoint) -> CGPoint) {
+    private func drawChevron(_ chevron: TrackThumbnailGeometry.ProjectedChevron, length: CGFloat, in context: inout GraphicsContext, screenPoint: (CGPoint) -> CGPoint) {
         let center = screenPoint(chevron.point)
         var triangle = Path()
-        triangle.move(to: CGPoint(x: 0, y: -Self.chevronLength * 0.6))
-        triangle.addLine(to: CGPoint(x: Self.chevronLength * 0.5, y: Self.chevronLength * 0.5))
-        triangle.addLine(to: CGPoint(x: -Self.chevronLength * 0.5, y: Self.chevronLength * 0.5))
+        triangle.move(to: CGPoint(x: 0, y: -length * 0.6))
+        triangle.addLine(to: CGPoint(x: length * 0.5, y: length * 0.5))
+        triangle.addLine(to: CGPoint(x: -length * 0.5, y: length * 0.5))
         triangle.closeSubpath()
 
         let transform = CGAffineTransform(rotationAngle: chevron.bearingDegrees * .pi / 180)
             .concatenating(CGAffineTransform(translationX: center.x, y: center.y))
         let rotated = triangle.applying(transform)
 
-        context.fill(rotated, with: .color(Color(appearance.color)))
-        context.stroke(rotated, with: .color(.black.opacity(0.55)), lineWidth: 1)
+        context.fill(rotated, with: .color(Color(appearance.color).opacity(Self.chevronOpacity)))
+        context.stroke(rotated, with: .color(.black.opacity(0.55 * Self.chevronOpacity)), lineWidth: 1)
     }
 }
