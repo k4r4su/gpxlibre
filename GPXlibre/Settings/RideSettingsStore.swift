@@ -24,6 +24,8 @@ final class RideSettingsStore: ObservableObject {
         static let shareBlockagesAnonymously = "settings.shareBlockagesAnonymously"
         static let sharedBlockageServerURL = "settings.sharedBlockageServerURL"
         static let turnMergeMinDistance = "settings.turnMergeMinDistanceMeters"
+        static let rideAnchorYFraction = "settings.rideAnchorYFraction"
+        static let controlsSide = "settings.controlsSide"
     }
 
     private let defaults: UserDefaults
@@ -93,6 +95,11 @@ final class RideSettingsStore: ObservableObject {
     @Published var turnMergeMinDistanceMeters: Double {
         didSet { defaults.set(turnMergeMinDistanceMeters, forKey: Keys.turnMergeMinDistance) }
     }
+    /// Position verticale du point bleu en mode suivi cap-en-haut (spec
+    /// "ride-anchor-lowered-setting", it14) — voir RideConstants.rideAnchorYFractionDefault.
+    @Published var rideAnchorYFraction: Double {
+        didSet { defaults.set(rideAnchorYFraction, forKey: Keys.rideAnchorYFraction) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -160,5 +167,10 @@ final class RideSettingsStore: ObservableObject {
         let storedMergeDistance = defaults.double(forKey: Keys.turnMergeMinDistance)
         turnMergeMinDistanceMeters = RideConstants.turnMergeMinDistanceMetersOptions.contains(storedMergeDistance)
             ? storedMergeDistance : RideConstants.turnMergeMinDistanceMetersDefault
+
+        let anchorRange = RideConstants.rideAnchorYFractionRange
+        let storedAnchor = defaults.object(forKey: Keys.rideAnchorYFraction) as? Double
+        rideAnchorYFraction = storedAnchor.map { min(max($0, anchorRange.lowerBound), anchorRange.upperBound) }
+            ?? RideConstants.rideAnchorYFractionDefault
     }
 }

@@ -72,6 +72,19 @@ enum RideConstants {
     static let positionAnchorRatio: Double = 0.625
     static let positionAnchorRatio2D: Double = 0.5
 
+    /// RIDE_ANCHOR_Y_FRACTION (spec "ride-anchor-lowered-setting", it14, terrain : "le point
+    /// bleu est trop peu bas, pas assez de visibilité avant"). Remplace `positionAnchorRatio`
+    /// ci-dessus UNIQUEMENT en mode suivi cap-en-haut actif (`!is2DNorthUp` — la "conduite"
+    /// réelle) : nord-en-haut garde `positionAnchorRatio2D` (0.5) inchangé, et le pan manuel
+    /// n'utilise de toute façon aucune ancre tant qu'il est actif (caméra non reprogrammée,
+    /// voir `isManualOverrideActive`). Réglable (slider Réglages > Navigation > Position point
+    /// bleu, `RideSettingsStore.rideAnchorYFraction`), valeur par défaut ci-dessous.
+    static let rideAnchorYFractionDefault: Double = 0.75
+    /// Fourchette du slider — `computeMapInsets` clampe de toute façon à [0.5, 0.9], cette
+    /// plage UI reste légèrement à l'intérieur pour un slider dont chaque extrémité a un effet
+    /// visible réel.
+    static let rideAnchorYFractionRange: ClosedRange<Double> = 0.55...0.85
+
     // MARK: - Paliers de zoom (distance caméra en mètres) par preset, selon la vitesse (km/h)
 
     struct ZoomBucket { let speedUpToKmh: Double; let cameraDistanceMeters: Double }

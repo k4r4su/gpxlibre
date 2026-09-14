@@ -448,7 +448,10 @@ struct RideView: View {
                 hasDirectionPanel: hasDirectionPanel(track: track),
                 hasBanner: activeBanner(track: track) != nil,
                 isLandscape: geometry.size.width > geometry.size.height,
-                positionAnchorRatio: is2DNorthUp ? RideConstants.positionAnchorRatio2D : RideConstants.positionAnchorRatio
+                // Spec "ride-anchor-lowered-setting" (it14) : le réglage utilisateur ne
+                // s'applique qu'en mode suivi cap-en-haut (la "conduite" réelle) — nord-en-haut
+                // garde sa valeur centrée fixe, inchangée.
+                positionAnchorRatio: is2DNorthUp ? RideConstants.positionAnchorRatio2D : settings.rideAnchorYFraction
             )
             rideContentBody(track: track, insets: insets)
         }

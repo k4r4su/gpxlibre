@@ -56,6 +56,7 @@
 		709399961F959D20BBBD7770 /* MapLoadWarningBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE1CC05064D82C3B5978F86 /* MapLoadWarningBannerView.swift */; };
 		70E872A1581371D76A198904 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */; };
 		70FCB21AD78A797B7D5FE3C8 /* RegionPickerMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EBC2E5A5E3A9151D4632F8A /* RegionPickerMapView.swift */; };
+		75474221808E3DCD655C159A /* NavigationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD75C9C059E58A8698BF8DC8 /* NavigationSettingsView.swift */; };
 		75F5D6CBD67B404FFCB65F1A /* LateralCapBannerViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C34BDEDDCA85102570904CE /* LateralCapBannerViewTests.swift */; };
 		780AFB9899F0798343C61B90 /* SharedBlockageAlertPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9982DF08E6E5670EC5DFB /* SharedBlockageAlertPillView.swift */; };
 		7A11B4D762CACFC34BCF5E40 /* NominatimGeocodingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBCA1F649C55214BD91D698 /* NominatimGeocodingService.swift */; };
@@ -117,6 +118,7 @@
 		EEF06EDE0AB369C7B4525E74 /* OfflineConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45900199AF18B7481E52EDA /* OfflineConstants.swift */; };
 		F1120E938FB599529C994C37 /* LongPressTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */; };
 		F252F614754C679895427F83 /* TrackThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D796406305809004769C00 /* TrackThumbnailView.swift */; };
+		F3C751BEB8AAA29D5039118A /* CameraPreviewMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2438975AC3F05CBE0463A4ED /* CameraPreviewMapView.swift */; };
 		F84C59B40DA90C8B571ED115 /* TileCacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880511AA5A6E5C4609F0B188 /* TileCacheStore.swift */; };
 		F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */; };
 		FAA066824132C41AD020F6A8 /* RideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5204AEC04322271B21AADF /* RideView.swift */; };
@@ -149,6 +151,7 @@
 		1E521E4F8ADB9294C7F7FAF8 /* TrackRideSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRideSettings.swift; sourceTree = "<group>"; };
 		1F8A9723D9DCD1AAE2B0A2A9 /* RideOverlayLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideOverlayLayout.swift; sourceTree = "<group>"; };
 		2319D3A331C723DEDBD6249D /* GPXTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXTrack.swift; sourceTree = "<group>"; };
+		2438975AC3F05CBE0463A4ED /* CameraPreviewMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewMapView.swift; sourceTree = "<group>"; };
 		2A17E509C0F20746BFF3FD93 /* TrackDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackDetailView.swift; sourceTree = "<group>"; };
 		2DA9DEF33C434FDB168E1C34 /* TrackThumbnailGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackThumbnailGeometryTests.swift; sourceTree = "<group>"; };
 		2E6E91693E4BD31C90751CBC /* TileCacheURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCacheURLProtocol.swift; sourceTree = "<group>"; };
@@ -237,6 +240,7 @@
 		D45900199AF18B7481E52EDA /* OfflineConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineConstants.swift; sourceTree = "<group>"; };
 		DA6F6ACEFE13A55FAA120D3D /* PrecacheConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrecacheConfirmationView.swift; sourceTree = "<group>"; };
 		DB1D1D75D61F282667EAB2F1 /* RoadbookAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookAnalyzer.swift; sourceTree = "<group>"; };
+		DD75C9C059E58A8698BF8DC8 /* NavigationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationSettingsView.swift; sourceTree = "<group>"; };
 		E5BE32586E35B557CFF482FA /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		E8DF6CFFE4D380DE8F08D661 /* NavRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavRoute.swift; sourceTree = "<group>"; };
 		E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -493,8 +497,10 @@
 		E56C90F25464862ADA82366D /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				2438975AC3F05CBE0463A4ED /* CameraPreviewMapView.swift */,
 				EEEED8415C5435295703C4DE /* FavoriteAddressesView.swift */,
 				83ABB0A48BB466F2958FEC61 /* MapThemePreset.swift */,
+				DD75C9C059E58A8698BF8DC8 /* NavigationSettingsView.swift */,
 				4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */,
 				50F6B4CC1371445701229DA1 /* SettingsView.swift */,
 				66DD42BC430B45DCFFCBCA5C /* SpeedUnit.swift */,
@@ -655,6 +661,7 @@
 				272C29E47921F1289B633B34 /* AppNavigationState.swift in Sources */,
 				BC03814FD9F5D4E0DF28E9B7 /* BlockageLogStore.swift in Sources */,
 				EAD8881321E745038ACECD7F /* BlockedPathBannerView.swift in Sources */,
+				F3C751BEB8AAA29D5039118A /* CameraPreviewMapView.swift in Sources */,
 				07215900E4D166483B5F7D81 /* Checkpoint.swift in Sources */,
 				507CF1E29CBAAD70EAFBBB96 /* CorridorPrecacheEstimator.swift in Sources */,
 				EB1288DAC9D91775DCA72EEA /* DetourRoutingService.swift in Sources */,
@@ -690,6 +697,7 @@
 				B35A1799743D8079C27F6A29 /* NavReportButton.swift in Sources */,
 				5B4FAD4F0735C445282B2D53 /* NavRoute.swift in Sources */,
 				44497D3E24198310F1EF88D0 /* NavVoiceAnnouncer.swift in Sources */,
+				75474221808E3DCD655C159A /* NavigationSettingsView.swift in Sources */,
 				AC0BCB4E77891E51752D8988 /* NetworkMonitor.swift in Sources */,
 				7A11B4D762CACFC34BCF5E40 /* NominatimGeocodingService.swift in Sources */,
 				520BFDFCBE94788B4FD75EC7 /* OSMAttributionView.swift in Sources */,

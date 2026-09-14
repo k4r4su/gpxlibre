@@ -10,13 +10,16 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Zoom automatique") {
-                    Picker("Preset", selection: $settings.zoomPreset) {
-                        ForEach(ZoomPreset.allCases) { preset in
-                            Text(preset.displayName).tag(preset)
-                        }
+                // Spec it14 (Blocs 1/6/7) : l'ancienne section "Zoom automatique" à plat
+                // déménage dans ce nouvel écran, avec Position point bleu et Zoom par défaut —
+                // les trois ont besoin d'un aperçu carte en direct, impossible à faire
+                // proprement dans une simple ligne de Form.
+                Section {
+                    NavigationLink {
+                        NavigationSettingsView()
+                    } label: {
+                        Label("Navigation", systemImage: "location.north.line.fill")
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 Section("Roadbook") {
