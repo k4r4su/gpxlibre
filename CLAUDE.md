@@ -283,3 +283,8 @@ propriétaire, nouveau device/UDID de référence, nouveau pattern de test, etc.
 doit toujours refléter l'état RÉEL du dépôt, jamais un instantané figé d'une itération
 passée. Un fichier CLAUDE.md obsolète est pire qu'utile : il fait perdre du temps à la
 prochaine session à démêler ce qui a changé.
+
+**Mettre à jour `README.md`** (demande explicite du propriétaire, it17) si une nouvelle
+feature utilisateur clé a été ajoutée/changée — c'est la vitrine du dépôt sur GitHub, pas un
+pense-bête interne comme CLAUDE.md : rester simple, agréable à lire, fidèle à la philosophie
+propriétaire citée en tête de ce fichier. Ne pas y mettre de détail technique/implémentation.
