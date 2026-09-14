@@ -22,24 +22,46 @@ avec recalcul a été ajouté malgré le "hors périmètre MVP" d'origine) : `sp
 GPXlibre/
   App/            AppNavigationState (onglet actif), GPXlibreApp (racine, injecte tous
                    les @StateObject en @EnvironmentObject)
+  Config/         NavigationConstants.swift (it14) — constantes du roadbook rebuilt from
+                   scratch UNIQUEMENT (fenêtre, paliers d'angle, flash, debug replay), demandé
+                   explicitement à cet emplacement plutôt que RideConstants.swift. Ajouté à
+                   `sources:` dans project.yml — si ce dossier disparaît d'un futur `xcodegen
+                   generate`, vérifier que project.yml le liste toujours.
   Models/         GPXPoint, GPXTrack (struct value type, reordered() pur — voir Trace sacrée)
   Services/       GPXParser (XMLParser maison), LibraryStore (source de vérité des traces,
                    voir section dédiée), LocationManager, NetworkMonitor
   Ride/           Le cœur du produit — RideView (orchestrateur SwiftUI de l'onglet Ride),
                    RideSessionManager (state machine GPS/roadbook/détour/resume, @MainActor),
                    RideOverlayLayout (grille figée des zones d'overlay, SEULE source de
-                   vérité layout), RoadbookAnalyzer/TrackProjector/Checkpoint (géométrie
-                   pure), DetourRoutingService (OSRM), ResumeGuidance* (feat it10),
-                   RidePanelStyle (styles partagés), RideConstants (toutes les constantes
-                   tunables du module Ride). RoadbookPanelView ne gère plus QUE l'alerte
-                   "hors trace" (EN HAUT, pleine largeur) depuis it12 — le cas "virage à
-                   venir" est porté par LateralCapBannerView (latérale, translucide, calque
-                   ZStack isolé donc hors de hasDirectionPanel/computeMapInsets), piloté par
-                   RoadbookAnalyzer.buildInflectionPoints : détection SÉPARÉE des checkpoints
-                   (angle cumulé signé sur fenêtre glissante ~150 m, seuil 40°, constantes
-                   `banner*` de RideConstants) — deux listes indépendantes
-                   (checkpoints/inflectionPoints), deux compteurs "N" distincts, ne jamais les
-                   confondre ni faire dépendre l'un de l'autre.
+                   vérité layout), RoadbookAnalyzer/TrackProjector/Checkpoint/RoadbookTier
+                   (géométrie pure), DetourRoutingService (OSRM), ResumeGuidance* (feat it10),
+                   RidePanelStyle (styles partagés), RideConstants (constantes Ride hors
+                   roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
+                   Roadbook REBUILT FROM SCRATCH (spec "roadbook-angle-buckets-replay", it14,
+                   Bloc 4 — "aujourd'hui aucun déclenchement réel en roulage") :
+                   RoadbookAnalyzer.buildRoadbookEvents REMPLACE les deux anciens détecteurs
+                   séparés (buildCheckpoints seuil ponctuel ±20 m ; buildInflectionPoints
+                   fenêtre glissante forward-only it12) par UN SEUL algorithme, source unique
+                   pour les épingles carte (`checkpoints`) ET la bannière latérale
+                   (`inflectionPoints`) — CE SONT LA MÊME LISTE depuis it14 (deux propriétés
+                   @Published distinctes uniquement pour ne pas renommer le paramètre
+                   `checkpoints:` déjà consommé par RideMapLibreView/RideMapView). Mesure la
+                   somme des deltas de cap segment à segment sur une fenêtre AVANT/APRÈS
+                   chaque point (`RideSettingsStore.roadbookWindowBeforeMeters/AfterMeters`,
+                   défauts dans Config/NavigationConstants.swift), classée en 5 paliers
+                   (RoadbookTier : light/marked/hard/uTurn, seuils réglables Réglages >
+                   Roadbook) — icône DISTINCTE par palier, cohérente épingles/bannière. PLUS
+                   D'INDEX à avancer/resynchroniser (currentCheckpointIndex et
+                   resyncCheckpointIndex supprimés it14) : le flash (100 derniers mètres,
+                   `NavigationConstants.roadbookFlashMeters`) et la bannière sont tous les
+                   deux SANS ÉTAT, recalculés à chaque fix GPS comme "prochain événement dont
+                   la distance cumulée dépasse la position actuelle" — s'auto-corrigent seuls
+                   après hors-trace/reprise, aucune synchronisation à maintenir. Countdown
+                   BANNER_* (RideConstants, 600→0 m) INCHANGÉ, ne pilote QUE l'affichage.
+                   RoadbookPanelView ne gère toujours QUE l'alerte "hors trace" (EN HAUT,
+                   pleine largeur, it12) — la bannière latérale vit maintenant DANS la colonne
+                   de contrôles (voir "Colonne de contrôles" plus bas), pas dans un calque à
+                   part comme avant it14.
   Map/            RideMapLibreView (moteur actif, voir ci-dessous), MapProvider (protocole
                    commun), MapEngineConstants (identifiants sources/couches + couleurs +
                    construction des styles raster ET vectoriel), MapSourceSelection (raster/
@@ -76,15 +98,23 @@ GPXlibre/
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
   Recording/      Enregistrement GPS pendant le Ride + export GPX
-  Settings/       RideSettingsStore (réglages globaux persistés), SettingsView,
-                   FavoriteAddressesView (Domicile/Travail, spec "home-work-favorites", it13
-                   — alimente NavFavoritesStore, déjà consommé par NavDestinationSearchView
-                   depuis plus tôt mais jamais configurable avant ce bloc)
+  Settings/       RideSettingsStore (réglages globaux persistés — SAUF exception explicite,
+                   voir "Réglages stagés" plus bas), SettingsView, FavoriteAddressesView
+                   (Domicile/Travail, it13), NavigationSettingsView (it14 : Réglages >
+                   Navigation, regroupe Position point bleu/Zoom par défaut/Zoom automatique
+                   — les 3 réglages qui ont besoin d'un aperçu carte en direct,
+                   CameraPreviewMapView), ControlsSide, DebugReplaySection (#if DEBUG, dans
+                   Réglages > Avancé).
   Views/          LibraryView (Biblio — tap sur une ligne ouvre TrackFullSheetView depuis
                    it13, spec "biblio-track-fullsheet" : fiche nom/stats + Supprimer/
                    Renommer/Paramètres ; PLUS TrackDetailView, qui n'a donc plus de point
                    d'entrée UI mais reste intact, voir TODO.md), TrackDetailView,
-                   TrackSettingsView (réglages par trace), TrackMapView, RootView (TabView)
+                   TrackSettingsView (réglages par trace — sélecteur de départ personnalisé
+                   RETIRÉ it14, spec "remove-start-choice", redondant avec le sens A→B/it12 ;
+                   `TrackRideSettings.customStartPointIndex` reste dans le modèle/persistance
+                   pour ne pas casser une valeur héritée, juste plus d'UI pour en DÉFINIR une
+                   nouvelle), TrackMapView (simplifié it14, plus de tap-to-pick, juste un
+                   aperçu), RootView (TabView)
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure
                    de la trace avec chevrons + pastille de sens, aucune carte interactive.
@@ -188,6 +218,48 @@ GPS continue d'être consommé à la cadence normale) alimente UNIQUEMENT le spe
 (RideStatsBadge/RideStatsPanel). Demande terrain explicite pour le speedo seul ("m'enfou que
 ça oscille") : ne jamais brancher `rawSpeedKmh` sur une décision automatique.
 
+## `isGuidanceStopped` vs `isRecordingPaused` (spec "stop-guidance-semantics", it14)
+
+DEUX états distincts sur `RideSessionManager`, ne jamais les confondre :
+`isRecordingPaused` (préexistant) suspend l'ENREGISTREMENT de la session (le tracé parcouru
+n'avance plus), typiquement via le bouton pause de l'écran d'enregistrement libre.
+`isGuidanceStopped` (nouveau, bouton Stop de la colonne de contrôles) arrête uniquement le
+GUIDAGE actif : la trace chargée reste affichée, le roadbook/bannières latérales se rétractent
+(`hasDirectionPanel`/`isLateralBannerVisible` passent à `false` tant que `isGuidanceStopped`),
+la vitesse continue d'être affichée, on reste sur l'écran Ride — la session de suivi/
+enregistrement, elle, N'EST PAS arrêtée. Haptic + toast "Guidage arrêté" au moment du Stop
+(`.rideToast`). Reprise : soit un tap sur une nouvelle trace, soit le bouton recentrer/cibler
+(`recenterCamera()`), soit le nouveau bouton discret "play" de la colonne
+(`resumeGuidanceAfterStop()`) si une trace reste sélectionnée — dans les trois cas
+`isGuidanceStopped` repasse à `false` et le roadbook/bannière réapparaissent naturellement
+(aucun état d'index à resynchroniser, voir section roadbook ci-dessus).
+
+## Seuil hors-trace à hystérésis (spec "offtrace-threshold-hysteresis", it14, Bloc 8)
+
+Bug terrain observé par photo (bannière "Hors trace – Reprise à 16,3 km" restée affichée alors
+que le trajet était proche de la trace) : un seuil unique oscillait autour de sa valeur.
+Remplacé par un DOUBLE seuil avec hystérésis, porté par `RideConstants.horsTraceEnterMeters`
+(30 m — au-delà, `isOffTrackPaused` passe à `true`) et `RideConstants.horsTraceExitMeters`
+(25 m — en-deçà, repasse à `false`) ; les anciennes constantes `resyncHysteresisSeconds`/
+`resyncMinConsecutiveStableFixes` ont été retirées, ce mécanisme de resync par temps/fixes
+consécutifs n'existe plus, remplacé par cette comparaison directe de distance dans
+`updateRoadbookProgress`. Comme avant, cet état reste NON bloquant : la trace reste visible,
+rien d'autre ne change. Se valide via le mode replay debug (voir section roadbook ci-dessus),
+pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
+
+## Réglages stagés (non live) — exception documentée
+
+Convention par défaut de l'app : tout réglage s'applique EN DIRECT dès qu'on le touche, jamais
+besoin de bouton Sauvegarder. Deux réglages dérogent explicitement à cette règle depuis it14,
+parce que le prompt d'itération le demandait noir sur blanc (Bloc 6 : "Sauvegarder = applique"
+; Bloc 7 : "non persistant tant que non validé") : Réglages > Navigation > **Zoom par défaut**
+(`DefaultRideZoomSettingsView`, bouton "Sauvegarder") et **Zoom automatique**
+(`AutoZoomSettingsView`, bouton "Valider"). Dans les deux cas, un `@State` local pilote
+l'aperçu carte pendant l'ajustement (`CameraPreviewMapView`) et seul le tap sur le bouton
+écrit dans `RideSettingsStore` (`settings.defaultRideZoomCameraMeters`/`settings.autoZoomEnabled`
+etc.). Ne pas généraliser ce patron à un nouveau réglage sans qu'une spec future le demande
+explicitement — c'est une exception, pas le nouveau défaut.
+
 ## Règles absolues (non négociables, violées = régression critique)
 
 1. **Trace sacrée** — en Mode Trace, la trace GPX chargée n'est JAMAIS recalculée ni
@@ -200,11 +272,21 @@ GPS continue d'être consommé à la cadence normale) alimente UNIQUEMENT le spe
    jamais `start(track:)` (reset complet, réservé aux vrais démarrages) pour ces cas.
 3. **Zone tab bar sacrée** — rien d'autre que la tab bar native n'entre jamais dans cette
    zone. Voir `RideOverlayLayout` pour la grille complète (segmented → bannière → panneau de
-   direction en haut ; colonne droite/badge vitesse en bas, au-dessus de la tab bar).
-4. **Position ancrée à ~63 %** — `RideConstants.positionAnchorRatio` (0.625) depuis le haut
-   de la zone libre (hors panneaux/tab bar), via un calcul EXACT sur `contentInset`
-   (`RideOverlayLayout.computeMapInsets`), jamais une heuristique de décalage géographique
-   côté MapLibre. Recalculé à CHAQUE apparition/disparition de panneau/bannière.
+   direction en haut ; colonne contrôles + badge vitesse en bas, au-dessus de la tab bar).
+   Depuis it14 (spec "controls-side-setting"), la colonne de contrôles (+/-/Stop/Bloqué + la
+   bannière latérale du roadbook, empilée au-dessus) est à DROITE ou à GAUCHE selon
+   `settings.controlsSide` (Réglages > Apparence > Position contrôles, live) — mais reste,
+   dans les deux cas, la SEULE chose à occuper cette zone verticale ; à gauche, elle doit
+   toujours éviter le compteur km/h (à droite, inchangé).
+4. **Position ancrée à ~63 % par défaut, overridable en mode suivi** —
+   `RideConstants.rideAnchorYFractionDefault` (0.625) reste la valeur par défaut, mais depuis
+   it14 (spec "ride-anchor-lowered-setting") l'ancre réelle utilisée en mode suivi cap-en-haut
+   est `settings.rideAnchorYFraction` (réglable via Réglages > Navigation > Position point
+   bleu, live, plage `RideConstants.rideAnchorYFractionRange`) — PAS la constante brute. Le
+   calcul EXACT sur `contentInset` (`RideOverlayLayout.computeMapInsets`) reste inchangé,
+   seule l'entrée qu'on lui passe est désormais dynamique ; nord-en-haut n'est pas concerné
+   (reste centré, sans notion d'ancre). Recalculé à CHAQUE apparition/disparition de
+   panneau/bannière ET à chaque changement du réglage.
 5. **Zéro overlap d'overlays** — un overlay qui apparaît (bannière, panneau, carte "Reprendre
    ici") ne doit JAMAIS déplacer un contrôle existant. Tout nouvel overlay custom : calque
    isolé, position fixe, jamais un sibling dans une VStack qui grandit avec son contenu (voir

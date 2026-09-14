@@ -1,5 +1,57 @@
 # TODO
 
+## Itération 14 (roadbook rebuild / layout ride final / zoom)
+
+- **Vérification de cette itération** : builds simulateur + device (compile-only) + suite de
+  tests (54, 0 échec, 1 skip) verts après CHAQUE bloc et en final. Logique pure testée
+  unitairement (`RoadbookAnalyzer.buildRoadbookEvents` — dont un vrai bug de mesure d'angle
+  trouvé et corrigé en cours de route, voir plus bas ; `OffTrackHysteresisTests` pour le
+  double seuil du Bloc 8 ; `TrackThumbnailGeometryTests` pour le plafond de chevrons Biblio).
+  **Aucun item de la checklist "Vérifications avant merge" du prompt n'a pu être confirmé
+  visuellement/tactilement** — pas d'automatisation tactile disponible dans cet environnement
+  (limite déjà documentée it9-it13) : ni l'ancre à 75 % visuellement, ni le switch live de
+  colonne, ni le toast/haptic Stop, ni le mode replay debug exercé par un vrai tap (implémenté
+  et compile, mais jamais lancé à la main — validé seulement indirectement via les tests
+  unitaires qui exercent le même chemin `handle(location:)`/fonctions pures), ni l'hystérésis
+  hors-trace en conditions réelles (20 m/35 m/20 m de la checklist), ni la comparaison
+  photo avant/après à vitesse et position identiques demandée par le propriétaire. Tout ceci
+  relève de son propre protocole de test terrain, pas d'une simulation que j'aurais pu faire
+  ici — à confirmer par le propriétaire lui-même avant de considérer l'itération pleinement
+  validée.
+
+- **Bug trouvé et corrigé en cours de développement (pas un TODO, juste tracé pour mémoire)** :
+  la toute première implémentation de `buildRoadbookEvents` mesurait l'angle entrant/sortant
+  par CORDE directe (bord de fenêtre → point central), copiant le patron de l'ancien
+  `buildCheckpoints` — cette mesure sous-estime mathématiquement le virage cumulé sur une
+  courbe progressive (une corde ≈ la tangente moyenne sur l'intervalle, pas la vraie variation
+  de cap bout à bout). Détecté par un test qui échouait (`testGradualCurveDetectedViaWindow`),
+  tracé à la main (courbe à 10 segments de 8°/20m : 24° mesurés par corde contre 48° réels).
+  Corrigé par sommation pas-à-pas des deltas de cap segment par segment sur toute la fenêtre
+  (voir `RoadbookAnalyzer.swift`). Sert de rappel : toujours dériver une mesure d'angle sur
+  fenêtre par sommation télescopique, jamais par corde directe, dès qu'une courbe progressive
+  (pas un simple coin net) peut se présenter.
+
+- **Hygiène de staging git, documentée par honnêteté (aucun risque fonctionnel)** : le commit
+  `fix:"biblio-chevrono-cap"` a embarqué par erreur le retrait (non lié) de
+  `RideConstants.customStartPickRadiusMeters`, destiné à `refactor:"remove-start-choice"` —
+  un reliquat de `git add -p` resté indexé puis inclus par un `git commit -m` sans pathspec.
+  Par ailleurs, vu l'enchevêtrement réel du contenu des Blocs 4/5/6/7 dans les mêmes zones de
+  `RideSessionManager.swift`, `RideSettingsStore.swift` et `NavigationSettingsView.swift`
+  (constantes/propriétés/init écrites en continu au fil des blocs), j'ai choisi consciemment
+  de ne PAS forcer un split `git add -p` plus loin pour ces 3 fichiers : chacun est entré
+  intégralement dans le commit du bloc en cours d'écriture au moment où le fichier s'est
+  stabilisé (Bloc 4 pour `RideSessionManager.swift`, Bloc 5 pour `RideSettingsStore.swift`/
+  `SettingsView.swift`, Bloc 6 pour `NavigationSettingsView.swift`), chaque message de commit
+  le documente explicitement. Aucun contenu perdu ni contradictoire, juste des frontières de
+  commit pas parfaitement alignées bloc-par-bloc sur ces 3 fichiers précis.
+
+- **Décision de scope assumée (Bloc 10, remove-start-choice)** : le contrôle "Départ" est
+  retiré de `TrackSettingsView`/`TrackMapView`, mais `TrackRideSettings.customStartPointIndex`
+  reste dans le modèle/la persistance (une valeur déjà enregistrée par un utilisateur avant
+  cette itération continue de s'appliquer par défaut, comme demandé) — juste plus aucun moyen
+  d'en DÉFINIR une nouvelle depuis l'UI. Si le besoin de repartir d'un point choisi à la main
+  revient, il faudra soit rebrancher un contrôle dédié, soit l'unifier avec le sens A→B/B→A.
+
 ## Itération 13 (chevrons-live-refresh / biblio-track-fullsheet / map-theme-binding / zoom-out-unclamped / thick-label-live-thickness / offroad-routing-preference / home-work-favorites / temp-trace-dash-readability)
 
 - **DÉCOUVERTE IMPORTANTE, NON RÉSOLUE : les chevrons de direction pourraient ne jamais
