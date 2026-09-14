@@ -1,5 +1,26 @@
 import SwiftUI
 
+/// Fond translucide pour les sheets à aperçu carte live (spec "translucent-settings-preview-
+/// sheets", it15, Bloc 2) — remplace le `.regularMaterial` opaque qui masquait la carte
+/// derrière. Teinte sombre légère + `ultraThinMaterial` (le blur seul se fait parfois "laver"
+/// par un fond de carte très clair, illisible en plein soleil) ; force `colorScheme` à `.dark`
+/// sur la carte pour que `.primary`/`.secondary` restent clairs dessus quel que soit le mode
+/// système — même patron que RideStatsBadge/Panel pour les calques posés sur la carte.
+/// Réservé aux 3 sheets à aperçu live ci-dessous ; ne PAS généraliser aux réglages
+/// administratifs classiques (nom/version...), qui restent en sheet opaque standard.
+private extension View {
+    func translucentPreviewBackground() -> some View {
+        background(
+            ZStack {
+                Color.black.opacity(0.45)
+                Rectangle().fill(.ultraThinMaterial)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        )
+        .environment(\.colorScheme, .dark)
+    }
+}
+
 /// Réglages > Navigation (spec it14, Blocs 1/6/7) — regroupe les réglages caméra/zoom qui ont
 /// besoin d'un aperçu carte en direct, remplace l'ancienne section "Zoom automatique" à plat
 /// en tête de Réglages (déplacée ici, voir SettingsView).
@@ -78,7 +99,7 @@ private struct RideAnchorSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .translucentPreviewBackground()
             .padding()
         }
         .navigationTitle("Position point bleu")
@@ -123,7 +144,7 @@ private struct DefaultRideZoomSettingsView: View {
                 .disabled(localValue == settings.defaultRideZoomCameraMeters)
             }
             .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .translucentPreviewBackground()
             .padding()
         }
         .navigationTitle("Zoom par défaut")
@@ -187,7 +208,7 @@ private struct AutoZoomSettingsView: View {
                 .disabled(!hasChanges)
             }
             .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .translucentPreviewBackground()
             .padding()
         }
         .navigationTitle("Zoom automatique")
