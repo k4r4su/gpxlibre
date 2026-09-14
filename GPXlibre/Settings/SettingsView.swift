@@ -22,28 +22,59 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Roadbook") {
-                    Picker("Seuil de virage", selection: $settings.turnThresholdDegrees) {
-                        ForEach(RideConstants.turnThresholdDegreesOptions, id: \.self) { value in
-                            Text("\(Int(value))°").tag(value)
+                // Renouvelée intégralement (spec "roadbook-settings-wired", it14, Bloc 5 :
+                // "L'ancien panneau Réglages > Roadbook existant n'agit pas") — chaque contrôle
+                // ci-dessous pilote directement RoadbookAnalyzer.buildRoadbookEvents via
+                // RideSessionManager.rebuildCheckpoints, appelé par le .onChange en bas de
+                // RideView pour chacun de ces réglages (bascule live, sans kill app).
+                Section {
+                    Toggle("Activé", isOn: $settings.roadbookEnabled)
+                    if settings.roadbookEnabled {
+                        Toggle("Flash (100 derniers mètres)", isOn: $settings.roadbookFlashEnabled)
+                        Picker("Nombre de flashs", selection: $settings.flashCount) {
+                            ForEach(RideConstants.flashCountOptions, id: \.self) { value in
+                                Text("\(value)").tag(value)
+                            }
+                        }
+                        Picker("Fusion des virages rapprochés", selection: $settings.turnMergeMinDistanceMeters) {
+                            ForEach(RideConstants.turnMergeMinDistanceMetersOptions, id: \.self) { value in
+                                Text("\(Int(value)) m").tag(value)
+                            }
+                        }
+                        .longPressTooltip("Deux virages détectés à moins de cette distance sont fusionnés en un seul — utile sur piste qui zigzague")
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Fenêtre de mesure : \(Int(settings.roadbookWindowBeforeMeters)) m avant / \(Int(settings.roadbookWindowAfterMeters)) m après")
+                                .font(.subheadline)
+                            Text("Avant").font(.caption).foregroundStyle(.secondary)
+                            Slider(value: $settings.roadbookWindowBeforeMeters, in: NavigationConstants.roadbookWindowRange, step: 5)
+                            Text("Après").font(.caption).foregroundStyle(.secondary)
+                            Slider(value: $settings.roadbookWindowAfterMeters, in: NavigationConstants.roadbookWindowRange, step: 5)
+                        }
+                        .longPressTooltip("Distance avant/après chaque point de la trace sur laquelle l'angle est mesuré (±40-80 m)")
+
+                        Toggle("Seuils personnalisés", isOn: Binding(
+                            get: { settings.roadbookUseCustomThresholds },
+                            set: { isCustom in
+                                settings.roadbookUseCustomThresholds = isCustom
+                                if !isCustom { settings.resetRoadbookThresholdsToDefaults() }
+                            }
+                        ))
+                        if settings.roadbookUseCustomThresholds {
+                            roadbookThresholdStepper("Léger dès", value: $settings.roadbookLightThresholdDegrees)
+                            roadbookThresholdStepper("Prononcé dès", value: $settings.roadbookMarkedThresholdDegrees)
+                            roadbookThresholdStepper("Fort dès", value: $settings.roadbookHardThresholdDegrees)
+                            roadbookThresholdStepper("Demi-tour dès", value: $settings.roadbookUTurnThresholdDegrees)
+                        } else {
+                            Text("Standard : léger 30° · prononcé 45° · fort 90° · demi-tour 135°")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    Picker("Alerte checkpoint", selection: $settings.checkpointAlertDistanceMeters) {
-                        ForEach(RideConstants.alertDistanceOptions, id: \.self) { value in
-                            Text("\(Int(value)) m").tag(value)
-                        }
-                    }
-                    Picker("Nombre de flashs", selection: $settings.flashCount) {
-                        ForEach(RideConstants.flashCountOptions, id: \.self) { value in
-                            Text("\(value)").tag(value)
-                        }
-                    }
-                    Picker("Fusion des virages rapprochés", selection: $settings.turnMergeMinDistanceMeters) {
-                        ForEach(RideConstants.turnMergeMinDistanceMetersOptions, id: \.self) { value in
-                            Text("\(Int(value)) m").tag(value)
-                        }
-                    }
-                    .longPressTooltip("Deux virages détectés à moins de cette distance sont fusionnés en un seul — utile sur piste qui zigzague")
+                } header: {
+                    Text("Roadbook")
+                } footer: {
+                    Text("Mesure l'angle de la trace autour de chaque point (fenêtre avant/après) et le classe en 4 paliers — léger, prononcé, fort, demi-tour.")
                 }
 
                 Section("Carte") {
@@ -144,6 +175,9 @@ struct SettingsView: View {
                     Text("Laisser vide désactive toute tentative réseau vers cette fonctionnalité.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                    #if DEBUG
+                    DebugReplaySection()
+                    #endif
                 }
 
                 Section {
@@ -156,6 +190,19 @@ struct SettingsView: View {
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
+        }
+    }
+
+    /// Un seuil personnalisé = un `Stepper` degré par degré, borné [10°, 179°] (au-delà l'ordre
+    /// light < marked < hard < uTurn n'est plus garanti — pas de validation croisée ici, le
+    /// propriétaire reste libre de l'ordre exact qu'il veut tester).
+    private func roadbookThresholdStepper(_ title: String, value: Binding<Double>) -> some View {
+        Stepper(value: value, in: 10...179, step: 1) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int(value.wrappedValue))°").foregroundStyle(.secondary).monospacedDigit()
+            }
         }
     }
 }

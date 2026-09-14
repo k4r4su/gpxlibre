@@ -1,14 +1,13 @@
 import Foundation
 
-/// Les 7 réglages de l'app, persistés en UserDefaults. Toute modification prend effet
-/// immédiatement (les vues Ride lisent ces valeurs @Published en continu, pas besoin
-/// de relancer l'app).
+/// Réglages de l'app, persistés en UserDefaults. Toute modification prend effet immédiatement
+/// (les vues Ride lisent ces valeurs @Published en continu, pas besoin de relancer l'app) —
+/// sauf mention contraire explicite (ex : Zoom par défaut/preset auto-zoom, qui se prévisualisent
+/// avant validation, voir NavigationSettingsView).
 @MainActor
 final class RideSettingsStore: ObservableObject {
     private enum Keys {
         static let zoomPreset = "settings.zoomPreset"
-        static let turnThreshold = "settings.turnThresholdDegrees"
-        static let alertDistance = "settings.checkpointAlertDistanceMeters"
         static let flashCount = "settings.flashCount"
         static let northUp = "settings.mapOrientationNorthUp"
         static let keepAwake = "settings.keepScreenAwakeInRide"
@@ -26,18 +25,25 @@ final class RideSettingsStore: ObservableObject {
         static let turnMergeMinDistance = "settings.turnMergeMinDistanceMeters"
         static let rideAnchorYFraction = "settings.rideAnchorYFraction"
         static let controlsSide = "settings.controlsSide"
+        static let roadbookEnabled = "settings.roadbookEnabled"
+        static let roadbookFlashEnabled = "settings.roadbookFlashEnabled"
+        static let roadbookUseCustomThresholds = "settings.roadbookUseCustomThresholds"
+        static let roadbookWindowBeforeMeters = "settings.roadbookWindowBeforeMeters"
+        static let roadbookWindowAfterMeters = "settings.roadbookWindowAfterMeters"
+        static let roadbookLightThresholdDegrees = "settings.roadbookLightThresholdDegrees"
+        static let roadbookMarkedThresholdDegrees = "settings.roadbookMarkedThresholdDegrees"
+        static let roadbookHardThresholdDegrees = "settings.roadbookHardThresholdDegrees"
+        static let roadbookUTurnThresholdDegrees = "settings.roadbookUTurnThresholdDegrees"
+        static let defaultRideZoomCameraMeters = "settings.defaultRideZoomCameraMeters"
+        static let autoZoomEnabled = "settings.autoZoomEnabled"
+        static let autoZoomMinMeters = "settings.autoZoomMinMeters"
+        static let autoZoomMaxMeters = "settings.autoZoomMaxMeters"
     }
 
     private let defaults: UserDefaults
 
     @Published var zoomPreset: ZoomPreset {
         didSet { defaults.set(zoomPreset.rawValue, forKey: Keys.zoomPreset) }
-    }
-    @Published var turnThresholdDegrees: Double {
-        didSet { defaults.set(turnThresholdDegrees, forKey: Keys.turnThreshold) }
-    }
-    @Published var checkpointAlertDistanceMeters: Double {
-        didSet { defaults.set(checkpointAlertDistanceMeters, forKey: Keys.alertDistance) }
     }
     @Published var flashCount: Int {
         didSet { defaults.set(flashCount, forKey: Keys.flashCount) }
@@ -106,6 +112,74 @@ final class RideSettingsStore: ObservableObject {
         didSet { defaults.set(controlsSide.rawValue, forKey: Keys.controlsSide) }
     }
 
+    // MARK: - Roadbook (spec "roadbook-settings-wired", it14, Bloc 5 — "l'ancien panneau
+    // Réglages > Roadbook n'agit pas, renouvelle-le avec des réglages réellement branchés")
+
+    /// Activation globale — désactivé vide `checkpoints`/`inflectionPoints` (voir
+    /// RideSessionManager.rebuildCheckpoints), sans jamais toucher la trace elle-même.
+    @Published var roadbookEnabled: Bool {
+        didSet { defaults.set(roadbookEnabled, forKey: Keys.roadbookEnabled) }
+    }
+    @Published var roadbookFlashEnabled: Bool {
+        didSet { defaults.set(roadbookFlashEnabled, forKey: Keys.roadbookFlashEnabled) }
+    }
+    /// "Sensibilité (pré-réglage des seuils à 30/45/90/135 ou personnalisé)" — les 4 propriétés
+    /// ci-dessous restent les valeurs EFFECTIVES en permanence (utilisées telles quelles par
+    /// rebuildCheckpoints) ; ce booléen ne pilote que la possibilité de les ÉDITER dans
+    /// Réglages (repasser à false les réinitialise aux défauts, voir NavigationSettingsView/
+    /// SettingsView).
+    @Published var roadbookUseCustomThresholds: Bool {
+        didSet { defaults.set(roadbookUseCustomThresholds, forKey: Keys.roadbookUseCustomThresholds) }
+    }
+    @Published var roadbookWindowBeforeMeters: Double {
+        didSet { defaults.set(roadbookWindowBeforeMeters, forKey: Keys.roadbookWindowBeforeMeters) }
+    }
+    @Published var roadbookWindowAfterMeters: Double {
+        didSet { defaults.set(roadbookWindowAfterMeters, forKey: Keys.roadbookWindowAfterMeters) }
+    }
+    @Published var roadbookLightThresholdDegrees: Double {
+        didSet { defaults.set(roadbookLightThresholdDegrees, forKey: Keys.roadbookLightThresholdDegrees) }
+    }
+    @Published var roadbookMarkedThresholdDegrees: Double {
+        didSet { defaults.set(roadbookMarkedThresholdDegrees, forKey: Keys.roadbookMarkedThresholdDegrees) }
+    }
+    @Published var roadbookHardThresholdDegrees: Double {
+        didSet { defaults.set(roadbookHardThresholdDegrees, forKey: Keys.roadbookHardThresholdDegrees) }
+    }
+    @Published var roadbookUTurnThresholdDegrees: Double {
+        didSet { defaults.set(roadbookUTurnThresholdDegrees, forKey: Keys.roadbookUTurnThresholdDegrees) }
+    }
+
+    // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
+
+    /// DEFAULT_RIDE_ZOOM réel (m), voir RideConstants.defaultRideZoomCameraMetersDefault —
+    /// utilisé UNE fois par RideSessionManager.init comme point de départ avant que le zoom
+    /// auto (vitesse) ne prenne le relais au premier fix GPS.
+    @Published var defaultRideZoomCameraMeters: Double {
+        didSet { defaults.set(defaultRideZoomCameraMeters, forKey: Keys.defaultRideZoomCameraMeters) }
+    }
+
+    // MARK: - Zoom automatique vitesse (spec "auto-zoom-speed-curve", it14, Bloc 7)
+
+    @Published var autoZoomEnabled: Bool {
+        didSet { defaults.set(autoZoomEnabled, forKey: Keys.autoZoomEnabled) }
+    }
+    @Published var autoZoomMinMeters: Double {
+        didSet { defaults.set(autoZoomMinMeters, forKey: Keys.autoZoomMinMeters) }
+    }
+    @Published var autoZoomMaxMeters: Double {
+        didSet { defaults.set(autoZoomMaxMeters, forKey: Keys.autoZoomMaxMeters) }
+    }
+
+    /// Repasse les 4 seuils à leurs défauts standards (30/45/90/135) — appelé quand l'utilisateur
+    /// quitte le mode "personnalisé" (voir SettingsView), jamais automatiquement ailleurs.
+    func resetRoadbookThresholdsToDefaults() {
+        roadbookLightThresholdDegrees = NavigationConstants.roadbookLightThresholdDegreesDefault
+        roadbookMarkedThresholdDegrees = NavigationConstants.roadbookMarkedThresholdDegreesDefault
+        roadbookHardThresholdDegrees = NavigationConstants.roadbookHardThresholdDegreesDefault
+        roadbookUTurnThresholdDegrees = NavigationConstants.roadbookUTurnThresholdDegreesDefault
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -114,14 +188,6 @@ final class RideSettingsStore: ObservableObject {
         } else {
             zoomPreset = .normal
         }
-
-        let storedThreshold = defaults.double(forKey: Keys.turnThreshold)
-        turnThresholdDegrees = RideConstants.turnThresholdDegreesOptions.contains(storedThreshold)
-            ? storedThreshold : RideConstants.turnThresholdDegreesDefault
-
-        let storedAlert = defaults.double(forKey: Keys.alertDistance)
-        checkpointAlertDistanceMeters = RideConstants.alertDistanceOptions.contains(storedAlert)
-            ? storedAlert : RideConstants.alertDistanceDefaultMeters
 
         let storedFlash = defaults.integer(forKey: Keys.flashCount)
         flashCount = RideConstants.flashCountOptions.contains(storedFlash)
@@ -183,5 +249,43 @@ final class RideSettingsStore: ObservableObject {
         } else {
             controlsSide = .right
         }
+
+        roadbookEnabled = defaults.object(forKey: Keys.roadbookEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.roadbookEnabled)
+        roadbookFlashEnabled = defaults.object(forKey: Keys.roadbookFlashEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.roadbookFlashEnabled)
+        roadbookUseCustomThresholds = defaults.bool(forKey: Keys.roadbookUseCustomThresholds)
+
+        let windowRange = NavigationConstants.roadbookWindowRange
+        let storedWindowBefore = defaults.object(forKey: Keys.roadbookWindowBeforeMeters) as? Double
+        roadbookWindowBeforeMeters = storedWindowBefore.map { min(max($0, windowRange.lowerBound), windowRange.upperBound) }
+            ?? NavigationConstants.roadbookWindowBeforeMetersDefault
+        let storedWindowAfter = defaults.object(forKey: Keys.roadbookWindowAfterMeters) as? Double
+        roadbookWindowAfterMeters = storedWindowAfter.map { min(max($0, windowRange.lowerBound), windowRange.upperBound) }
+            ?? NavigationConstants.roadbookWindowAfterMetersDefault
+
+        let storedLight = defaults.object(forKey: Keys.roadbookLightThresholdDegrees) as? Double
+        roadbookLightThresholdDegrees = storedLight ?? NavigationConstants.roadbookLightThresholdDegreesDefault
+        let storedMarked = defaults.object(forKey: Keys.roadbookMarkedThresholdDegrees) as? Double
+        roadbookMarkedThresholdDegrees = storedMarked ?? NavigationConstants.roadbookMarkedThresholdDegreesDefault
+        let storedHard = defaults.object(forKey: Keys.roadbookHardThresholdDegrees) as? Double
+        roadbookHardThresholdDegrees = storedHard ?? NavigationConstants.roadbookHardThresholdDegreesDefault
+        let storedUTurn = defaults.object(forKey: Keys.roadbookUTurnThresholdDegrees) as? Double
+        roadbookUTurnThresholdDegrees = storedUTurn ?? NavigationConstants.roadbookUTurnThresholdDegreesDefault
+
+        let zoomRange = RideConstants.defaultRideZoomRange
+        let storedDefaultZoom = defaults.object(forKey: Keys.defaultRideZoomCameraMeters) as? Double
+        defaultRideZoomCameraMeters = storedDefaultZoom.map { min(max($0, zoomRange.lowerBound), zoomRange.upperBound) }
+            ?? RideConstants.defaultRideZoomCameraMetersDefault
+
+        autoZoomEnabled = defaults.object(forKey: Keys.autoZoomEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.autoZoomEnabled)
+        let boundsRange = RideConstants.autoZoomBoundsRange
+        let storedMin = defaults.object(forKey: Keys.autoZoomMinMeters) as? Double
+        autoZoomMinMeters = storedMin.map { min(max($0, boundsRange.lowerBound), boundsRange.upperBound) }
+            ?? RideConstants.autoZoomMinMetersDefault
+        let storedMax = defaults.object(forKey: Keys.autoZoomMaxMeters) as? Double
+        autoZoomMaxMeters = storedMax.map { min(max($0, boundsRange.lowerBound), boundsRange.upperBound) }
+            ?? RideConstants.autoZoomMaxMetersDefault
     }
 }
