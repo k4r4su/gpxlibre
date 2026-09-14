@@ -73,6 +73,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var lastRecordedDate: Date?
     @Published private(set) var isRecordingPaused = false
 
+    /// Guidage arrêté (spec "stop-guidance-semantics", it14, Bloc 3) — DISTINCT de
+    /// `isRecordingPaused` ci-dessus (jamais touché par Stop désormais, l'enregistrement
+    /// continue toujours en arrière-plan). Masque roadbook/bannières de guidage (voir RideView)
+    /// sans rien arrêter d'autre : trace, vitesse, carte restent affichées, on reste en vue
+    /// Ride. Levé automatiquement par une nouvelle sélection de trace (start/switchMode) ou un
+    /// recentrage manuel explicite (recenterCamera()), ou via l'icône "reprendre" discrète.
+    @Published private(set) var isGuidanceStopped = false
+    private let stopGuidanceHapticGenerator = UINotificationFeedbackGenerator()
+
     // MARK: - Aller à universel (Bloc 4) — guidage PARALLÈLE, jamais un remplacement de la
     // trace sacrée ni de la route Nav principale. Fonctionne en Mode Trace ET Mode Nav.
     @Published private(set) var goToGuidance: GoToGuidance?
@@ -177,6 +186,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         manualZoomDistanceMeters = nil
         lastManualGestureDate = nil
         cameraCommandToken = UUID()
+        // Spec "stop-guidance-semantics" (it14, Bloc 3) : "Reprendre = ... le bouton cible/
+        // recenter si un guidage était actif" — un recentrage explicite relance le guidage
+        // arrêté, pas seulement la caméra.
+        isGuidanceStopped = false
     }
 
     var currentCheckpoint: Checkpoint? {
@@ -214,12 +227,16 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     func start(track: GPXTrack?) {
         self.track = track
         isActive = true
+        // Spec "stop-guidance-semantics" (it14, Bloc 3) : "Reprendre = tap de nouvelle trace" —
+        // un vrai (re)démarrage relance toujours un guidage précédemment arrêté.
+        isGuidanceStopped = false
         speedSamples.removeAll()
         fastSpeedSustainedSince = nil
         currentBucketIndex = 0
         rideContext = .normal
         hapticGenerator.prepare()
         detourClearedHapticGenerator.prepare()
+        stopGuidanceHapticGenerator.prepare()
 
         if let track {
             trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
@@ -341,6 +358,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         manager.stopUpdatingLocation()
         UIApplication.shared.isIdleTimerDisabled = false
         detourTask?.cancel()
+        isGuidanceStopped = false
         track = nil
         checkpoints = []
         currentCheckpointIndex = 0
@@ -1105,15 +1123,28 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         goToDistanceRemainingMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, guidance.destinationCoordinate)
     }
 
-    /// Stop universel, visible en Mode Trace ET Mode Nav : état propre en 1 geste
-    /// (confirmation portée par l'appelant, voir RideView). N'efface JAMAIS la trace chargée
-    /// — seulement les guidages actifs (Nav, Aller à, détour) et la caméra forcée (2D).
-    /// L'enregistrement est mis en pause ; l'appelant propose l'export si > 1 km.
+    /// Stop universel, visible en Mode Trace ET Mode Nav (spec "stop-guidance-semantics", it14,
+    /// Bloc 3, sémantique CONFIRMÉE) : arrête IMMÉDIATEMENT le guidage actif (Nav, Aller à,
+    /// détour, roadbook/bannières via `isGuidanceStopped`) — la trace reste affichée, la
+    /// vitesse reste affichée, on reste en vue Ride. Ne touche JAMAIS l'enregistrement GPS en
+    /// cours : le tracking continue silencieusement, seul le GUIDAGE s'interrompt (avant it14,
+    /// Stop mettait `isRecordingPaused` à true — contraire à la nouvelle consigne explicite
+    /// "NE PAS fermer la session de tracking record"). Confirmation haptique portée ici ; le
+    /// toast "Guidage arrêté" est déclenché côté RideView (composant visuel, pas d'état
+    /// session).
     func stopGuidance() {
         stopNav()
         stopGoTo()
         cancelDetour()
-        isRecordingPaused = true
+        isGuidanceStopped = true
+        stopGuidanceHapticGenerator.notificationOccurred(.success)
+    }
+
+    /// Relance un guidage arrêté (spec Bloc 3) — icône "reprendre" discrète dans la colonne de
+    /// contrôles, visible uniquement si une trace reste sélectionnée et que le guidage est à
+    /// l'arrêt (voir RideView).
+    func resumeGuidanceAfterStop() {
+        isGuidanceStopped = false
     }
 
     private func requestNavRoute() {

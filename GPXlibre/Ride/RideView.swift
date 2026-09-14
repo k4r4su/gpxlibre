@@ -24,6 +24,7 @@ struct RideView: View {
     @State private var pendingGoToLabel = ""
     @State private var showGoToActionSheet = false
     @State private var showStopConfirmation = false
+    @State private var toastMessage: String?
     @Environment(\.colorScheme) private var colorScheme
 
     /// "OSM standard" (item #10, défaut) = automatique, suit le mode sombre système (lui-même
@@ -86,6 +87,10 @@ struct RideView: View {
     /// désormais porté par la bannière LATÉRALE (spec "lateral-cap-banner-countdown", it12,
     /// voir lateralCapBannerLayer) — isolée de ce calcul par construction, donc absente d'ici.
     private func hasDirectionPanel(track: GPXTrack?) -> Bool {
+        // Spec "stop-guidance-semantics" (it14, Bloc 3) : "roadbook et bannières de guidage se
+        // retirent" pendant un guidage arrêté — la détection hors-trace continue de tourner en
+        // arrière-plan (session.isOffTrackPaused), seul l'AFFICHAGE se tait.
+        guard !session.isGuidanceStopped else { return false }
         switch modeStore.mode {
         case .trace: return session.isOffTrackPaused
         case .nav: return session.navRoute != nil
@@ -257,7 +262,7 @@ struct RideView: View {
     /// par la bannière latérale, voir lateralCapBannerLayer et hasDirectionPanel ci-dessus).
     @ViewBuilder
     private var directionPanelLayer: some View {
-        if modeStore.mode == .trace, session.isOffTrackPaused, let offTrackInfo = offTrackPanelInfo {
+        if modeStore.mode == .trace, !session.isGuidanceStopped, session.isOffTrackPaused, let offTrackInfo = offTrackPanelInfo {
             RoadbookPanelView(offTrackInfo: offTrackInfo)
         }
         if modeStore.mode == .nav, session.navRoute != nil {
@@ -345,6 +350,23 @@ struct RideView: View {
                 if session.isManualOverrideActive {
                     RideRecenterButton { session.recenterCamera() }
                 }
+                // Spec "stop-guidance-semantics" (it14, Bloc 3) : "un état guidage arrêté
+                // affiche l'icône play discret... pour relancer si une trace reste selected."
+                if session.isGuidanceStopped, library.activeTrack != nil {
+                    Button {
+                        session.resumeGuidanceAfterStop()
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: RideConstants.glovedTapTargetSize, height: RideConstants.glovedTapTargetSize)
+                            .background(.green.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .accessibilityLabel("Reprendre le guidage")
+                    .longPressTooltip("Reprendre le guidage")
+                    .transition(.scale.combined(with: .opacity))
+                }
                 if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
                     LateralCapBannerView(
                         direction: inflection.direction,
@@ -364,6 +386,7 @@ struct RideView: View {
             }
             .frame(width: 92)
             .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
+            .animation(.easeInOut(duration: 0.2), value: session.isGuidanceStopped)
             .animation(.ridePanel, value: isLateralBannerVisible)
             .padding(settings.controlsSide == .right ? .trailing : .leading, 20)
             .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
@@ -413,6 +436,7 @@ struct RideView: View {
     /// pushes").
     private var isLateralBannerVisible: Bool {
         modeStore.mode == .trace
+            && !session.isGuidanceStopped
             && !session.isOffTrackPaused
             && session.currentInflection != nil
             && (session.distanceToCurrentInflectionMeters ?? .infinity) <= RideConstants.bannerAlertStartMeters
@@ -492,8 +516,9 @@ struct RideView: View {
             Button("Arrêter", role: .destructive) { commitStop() }
             Button("Continuer", role: .cancel) {}
         } message: {
-            Text("La caméra se libère et les panneaux se masquent. L'enregistrement en cours est mis en pause.")
+            Text("La trace reste affichée et l'enregistrement continue — seuls le roadbook et les bannières de guidage se retirent.")
         }
+        .rideToast(message: toastMessage)
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
                 trackName: track?.name ?? "Sortie Nav",
@@ -561,15 +586,15 @@ struct RideView: View {
         }
     }
 
-    /// Stop universel (spec Bloc 4) : état propre en 1 geste (confirmation déjà passée),
-    /// propose l'export seulement si plus d'1 km a été enregistré.
+    /// Stop universel (spec "stop-guidance-semantics", it14, Bloc 3, sémantique confirmée) :
+    /// arrête le guidage en 1 geste (confirmation déjà passée), reste en vue Ride, trace et
+    /// vitesse restent affichées, enregistrement jamais interrompu. Ne propose PLUS l'export
+    /// automatiquement (avant it14 : si > 1 km) — Stop n'est plus "terminer la sortie", cette
+    /// action reste distincte et déjà accessible via le panneau de stats (RideStatsPanel.
+    /// onEndRide), inchangé.
     private func commitStop() {
-        let distance = session.recordedDistanceMeters
         session.stopGuidance()
-        is2DNorthUp = false
-        if distance > 1000 {
-            showEndRideSheet = true
-        }
+        toastMessage = "Guidage arrêté"
     }
 
     /// Spec Bloc 5 : pill d'alerte si la trace chargée passe à moins de 300 m d'un point
