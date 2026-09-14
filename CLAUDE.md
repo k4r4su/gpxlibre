@@ -93,7 +93,8 @@ GPXlibre/
                    itération future, après la trace door-to-door.
   Offline/        Téléchargement de tuiles raster par région, cache, précalcul de taille ;
                    VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
-                   régionaux (import/téléchargement, un seul actif à la fois)
+                   régionaux (import/téléchargement, un seul actif à la fois). Voir section
+                   "Compter avant d'énumérer" (bbox de tuiles) plus bas — piège vécu, it16.
   Waypoints/      RollingWaypoint(Store) — sert uniquement à "Signaler" (Nav) depuis it10 ;
                    le bouton "Point" (POI rapide Essence/Eau/Bivouac) a été supprimé pour de
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
@@ -308,6 +309,25 @@ la carte pour que `.primary`/`.secondary` restent clairs dessus quel que soit le
 — même patron que RideStatsBadge/Panel pour un calque posé sur la carte. Réservé à CES 3
 sheets précisément ; un réglage administratif classique (nom/version...) reste en sheet opaque
 standard — ne pas généraliser sans qu'une spec future le demande.
+
+## Compter avant d'énumérer : bbox de tuiles (fix "region-picker-huge-bbox-crash", it16)
+
+Piège vécu (crash terrain réel, pas théorique) : `RegionPickerMapView` (MLNMapView) démarre
+SANS caméra initiale — MapLibre part alors en vue "monde" (zoom ~0), et le tout premier
+`visibleCoordinateBounds` rapporté peut couvrir la planète entière AVANT que l'utilisateur
+n'ait pu cadrer sa vraie zone. `RegionDownloadView.updateEstimate()` énumérait directement
+cette zone jusqu'au zoom max (`TileCoordinate.tiles`, deux boucles imbriquées) sur le thread
+principal — pour une bbox quasi mondiale, ça représente des milliards d'éléments, thread
+bloqué jusqu'à ce que le watchdog iOS tue l'app (~10 s d'absence de réponse).
+
+Règle à appliquer PARTOUT où une bbox géographique arbitraire (pas une bbox déjà bornée par un
+tracé réel, comme `CorridorPrecacheEstimator`) pilote une énumération de tuiles : calculer
+D'ABORD le COMPTE en O(1) (`TileCoordinate.tileCount`, arithmétique de plage sur
+topLeft/bottomRight, jamais de boucle) et comparer à un plafond dur
+(`OfflineConstants.regionTileCountHardCap`) AVANT d'appeler `tiles(...)` qui matérialise la
+liste réelle. Donner une caméra initiale raisonnable à une carte de sélection est un confort,
+PAS une protection suffisante — un utilisateur peut toujours pincer manuellement jusqu'au zoom
+monde, le garde-fou de compte reste la seule protection qui couvre tous les cas.
 
 ## Règles absolues (non négociables, violées = régression critique)
 

@@ -1,5 +1,40 @@
 # TODO
 
+## Itération 16 (corrections terrain — retours de tests tactiles réels du propriétaire)
+
+Six bugs remontés par un vrai passage terrain sur les fonctionnalités it14/it15 (checklist de
+10 tests tactiles proposée, tous exécutés côté propriétaire — la toute première fois que ces
+fonctionnalités étaient réellement touchées du doigt depuis leur écriture) :
+
+- `fix:"region-picker-huge-bbox-crash"` — **crash confirmé**, le plus critique des six : bouton
+  "Cartes hors-ligne" plantait l'app après ~10 s (main thread bloqué à énumérer une bbox
+  quasi mondiale). Voir CLAUDE.md, section "Compter avant d'énumérer".
+- `fix:"settings-segmented-picker-missing-title"` — "Position contrôles" (et "Épaisseur",
+  même bug) sans titre visible, `.pickerStyle(.segmented)` masque le label par défaut.
+- `fix:"settings-preview-panel-hides-anchor-dot"` — le panneau de réglage Position point bleu
+  cachait son propre indicateur de position (ancré en bas, comme l'ancre à 75 %).
+- `fix:"pause-stop-indistinguishable"` — Pause et Stop défini (it15, Bloc 3) étaient
+  impossibles à distinguer à l'usage (même absence de signal visuel/toast, haptique seule
+  trop discrète) — toast dédié ajouté sur les deux chemins.
+- `fix:"end-ride-default-name"` — la trace enregistrée en fin de sortie reprenait le nom de la
+  trace suivie À L'IDENTIQUE, impossible à distinguer de l'originale une fois dans Biblio ;
+  nom désormais éditable, préempli "<nom trace> – <date du jour>".
+- `fix:"debug-replay-erratic-speed"` — le mode replay debug (jamais exercé avant ce round)
+  avançait de façon erratique ("un oiseau qui vole au-dessus de la trace"), intervalle fixe
+  par point indépendant de la distance réelle — corrigé en dérivant le délai de la distance à
+  vitesse simulée constante.
+
+**Confirmés fonctionnels sans changement** (mêmes 10 tests) : colonne contrôles gauche/droite
+live (bien qu'ayant révélé le bug de titre manquant), slider Position point bleu, zoom par
+défaut persistant après kill+relance de l'app, tri Biblio par date (plus récente en tête,
+confirmé visuellement).
+
+**Toujours pas vérifié** (pas de trajet réel possible au moment du test) : hors-trace
+hystérésis en conditions réelles, paliers roadbook (icônes par sévérité + flash 100 m) — le
+mode replay debug qui aurait dû permettre de les valider sans sortir avait lui-même un bug
+(voir `debug-replay-erratic-speed` ci-dessus), donc ni l'un ni l'autre n'a pu être confirmé ce
+tour-ci. À reprendre maintenant que le replay est corrigé.
+
 ## Itération 15 (horodatage traces Biblio / sheets translucides / Stop↔Pause/Play toggle)
 
 - **Vérification de cette itération** : builds simulateur + device (compile-only) + suite de
