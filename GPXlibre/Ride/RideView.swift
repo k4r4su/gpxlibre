@@ -390,7 +390,7 @@ struct RideView: View {
                 } else {
                     RideGuidanceToggleButton(
                         isStopped: session.isGuidanceStopped,
-                        onPause: { session.pauseGuidance() },
+                        onPause: commitPause,
                         onResume: { session.resumeGuidanceAfterStop() },
                         onDefiniteStop: commitStop
                     )
@@ -610,6 +610,16 @@ struct RideView: View {
         } else {
             session.startGoTo(to: coordinate, label: label, profile: profile)
         }
+    }
+
+    /// Fix "pause-stop-indistinguishable" (bug terrain, it16) : Pause et Stop défini menaient
+    /// tous les deux au même état visuel silencieux (roadbook/bannière disparaissent, aucun
+    /// autre signal) — un pilote ne pouvait pas dire lequel des deux venait de se déclencher.
+    /// Toast dédié désormais sur CHAQUE chemin, texte distinct (Stop garde "Guidage arrêté",
+    /// inchangé) — seule la présentation diffère, l'état isGuidanceStopped reste identique.
+    private func commitPause() {
+        session.pauseGuidance()
+        toastMessage = "Guidage en pause"
     }
 
     /// Stop universel (spec "stop-guidance-semantics", it14, Bloc 3, sémantique confirmée) :

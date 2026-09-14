@@ -1095,7 +1095,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// Pause légère (spec "guidance-toggle-stop-pause-play", it15, Bloc 3, tap court sur le
     /// bouton toggle unique) — MÊME état résultant que `stopGuidance()` (`isGuidanceStopped`,
     /// réversible sans reset via `resumeGuidanceAfterStop()`), mais haptique légère au lieu de
-    /// forte et PAS de toast côté RideView : une pause de routine, pas une confirmation d'arrêt.
+    /// forte. Toast dédié "Guidage en pause" côté RideView (`commitPause()`, distinct du "Guidage
+    /// arrêté" du Stop défini) depuis le fix "pause-stop-indistinguishable" (bug terrain, it16) —
+    /// les deux états étaient auparavant indiscernables à l'écran.
     func pauseGuidance() {
         haltActiveGuidance()
         pauseGuidanceHapticGenerator.impactOccurred()
