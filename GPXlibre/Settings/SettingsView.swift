@@ -124,12 +124,20 @@ struct SettingsView: View {
                 // "Réglages > Apparence > Position contrôles") — regroupe désormais aussi le
                 // côté de la colonne de contrôles Ride, pas seulement le rendu de la trace.
                 Section("Apparence") {
-                    Picker("Épaisseur", selection: $settings.traceWidthPreset) {
-                        ForEach(TraceWidthPreset.allCases) { preset in
-                            Text(preset.label).tag(preset)
+                    // Fix "settings-segmented-picker-missing-title" (bug terrain, it16) :
+                    // .pickerStyle(.segmented) masque le titre du Picker par défaut (contrairement
+                    // au style menu utilisé pour "Couleur" juste en dessous) — sans Text explicite
+                    // au-dessus, impossible de deviner à quoi correspondent les segments.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Épaisseur").font(.subheadline)
+                        Picker("Épaisseur", selection: $settings.traceWidthPreset) {
+                            ForEach(TraceWidthPreset.allCases) { preset in
+                                Text(preset.label).tag(preset)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.segmented)
 
                     Picker("Couleur", selection: $settings.traceColorPreset) {
                         ForEach(TraceColorPreset.allCases) { preset in
@@ -142,13 +150,17 @@ struct SettingsView: View {
                         }
                     }
 
-                    Picker("Position contrôles", selection: $settings.controlsSide) {
-                        ForEach(ControlsSide.allCases) { side in
-                            Text(side.label).tag(side)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Position contrôles").font(.subheadline)
+                        Picker("Position contrôles", selection: $settings.controlsSide) {
+                            ForEach(ControlsSide.allCases) { side in
+                                Text(side.label).tag(side)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .longPressTooltip("Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté")
                     }
-                    .pickerStyle(.segmented)
-                    .longPressTooltip("Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté")
                 }
 
                 Section("Écran") {
