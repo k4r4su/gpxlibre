@@ -36,8 +36,8 @@ final class DebugReplayDriver: ObservableObject {
         // d'un état propre, y compris si une autre trace était en cours.
         session.start(track: track)
 
-        let interval = NavigationConstants.debugReplayBaseIntervalSeconds / max(speedMultiplier, 0.01)
         let points = track.points
+        let metersPerSecond = Self.simulatedSpeedKmh / 3.6
 
         task = Task { [weak self] in
             for index in points.indices {
@@ -58,7 +58,18 @@ final class DebugReplayDriver: ObservableObject {
                 )
                 self.currentPointIndex = index
                 session.handle(location: location)
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+
+                // Fix "debug-replay-erratic-speed" (bug terrain, it16) : délai proportionnel à
+                // la distance RÉELLE jusqu'au point suivant (à vitesse simulée constante) au
+                // lieu d'un intervalle fixe par point — sinon les points GPX bruts, espacés très
+                // irrégulièrement, donnaient un point bleu erratique ("un oiseau qui vole").
+                if index < points.count - 1 {
+                    let distanceToNext = RoadbookAnalyzer.distanceMeters(point.coordinate, points[index + 1].coordinate)
+                    let travelSeconds = distanceToNext / metersPerSecond
+                    let boundedSeconds = min(max(travelSeconds, NavigationConstants.debugReplayMinStepSeconds), NavigationConstants.debugReplayMaxStepSeconds)
+                    let waitSeconds = boundedSeconds / max(speedMultiplier, 0.01)
+                    try? await Task.sleep(nanoseconds: UInt64(waitSeconds * 1_000_000_000))
+                }
             }
             self?.isPlaying = false
         }

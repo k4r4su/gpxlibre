@@ -38,8 +38,15 @@ enum NavigationConstants {
 
     /// Multiplicateurs de vitesse de rejeu disponibles.
     static let debugReplaySpeedMultipliers: [Double] = [4, 8]
-    /// Intervalle (s) entre deux points rejoués à vitesse ×1 — les points de la trace n'ont pas
-    /// d'horodatage fiable (GPX importé), donc un intervalle FIXE est simulé puis divisé par le
-    /// multiplicateur, plutôt que de dépendre d'un `time` GPX souvent absent/faux.
-    static let debugReplayBaseIntervalSeconds: Double = 1.0
+
+    /// Fix "debug-replay-erratic-speed" (bug terrain, it16) : le rejeu utilisait un délai FIXE
+    /// entre deux points bruts — or les points GPX sont espacés très irrégulièrement (parfois
+    /// 3 m, parfois 300 m), ce qui donnait un point bleu erratique en replay ("un oiseau qui
+    /// vole au-dessus de la trace"). Le délai entre deux points est désormais dérivé de leur
+    /// distance réelle à vitesse simulée constante (`DebugReplayDriver.simulatedSpeedKmh`) —
+    /// ces deux bornes évitent les deux excès opposés : une rafale d'appels quasi instantanés
+    /// sur des points très rapprochés (min), ou un blocage visible plusieurs secondes sur un
+    /// grand trou de la trace (max).
+    static let debugReplayMinStepSeconds: Double = 0.05
+    static let debugReplayMaxStepSeconds: Double = 3.0
 }
