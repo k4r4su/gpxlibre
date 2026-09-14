@@ -218,6 +218,19 @@ enum RideConstants {
     /// Cible tactile minimale recommandée pour une utilisation gantée.
     static let glovedTapTargetSize: Double = 56
 
+    // MARK: - Bouton guidage (spec "guidance-toggle-stop-pause-play", it15, Bloc 3)
+
+    /// GUIDANCE_BUTTON_MODE : `.toggle` (défaut) = un seul bouton Pause↔Play, Stop défini
+    /// accessible via menu contextuel (appui long) — voir `RideGuidanceToggleButton`.
+    /// `.twoButtons` = comportement it14 conservé tel quel (Stop + icône Play séparée
+    /// empilés), gardé derrière ce flag comme filet de secours si le toggle unique s'avère
+    /// mal compris sur le terrain — voir `RideView.bottomControlsColumn`.
+    enum GuidanceButtonMode {
+        case toggle
+        case twoButtons
+    }
+    static let guidanceButtonMode: GuidanceButtonMode = .toggle
+
     // MARK: - Bannière latérale cap + countdown (spec "lateral-cap-banner-countdown", it12)
     //
     // Le SEUIL/la FENÊTRE de détection de "quand un point devient un événement" a déménagé

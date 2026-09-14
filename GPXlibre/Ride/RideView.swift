@@ -336,8 +336,9 @@ struct RideView: View {
     /// Colonne de contrôles (fix "overlay-layout-grid", Bug 3 ; côté réglable depuis spec
     /// "controls-side-setting", it14, Bloc 2) : ANCRÉE EN BAS (au-dessus de la tab bar, jamais
     /// au centre) — ordre figé : Me recentrer, bannière roadbook (empilée au-dessus des boutons
-    /// de zoom, spec Bloc 2), +, −, Stop, Bloqué/Signaler, espacés uniformément de 12 pt. Le
-    /// badge vitesse (`speedoBadgeLayer`) permute TOUJOURS du côté opposé (voir
+    /// de zoom, spec Bloc 2), +, −, Pause↔Play (Stop défini en menu contextuel, spec
+    /// "guidance-toggle-stop-pause-play", it15, Bloc 3), Bloqué/Signaler, espacés uniformément
+    /// de 12 pt. Le badge vitesse (`speedoBadgeLayer`) permute TOUJOURS du côté opposé (voir
     /// `RideSettingsStore.controlsSide`) — jamais de chevauchement possible, les deux zones
     /// bougent ensemble. Largeur FIXE (92 pt, celle de la bannière) : l'apparition/disparition
     /// de la bannière ne doit jamais faire bouger horizontalement les boutons en dessous.
@@ -350,9 +351,12 @@ struct RideView: View {
                 if session.isManualOverrideActive {
                     RideRecenterButton { session.recenterCamera() }
                 }
-                // Spec "stop-guidance-semantics" (it14, Bloc 3) : "un état guidage arrêté
-                // affiche l'icône play discret... pour relancer si une trace reste selected."
-                if session.isGuidanceStopped, library.activeTrack != nil {
+                // Spec "stop-guidance-semantics" (it14, Bloc 3), comportement à 2 boutons
+                // empilés conservé derrière le feature-flag GUIDANCE_BUTTON_MODE (filet de
+                // secours it15, Bloc 3) : "un état guidage arrêté affiche l'icône play discret
+                // ... pour relancer si une trace reste selected."
+                if RideConstants.guidanceButtonMode == .twoButtons,
+                   session.isGuidanceStopped, library.activeTrack != nil {
                     Button {
                         session.resumeGuidanceAfterStop()
                     } label: {
@@ -378,7 +382,19 @@ struct RideView: View {
                     .transition(.ridePanel)
                 }
                 RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
-                RideStopButton { showStopConfirmation = true }
+                // Spec "guidance-toggle-stop-pause-play" (it15, Bloc 3) : bouton unique par
+                // défaut (Pause↔Play, Stop défini en menu contextuel) — remplace l'empilement
+                // Stop + Play séparé, jugé trop lourd visuellement en test terrain.
+                if RideConstants.guidanceButtonMode == .twoButtons {
+                    RideStopButton { showStopConfirmation = true }
+                } else {
+                    RideGuidanceToggleButton(
+                        isStopped: session.isGuidanceStopped,
+                        onPause: { session.pauseGuidance() },
+                        onResume: { session.resumeGuidanceAfterStop() },
+                        onDefiniteStop: commitStop
+                    )
+                }
                 if modeStore.mode == .trace {
                     BlockedPathButton { showDetourConfirmation = true }
                 } else {
