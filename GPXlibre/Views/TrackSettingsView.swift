@@ -18,19 +18,6 @@ struct TrackSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    // Fix "remove-start-choice" (it14, Bloc 10) : plus de sélection tactile de
-                    // départ ici (voir plus bas) — cet aperçu reste un simple aperçu, pas
-                    // interactif.
-                    TrackMapView(
-                        track: track,
-                        currentLocation: nil,
-                        traceAppearance: previewAppearance
-                    )
-                    .frame(height: 220)
-                    .listRowInsets(EdgeInsets())
-                }
-
-                Section {
                     // Fix "single-source-active-track" (Bloc 1, it10) : second point d'entrée
                     // pour le même état que l'icône de la ligne Biblio — jamais un état
                     // parallèle, toujours library.setActive/setDisplayed.
@@ -50,28 +37,20 @@ struct TrackSettingsView: View {
                 }
 
                 Section {
-                    // Miniature directionnelle (spec "biblio-preview-direction", it11) : pure
-                    // géométrie en mémoire (track.reordered, déjà pur), se redessine à chaque
-                    // bascule du Picker ci-dessous sans rescan GPS — voir TrackThumbnailView.
-                    TrackThumbnailView(
-                        track: reorderedTrack,
-                        appearance: previewAppearance,
-                        chevronSpacingMeters: localSettings.chevronSpacingMeters,
-                        isReversed: localSettings.isReversed
+                    // Fiche trace fusionnée (spec "trace-fiche-map-ab-markers", it17, Bloc 5) :
+                    // une seule carte (même cartographie vectorielle que la Ride map) avec
+                    // chevrons agrandis + repères A/B, remplace l'ancien duo TrackMapView
+                    // (aperçu MapKit séparé, retiré ci-dessus) + TrackThumbnailView (diagramme
+                    // Canvas séparé, ci-dessous avant ce bloc). `orderedTrack` = `reorderedTrack`
+                    // (déjà pur, `GPXTrack.reordered(using:)`) : bascule A→B/B→A = pastilles +
+                    // chevrons recalculés instantanément, PAS de rescan GPX.
+                    TrackFicheMapView(
+                        orderedTrack: reorderedTrack,
+                        isReversed: localSettings.isReversed,
+                        traceAppearance: previewAppearance
                     )
-                    .frame(height: 110)
+                    .frame(height: 220)
                     .listRowInsets(EdgeInsets())
-                    // Fix "biblio-direction-live-refresh" (it12), clé étendue par fix
-                    // "thick-label-live-thickness" (it13) : un `Canvas` dans une `Form`/`List`
-                    // peut rester visuellement figé après un changement d'état tant qu'aucun
-                    // scroll/layout ne force le redessin de la cellule hôte. `.id(...)` force
-                    // SwiftUI à recréer la cellule plutôt que de patcher en place — la clé
-                    // d'it12 ne couvrait que sens/départ/espacement, PAS l'override
-                    // épaisseur/couleur (Bloc "Apparence (cette trace)" ci-dessous) : la
-                    // miniature restait donc figée sur l'ancienne épaisseur/couleur après un
-                    // changement, même si `previewAppearance` avait la bonne valeur — même
-                    // classe de bug, simplement pas couverte la première fois.
-                    .id("thumbnail-\(localSettings.isReversed)-\(localSettings.customStartPointIndex ?? -1)-\(localSettings.chevronSpacingMeters)-\(localSettings.widthOverride?.rawValue ?? "global")-\(localSettings.colorOverride?.rawValue ?? "global")")
 
                     if track.isLoop {
                         Label("Boucle détectée — ordre du fichier conservé par défaut", systemImage: "arrow.triangle.2.circlepath")
@@ -91,8 +70,8 @@ struct TrackSettingsView: View {
 
                 // Fix "remove-start-choice" (it14, Bloc 10) : "redondant depuis le toggle
                 // A→B/it12 — retire le contrôle et la logique." Le sélecteur tactile de départ
-                // a disparu (voir TrackMapView, plus interactif) ; seul un bouton de retrait
-                // reste, UNIQUEMENT si une trace a déjà une valeur stockée d'avant ce fix — ne
+                // a disparu ; seul un bouton de retrait reste, UNIQUEMENT si une trace a déjà
+                // une valeur stockée d'avant ce fix — ne
                 // casse pas la persistance existante, mais ne propose plus d'en définir une
                 // nouvelle (le sens A→B/B→A est désormais la SEULE source pour "où ça commence").
                 if localSettings.hasCustomStart {
@@ -149,7 +128,10 @@ struct TrackSettingsView: View {
                 } header: {
                     Text("Chevrons de direction")
                 } footer: {
-                    Text("Petites flèches le long de la trace, orientées selon le sens actif — visibles à partir du zoom 14.")
+                    // Texte mis à jour (it17, Bloc 3, "chevrons-zoom-adaptive") : les chevrons
+                    // ne disparaissent plus en dessous d'un zoom donné, l'espacement choisi ici
+                    // est juste la référence au zoom le plus serré — plus espacés en dézoomant.
+                    Text("Petites flèches le long de la trace, orientées selon le sens actif — cet espacement s'applique au zoom serré, plus espacées en dézoomant.")
                 }
             }
             .navigationTitle("Paramétrer la trace")

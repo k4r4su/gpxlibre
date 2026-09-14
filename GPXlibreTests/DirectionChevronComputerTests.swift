@@ -85,6 +85,37 @@ final class DirectionChevronComputerTests: XCTestCase {
         XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: 2_000, zoomLevel: 9), 5_000, "à zoom large, la table (5 km) dépasse le réglage (2 km) — la table prend le relais")
     }
 
+    // MARK: - Sous-échantillonnage pour la fiche trace (spec "trace-fiche-map-ab-markers", it17, Bloc 5)
+
+    func testEvenlySpacedSubsetLeavesShortListsUnaffected() {
+        let chevrons = (0..<4).map { DirectionChevronComputer.Chevron(coordinate: CLLocationCoordinate2D(latitude: 45, longitude: Double($0) * 0.01), bearingDegrees: 90) }
+        let result = DirectionChevronComputer.evenlySpacedSubset(chevrons, targetCount: 6)
+        XCTAssertEqual(result.count, 4, "en dessous du plafond, la liste reste inchangée")
+    }
+
+    /// Une trace "grande" (des milliers de candidats, simule une longue trace échantillonnée à
+    /// 50 m) doit se réduire exactement à targetCount, sans jamais concentrer le résultat au
+    /// début (spec "quelques chevrons placés équitablement") — couvre aussi la préoccupation
+    /// perf ("sans blocking thread principal pour grande trace") : l'algorithme reste O(n).
+    func testEvenlySpacedSubsetOnALargeCandidateListStaysEvenlyDistributed() {
+        let chevrons = (0..<5000).map { DirectionChevronComputer.Chevron(coordinate: CLLocationCoordinate2D(latitude: 45, longitude: Double($0) * 0.0001), bearingDegrees: 90) }
+        let result = DirectionChevronComputer.evenlySpacedSubset(chevrons, targetCount: 6)
+
+        XCTAssertEqual(result.count, 6)
+        XCTAssertEqual(result.first?.coordinate.longitude, chevrons.first?.coordinate.longitude, "le premier échantillon doit être proche du DÉBUT de la trace")
+        guard let lastResultLongitude = result.last?.coordinate.longitude, let lastChevronLongitude = chevrons.last?.coordinate.longitude else {
+            XCTFail("résultat ou candidats vides de façon inattendue")
+            return
+        }
+        XCTAssertEqual(lastResultLongitude, lastChevronLongitude, accuracy: 0.001, "le dernier échantillon doit être proche de la FIN de la trace")
+    }
+
+    func testEvenlySpacedSubsetHandlesEmptyAndSingleElementLists() {
+        XCTAssertTrue(DirectionChevronComputer.evenlySpacedSubset([], targetCount: 6).isEmpty)
+        let single = [DirectionChevronComputer.Chevron(coordinate: CLLocationCoordinate2D(latitude: 45, longitude: 5), bearingDegrees: 0)]
+        XCTAssertEqual(DirectionChevronComputer.evenlySpacedSubset(single, targetCount: 6).count, 1)
+    }
+
     func testIsLoopDetectsFirstAndLastPointWithin200Meters() {
         let loopPoints = [
             GPXPoint(latitude: 45.0, longitude: 5.0),

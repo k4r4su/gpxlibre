@@ -38,6 +38,28 @@ enum DirectionChevronComputer {
         return max(configuredSpacingMeters, zoomFloorSpacing)
     }
 
+    /// Sous-échantillonne à `targetCount` éléments, à INDICES ÉGALEMENT RÉPARTIS le long de la
+    /// liste déjà ordonnée par parcours de la trace — jamais un simple `prefix`, qui
+    /// concentrerait tout au DÉBUT. Même algorithme que `TrackThumbnailGeometry.capChevrons`
+    /// (it14, Bloc 9), généralisé ici en coordonnées réelles pour la fiche trace (spec
+    /// "trace-fiche-map-ab-markers", it17, Bloc 5) — dupliqué plutôt que partagé avec
+    /// `TrackThumbnailGeometry` (types différents, CGPoint normalisé vs coordonnée réelle) pour
+    /// ne pas toucher un algorithme déjà testé et stable. En dessous du plafond, la liste
+    /// n'a pas assez d'éléments pour poser problème : inchangée telle quelle.
+    static func evenlySpacedSubset(_ chevrons: [Chevron], targetCount: Int) -> [Chevron] {
+        guard chevrons.count > targetCount, targetCount > 0 else { return chevrons }
+        guard targetCount > 1 else { return [chevrons[0]] }
+        let step = Double(chevrons.count - 1) / Double(targetCount - 1)
+        var seenIndices = Set<Int>()
+        var sampled: [Chevron] = []
+        for i in 0..<targetCount {
+            let index = min(Int((Double(i) * step).rounded()), chevrons.count - 1)
+            guard seenIndices.insert(index).inserted else { continue }
+            sampled.append(chevrons[index])
+        }
+        return sampled
+    }
+
     static func chevrons(for points: [GPXPoint], spacingMeters: Double) -> [Chevron] {
         guard points.count > 1, spacingMeters > 0 else { return [] }
         var result: [Chevron] = []
