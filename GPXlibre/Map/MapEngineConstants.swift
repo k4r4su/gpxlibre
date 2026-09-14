@@ -62,11 +62,11 @@ enum MapEngineConstants {
     /// Chevrons de direction par trace (spec "per-track-settings") — un MLNSymbolStyleLayer
     /// unique, données mises à jour par diff (voir RideMapLibreView.updateChevronShape),
     /// jamais reconstruit par frame. `bearing`, propriété par feature, pilote la rotation
-    /// (icon-rotate data-driven), lisible dès le zoom 14.
+    /// (icon-rotate data-driven). Densité adaptative au zoom depuis it17 (Bloc 3, voir
+    /// `DirectionChevronComputer.zoomSpacingTable`) — plus de seuil `minimumZoomLevel` fixe ici.
     static let chevronSourceIdentifier = "direction-chevron-source"
     static let chevronLayerIdentifier = "direction-chevron-layer"
     static let chevronIconName = "direction-chevron-icon"
-    static let chevronMinZoom: Double = 14
 
     // MARK: - Fond vectoriel PMTiles (spec "vector-pmtiles", it11)
 

@@ -57,6 +57,34 @@ final class DirectionChevronComputerTests: XCTestCase {
         XCTAssertEqual(rotated.points.map(\.longitude), [0.002, 0.003, 0.004, 0.000, 0.001])
     }
 
+    // MARK: - Densité adaptative au zoom (spec "chevrons-zoom-adaptive", it17, Bloc 3)
+
+    /// Table zoom → espacement : chaque palier testé en son propre point + juste sous la
+    /// borne suivante, pour couvrir les seuils exacts demandés par la checklist terrain.
+    func testAdaptiveSpacingMatchesEachZoomTierExactly() {
+        let configured: Double = 1 // volontairement très petit : la table doit dominer partout ici
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 18), 100)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 14), 100)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 13), 500)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 12), 500)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 11), 1_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 10), 1_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 9), 5_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 8), 5_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 7), 10_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 5), 10_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 4), 20_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: 0), 20_000)
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: configured, zoomLevel: -3), 20_000, "un zoom négatif ne doit jamais planter/déborder la table")
+    }
+
+    /// Le réglage utilisateur reste la référence tant qu'il est DÉJÀ plus large que le palier
+    /// de zoom courant — jamais resserré par la table (spec : "le plus grand des deux").
+    func testAdaptiveSpacingNeverNarrowerThanConfiguredValue() {
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: 2_000, zoomLevel: 18), 2_000, "à zoom serré, le réglage (2 km) reste plus large que le palier (100 m) — jamais resserré")
+        XCTAssertEqual(DirectionChevronComputer.adaptiveSpacingMeters(configuredSpacingMeters: 2_000, zoomLevel: 9), 5_000, "à zoom large, la table (5 km) dépasse le réglage (2 km) — la table prend le relais")
+    }
+
     func testIsLoopDetectsFirstAndLastPointWithin200Meters() {
         let loopPoints = [
             GPXPoint(latitude: 45.0, longitude: 5.0),

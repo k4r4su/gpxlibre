@@ -115,7 +115,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateNavRouteShape(on: mapView, context: context)
         updateGoToShape(on: mapView, context: context)
         updateResumeShape(on: mapView, context: context)
-        context.coordinator.updateChevronShape(track: track, spacingMeters: chevronSpacingMeters, on: mapView)
+        context.coordinator.updateChevronShape(track: track, configuredSpacingMeters: chevronSpacingMeters, on: mapView)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
         context.coordinator.updateContentInset(
             UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
@@ -380,10 +380,20 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             mapView.contentInset = inset
         }
 
-        /// Chevrons de direction (spec "per-track-settings") : recalculés UNIQUEMENT si la
-        /// trace ou l'espacement a changé (clé trackID+nombre de points+espacement) — jamais
-        /// à chaque frame/update de position (Bloc 6, performance).
-        func updateChevronShape(track: GPXTrack?, spacingMeters: Double, on mapView: MLNMapView) {
+        /// Espacement CONFIGURÉ (réglage par trace, it11) — distinct de `currentChevronSpacing`
+        /// ci-dessus qui stocke l'espacement EFFECTIF (après combinaison avec le zoom, spec
+        /// "chevrons-zoom-adaptive", it17, Bloc 3). Permet à `regionIsChangingWith` de
+        /// recalculer l'effectif à chaque changement de zoom sans redemander à SwiftUI.
+        private var chevronConfiguredSpacingMeters: Double?
+
+        /// Chevrons de direction (spec "per-track-settings" ; densité adaptative au zoom, spec
+        /// "chevrons-zoom-adaptive", it17, Bloc 3) : recalculés UNIQUEMENT si la trace ou
+        /// l'espacement EFFECTIF a changé — jamais à chaque frame/update de position (Bloc 6,
+        /// performance). L'espacement effectif combine le réglage par trace et le zoom courant
+        /// (`DirectionChevronComputer.adaptiveSpacingMeters`, le plus GRAND des deux) — plus
+        /// aucun `minimumZoomLevel` sur la couche (bug corrigé : coupure binaire au zoom 14,
+        /// remplacée par un espacement croissant mais jamais nul).
+        func updateChevronShape(track: GPXTrack?, configuredSpacingMeters: Double, on mapView: MLNMapView) {
             guard let style = mapView.style,
                   let source = style.source(withIdentifier: MapEngineConstants.chevronSourceIdentifier) as? MLNShapeSource
             else { return }
@@ -392,16 +402,23 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 if currentChevronTrack != nil {
                     currentChevronTrack = nil
                     currentChevronSpacing = nil
+                    chevronConfiguredSpacingMeters = nil
                     source.shape = nil
                 }
                 return
             }
 
-            guard track != currentChevronTrack || spacingMeters != currentChevronSpacing else { return }
-            currentChevronTrack = track
-            currentChevronSpacing = spacingMeters
+            chevronConfiguredSpacingMeters = configuredSpacingMeters
+            let effectiveSpacing = DirectionChevronComputer.adaptiveSpacingMeters(
+                configuredSpacingMeters: configuredSpacingMeters,
+                zoomLevel: mapView.zoomLevel
+            )
 
-            let chevrons = DirectionChevronComputer.chevrons(for: track.points, spacingMeters: spacingMeters)
+            guard track != currentChevronTrack || effectiveSpacing != currentChevronSpacing else { return }
+            currentChevronTrack = track
+            currentChevronSpacing = effectiveSpacing
+
+            let chevrons = DirectionChevronComputer.chevrons(for: track.points, spacingMeters: effectiveSpacing)
             let features = chevrons.map { chevron -> MLNPointFeature in
                 let feature = MLNPointFeature()
                 feature.coordinate = chevron.coordinate
@@ -409,6 +426,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 return feature
             }
             source.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
+        /// Redéclenché en continu pendant un pincement/pan (spec "chevrons-zoom-adaptive", it17,
+        /// Bloc 3, "sans saut" demandé par la checklist terrain) — le dedup ci-dessus
+        /// (`effectiveSpacing != currentChevronSpacing`) limite le vrai recalcul aux SEULES
+        /// transitions de palier (table à ~6 valeurs), jamais à chaque frame malgré la fréquence
+        /// d'appel de ce delegate pendant un geste.
+        func mapView(_ mapView: MLNMapView, regionIsChangingWith reason: MLNCameraChangeReason) {
+            guard let track = currentChevronTrack, let configuredSpacing = chevronConfiguredSpacingMeters else { return }
+            updateChevronShape(track: track, configuredSpacingMeters: configuredSpacing, on: mapView)
         }
 
         /// Petit chevron plein pointant vers le HAUT au repos (0°) — `icon-rotate` tourne en
@@ -633,7 +660,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             chevronLayer.iconRotationAlignment = NSExpression(forConstantValue: "map")
             chevronLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
             chevronLayer.iconIgnoresPlacement = NSExpression(forConstantValue: true)
-            chevronLayer.minimumZoomLevel = Float(MapEngineConstants.chevronMinZoom)
+            // Fix "chevrons-zoom-adaptive" (it17, Bloc 3) : PLUS de minimumZoomLevel — c'était
+            // la cause du bug (coupure binaire au zoom 14). La densité (quelles features
+            // existent dans la source) est désormais pilotée par le zoom courant via
+            // updateChevronShape/adaptiveSpacingMeters ; la couche elle-même reste visible à
+            // tout niveau de zoom.
             style.addLayer(chevronLayer)
             chevronLayerRef = chevronLayer
 
