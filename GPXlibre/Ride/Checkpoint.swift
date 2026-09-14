@@ -28,11 +28,13 @@ struct Checkpoint: Identifiable, Hashable {
     let coordinate: CLLocationCoordinate2D
     let turnAngleDegrees: Double
     let direction: TurnDirection
+    /// Palier d'angle (spec "roadbook-angle-buckets-replay", it14, Bloc 4) — pilote l'icône
+    /// affichée (voir RoadbookTier.systemImageName), DISTINCT de `direction` (gauche/droite).
+    let tier: RoadbookTier
     let sequenceIndex: Int
     /// Index dans `GPXTrack.points` d'origine — permet de retrouver la distance cumulée du
     /// checkpoint (`trackCumulativeDistances[sourcePointIndex]`) sans re-projeter sa
-    /// coordonnée sur la trace (spec "resync-hysteresis" : resynchroniser l'index courant
-    /// sans jamais reculer).
+    /// coordonnée sur la trace.
     let sourcePointIndex: Int
 
     static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.id == rhs.id }

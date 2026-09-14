@@ -370,6 +370,7 @@ struct RideView: View {
                 if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
                     LateralCapBannerView(
                         direction: inflection.direction,
+                        tier: inflection.tier,
                         distanceMeters: distance,
                         sequenceIndex: inflection.sequenceIndex,
                         totalCount: session.inflectionPoints.count
@@ -427,9 +428,9 @@ struct RideView: View {
         }
     }
 
-    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) — visible uniquement
-    /// pour une VRAIE inflexion dure (angle cumulé > `bannerInflectionThresholdDegrees` sur
-    /// `bannerInflectionWindowMeters`, voir RoadbookAnalyzer.buildInflectionPoints), à moins de
+    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12 ; détection remplacée
+    /// "roadbook-angle-buckets-replay", it14, voir RoadbookAnalyzer.buildRoadbookEvents et
+    /// Réglages > Roadbook) — visible uniquement pour un événement à moins de
     /// `bannerAlertStartMeters`, et jamais pendant l'alerte "hors trace" (message déjà donné en
     /// haut, pas de double message). N'entre JAMAIS dans `hasDirectionPanel`/
     /// `computeMapInsets` — calque isolé, zéro remontée d'ancre/zoom (fix "overlay-never-
@@ -560,15 +561,24 @@ struct RideView: View {
                 session.switchMode(track: nil)
             }
         }
-        .onChange(of: settings.turnThresholdDegrees) { _ in
+        .onChange(of: settings.turnMergeMinDistanceMeters) { _ in
             session.rebuildCheckpoints()
         }
-        .onChange(of: settings.turnMergeMinDistanceMeters) { _ in
+        // Spec "roadbook-settings-wired" (it14, Bloc 5) : "Chaque changement actif
+        // immédiatement sur la carte (pas de kill)" — un seul .onChange combiné (impossible de
+        // chaîner plus de 2-3 .onChange proprement en SwiftUI) via un flux synthétique.
+        .onChange(of: roadbookSettingsSignature) { _ in
             session.rebuildCheckpoints()
         }
         .onChange(of: settings.keepScreenAwakeInRide) { _ in
             session.applyIdleTimerSetting()
         }
+    }
+
+    /// Combine tous les réglages roadbook en une seule valeur `Equatable` — évite d'empiler 7
+    /// `.onChange` séparés pour le même effet (`session.rebuildCheckpoints()`).
+    private var roadbookSettingsSignature: String {
+        "\(settings.roadbookEnabled)-\(settings.roadbookWindowBeforeMeters)-\(settings.roadbookWindowAfterMeters)-\(settings.roadbookLightThresholdDegrees)-\(settings.roadbookMarkedThresholdDegrees)-\(settings.roadbookHardThresholdDegrees)-\(settings.roadbookUTurnThresholdDegrees)"
     }
 
     /// "Itinéraire ici" en Mode Nav démarre directement le guidage principal (voix +

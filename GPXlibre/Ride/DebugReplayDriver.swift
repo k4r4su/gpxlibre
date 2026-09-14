@@ -1,0 +1,73 @@
+#if DEBUG
+import Foundation
+import CoreLocation
+
+/// Mode debug replay (spec "roadbook-angle-buckets-replay", it14, Bloc 4 : "obligatoire pour
+/// valider les paliers sans sortir en voiture") — rejoue les points d'une trace déjà chargée
+/// comme des fixs GPS synthétiques, à x4/x8, à travers le MÊME `RideSessionManager.handle
+/// (location:)` que le vrai chemin GPS (`locationManager(_:didUpdateLocations:)`) : aucune
+/// logique dupliquée, ce qui est validé ici est exactement ce qui tourne en conduite réelle.
+///
+/// `#if DEBUG` entier (build flag demandé explicitement) : absent des builds Release, aucun
+/// risque qu'un utilisateur final tombe dessus. Accessible depuis Réglages > Avancé (section
+/// déjà repliée par défaut, "menu caché" — voir SettingsView).
+@MainActor
+final class DebugReplayDriver: ObservableObject {
+    @Published private(set) var isPlaying = false
+    @Published private(set) var currentPointIndex = 0
+    @Published private(set) var totalPointCount = 0
+
+    private var task: Task<Void, Never>?
+
+    /// Vitesse simulée constante (km/h) injectée dans chaque fix — juste assez réaliste pour
+    /// alimenter `smoothedSpeedKmh`/`rideContext` sans prétendre reproduire un vrai profil de
+    /// vitesse (hors sujet ici, seul le roadbook est à valider).
+    private static let simulatedSpeedKmh: Double = 45
+
+    func start(track: GPXTrack, speedMultiplier: Double, session: RideSessionManager) {
+        stop()
+        guard track.points.count > 1 else { return }
+        isPlaying = true
+        currentPointIndex = 0
+        totalPointCount = track.points.count
+
+        // Vrai (re)démarrage de session pour CETTE trace, comme RideView.onAppear le ferait —
+        // pas un simple switchMode (spec "camera-mode-stability") : le replay doit repartir
+        // d'un état propre, y compris si une autre trace était en cours.
+        session.start(track: track)
+
+        let interval = NavigationConstants.debugReplayBaseIntervalSeconds / max(speedMultiplier, 0.01)
+        let points = track.points
+
+        task = Task { [weak self] in
+            for index in points.indices {
+                guard !Task.isCancelled else { break }
+                guard let self else { return }
+                let point = points[index]
+                let heading = index < points.count - 1
+                    ? RoadbookAnalyzer.bearing(from: point.coordinate, to: points[index + 1].coordinate)
+                    : (index > 0 ? RoadbookAnalyzer.bearing(from: points[index - 1].coordinate, to: point.coordinate) : 0)
+                let location = CLLocation(
+                    coordinate: point.coordinate,
+                    altitude: point.elevation ?? 0,
+                    horizontalAccuracy: 5,
+                    verticalAccuracy: 5,
+                    course: heading,
+                    speed: Self.simulatedSpeedKmh / 3.6,
+                    timestamp: Date()
+                )
+                self.currentPointIndex = index
+                session.handle(location: location)
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+            self?.isPlaying = false
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+        isPlaying = false
+    }
+}
+#endif

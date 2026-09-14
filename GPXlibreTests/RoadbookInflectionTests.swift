@@ -2,14 +2,11 @@ import XCTest
 import CoreLocation
 @testable import GPXlibre
 
-/// Vérifie `RoadbookAnalyzer.buildInflectionPoints` (spec "lateral-cap-banner-countdown",
-/// it12) — en particulier le cas qui motive cette fonction séparée de `buildCheckpoints` :
-/// un virage progressif ("naturel") dont AUCUN point isolé ne dépasse le seuil ponctuel du
-/// roadbook, mais qui tourne net sur sa fenêtre glissante.
+/// Vérifie `RoadbookAnalyzer.buildRoadbookEvents` (spec "roadbook-angle-buckets-replay", it14,
+/// Bloc 4 — roadbook rebuilt from scratch, REMPLACE buildCheckpoints/buildInflectionPoints) :
+/// la mesure de tangente sur fenêtre avant/après, et la segmentation en paliers d'angle.
 final class RoadbookInflectionTests: XCTestCase {
-    /// Déplace un point d'un cap/distance donné (formule de destination great-circle) — les
-    /// tests existants (DirectionChevronComputerTests) construisent leurs traces par simples
-    /// décalages de longitude ; une courbe a besoin d'un vrai calcul de destination par cap.
+    /// Déplace un point d'un cap/distance donné (formule de destination great-circle).
     private func destination(from coordinate: CLLocationCoordinate2D, bearingDegrees: Double, distanceMeters: Double) -> CLLocationCoordinate2D {
         let earthRadius = 6_371_000.0
         let bearing = bearingDegrees * .pi / 180
@@ -36,68 +33,75 @@ final class RoadbookInflectionTests: XCTestCase {
         return GPXTrack(id: UUID(), name: "Courbe", fileName: "courbe.gpx", importDate: Date(), points: points, waypoints: [])
     }
 
-    /// Cœur de la feature : 10 segments de 20 m, 6° de cap gagnés à chaque segment — delta
-    /// ponctuel (~12° avec un lissage ±20 m) largement sous le seuil roadbook par défaut (35°,
-    /// `buildCheckpoints` ne détecte donc RIEN ici), mais 60° cumulés sur les ~150 m de fenêtre
-    /// — exactement le cas "virage naturel dur" que la bannière latérale doit couvrir.
-    func testGradualCurveBelowPerPointThresholdStillTriggersCumulatively() {
-        let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 20, segmentTurnDegrees: 6)
-
-        let checkpoints = RoadbookAnalyzer.buildCheckpoints(
+    private func events(for track: GPXTrack, mergeMinDistanceMeters: Double = 50) -> [Checkpoint] {
+        RoadbookAnalyzer.buildRoadbookEvents(
             for: track,
-            turnThresholdDegrees: RideConstants.turnThresholdDegreesDefault
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: mergeMinDistanceMeters
         )
-        XCTAssertTrue(checkpoints.isEmpty, "le seuil ponctuel du roadbook ne doit rien détecter sur une courbe aussi progressive")
-
-        let inflections = RoadbookAnalyzer.buildInflectionPoints(
-            for: track,
-            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
-            windowMeters: RideConstants.bannerInflectionWindowMeters,
-            mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault
-        )
-        XCTAssertFalse(inflections.isEmpty, "l'angle cumulé sur la fenêtre glissante doit déclencher une inflexion")
-        XCTAssertEqual(inflections.first?.direction, .right, "cap croissant = virage à droite")
     }
 
-    /// Une vraie "split" nette (tout l'angle dans un petit sous-segment) doit aussi déclencher —
-    /// la fenêtre glissante ne doit pas "diluer" un virage déjà net.
-    func testSharpSplitAlsoTriggersAnInflection() {
-        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 30, segmentTurnDegrees: 70)
-
-        let inflections = RoadbookAnalyzer.buildInflectionPoints(
-            for: track,
-            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
-            windowMeters: RideConstants.bannerInflectionWindowMeters,
-            mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault
-        )
-        XCTAssertFalse(inflections.isEmpty)
+    /// Cœur de la feature (hérité de "lateral-cap-banner-countdown", it12) : un virage
+    /// progressif ("naturel") dont l'angle PAR SEGMENT est faible, mais qui tourne net sur la
+    /// fenêtre avant/après complète, doit être détecté — 10 segments de 20 m à 8°, 80° cumulés
+    /// sur 200 m, bien au-delà de ce qu'un seuil ponctuel ±20 m capterait.
+    func testGradualCurveDetectedViaWindow() {
+        let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 20, segmentTurnDegrees: 8)
+        let result = events(for: track)
+        XCTAssertFalse(result.isEmpty, "l'angle mesuré sur la fenêtre avant/après doit détecter cette courbe progressive")
+        XCTAssertEqual(result.first?.direction, .right, "cap croissant = virage à droite")
     }
 
-    /// Une trace parfaitement droite ne doit jamais produire d'inflexion.
-    func testStraightTrackProducesNoInflections() {
+    /// Une vraie "split" nette (tout l'angle en un point) doit aussi déclencher.
+    func testSharpSplitAlsoTriggersAnEvent() {
+        let track = curvingTrack(segmentCount: 4, segmentLengthMeters: 30, segmentTurnDegrees: 70)
+        XCTAssertFalse(events(for: track).isEmpty)
+    }
+
+    /// Une trace parfaitement droite ne doit jamais produire d'événement.
+    func testStraightTrackProducesNoEvents() {
         let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 50, segmentTurnDegrees: 0)
-        let inflections = RoadbookAnalyzer.buildInflectionPoints(
-            for: track,
-            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
-            windowMeters: RideConstants.bannerInflectionWindowMeters,
-            mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault
-        )
-        XCTAssertTrue(inflections.isEmpty)
+        XCTAssertTrue(events(for: track).isEmpty)
     }
 
-    /// Deux candidats trop rapprochés fusionnent en un seul (garde l'angle le plus marqué) —
-    /// même règle de fusion que `buildCheckpoints` (mergeNearby, partagée).
-    func testNearbyInflectionsMergeIntoOne() {
+    /// Un virage sous le seuil "light" (< 30°) — même isolé — ne doit rien produire (spec :
+    /// "< 30° : rien, tout droit, pas affiché"). Segments LONGS (100 m, > fenêtre 60 m) pour
+    /// un seul sommet isolé mesuré proprement, sans capter un virage voisin.
+    func testBelowLightThresholdProducesNoEvent() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        XCTAssertTrue(events(for: track).isEmpty)
+    }
+
+    /// Deux candidats trop rapprochés fusionnent en un seul (garde l'angle le plus marqué).
+    func testNearbyEventsMergeIntoOne() {
         let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 15, segmentTurnDegrees: 8)
-        let inflections = RoadbookAnalyzer.buildInflectionPoints(
-            for: track,
-            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
-            windowMeters: RideConstants.bannerInflectionWindowMeters,
-            mergeMinDistanceMeters: 150
-        )
-        for i in 1..<inflections.count {
-            let distance = RoadbookAnalyzer.distanceMeters(inflections[i - 1].coordinate, inflections[i].coordinate)
-            XCTAssertGreaterThanOrEqual(distance, 150, "deux inflexions retenues ne doivent jamais être plus proches que mergeMinDistanceMeters")
+        let result = events(for: track, mergeMinDistanceMeters: 150)
+        for i in 1..<result.count {
+            let distance = RoadbookAnalyzer.distanceMeters(result[i - 1].coordinate, result[i].coordinate)
+            XCTAssertGreaterThanOrEqual(distance, 150, "deux événements retenus ne doivent jamais être plus proches que mergeMinDistanceMeters")
         }
+    }
+
+    /// Segmentation en paliers (spec "standards marché type Waze/MUTCD") : UN SEUL sommet
+    /// (2 segments longs, 100 m > fenêtre 60 m, pour que la mesure ne capte que ce virage)
+    /// classé directement selon son angle exact.
+    func testAngleBucketsMapToExpectedTiers() {
+        let lightTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 35)
+        XCTAssertEqual(events(for: lightTrack).first?.tier, .light)
+
+        let markedTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 60)
+        XCTAssertEqual(events(for: markedTrack).first?.tier, .marked)
+
+        let hardTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 100)
+        XCTAssertEqual(events(for: hardTrack).first?.tier, .hard)
+
+        let uTurnTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 150)
+        XCTAssertEqual(events(for: uTurnTrack).first?.tier, .uTurn)
+        XCTAssertEqual(events(for: uTurnTrack).first?.direction, .uTurn)
     }
 }

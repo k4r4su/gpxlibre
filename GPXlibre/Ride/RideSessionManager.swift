@@ -23,14 +23,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var lastRawSpeedDisplayDate: Date?
     @Published private(set) var cameraDistanceMeters: Double
     @Published private(set) var rideContext: RideContext = .normal
+    /// Épingles carte (spec "roadbook-angle-buckets-replay", it14) — MÊME liste que
+    /// `inflectionPoints` ci-dessous (une seule détection désormais, voir rebuildCheckpoints) ;
+    /// gardée comme propriété séparée pour ne pas renommer le paramètre `checkpoints:` déjà
+    /// consommé par RideMapLibreView/RideMapView (épingles) sans nécessité.
     @Published private(set) var checkpoints: [Checkpoint] = []
-    @Published private(set) var currentCheckpointIndex: Int = 0
-    @Published private(set) var distanceToCurrentCheckpointMeters: Double?
-    @Published private(set) var isCloseToCheckpoint: Bool = false
-    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) — liste SÉPARÉE des
-    /// checkpoints ci-dessus (voir RoadbookAnalyzer.buildInflectionPoints), sans index à
-    /// avancer/resynchroniser : `currentInflection` est recalculé sans état propre à chaque fix
-    /// (voir updateInflectionBanner), donc toujours correct même après un hors-trace/reprise.
+    /// Bannière latérale roadbook (spec "lateral-cap-banner-countdown", it12 ; détection
+    /// remplacée "roadbook-angle-buckets-replay", it14, Bloc 4) — SANS index à avancer/
+    /// resynchroniser : `currentInflection` est recalculé sans état propre à chaque fix (voir
+    /// updateRoadbookBanner), donc toujours correct même après un hors-trace/reprise.
     @Published private(set) var inflectionPoints: [Checkpoint] = []
     @Published private(set) var currentInflection: Checkpoint?
     @Published private(set) var distanceToCurrentInflectionMeters: Double?
@@ -129,9 +130,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var speedSamples: [(date: Date, speedMps: Double)] = []
     private var currentBucketIndex: Int = 0
     private var fastSpeedSustainedSince: Date?
-    private var flashedCheckpointIDs: Set<UUID> = []
-    private var hapticCheckpointIDs: Set<UUID> = []
-    private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    /// Dédup du flash roadbook (spec "roadbook-angle-buckets-replay", it14) — une seule fois
+    /// par événement, remis à zéro à chaque `rebuildCheckpoints()`.
+    private var flashedRoadbookEventIDs: Set<UUID> = []
     private let detourClearedHapticGenerator = UINotificationFeedbackGenerator()
 
     private var offTrackSinceDate: Date?
@@ -192,27 +193,17 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isGuidanceStopped = false
     }
 
-    var currentCheckpoint: Checkpoint? {
-        checkpoints.indices.contains(currentCheckpointIndex) ? checkpoints[currentCheckpointIndex] : nil
-    }
-
-    /// Mini preview roadbook (spec "roadbook-declutter") : le motard voit qu'il y a un
-    /// deuxième virage à venir sans avoir à lire le détail.
-    var nextCheckpoint: Checkpoint? {
-        let nextIndex = currentCheckpointIndex + 1
-        return checkpoints.indices.contains(nextIndex) ? checkpoints[nextIndex] : nil
-    }
-
-    var remainingCheckpointsCount: Int {
-        max(checkpoints.count - currentCheckpointIndex, 0)
-    }
-
     init(settings: RideSettingsStore, networkMonitor: NetworkMonitor, modeStore: RideModeStore, sharedBlockages: SharedBlockageSyncCoordinator) {
         self.settings = settings
         self.networkMonitor = networkMonitor
         self.modeStore = modeStore
         self.sharedBlockages = sharedBlockages
-        self.cameraDistanceMeters = ZoomPreset.normal.buckets.first?.cameraDistanceMeters ?? 300
+        // Spec "default-zoom-preview" (it14, Bloc 6) : point de départ réglable
+        // (RideSettingsStore.defaultRideZoomCameraMeters, défaut "4 taps zoom-arrière" depuis
+        // l'ancien point fixe) plutôt que le premier palier "Normal" codé en dur — écrasé dès
+        // le premier fix GPS par updateZoomBucket() de toute façon (vitesse), ce réglage ne
+        // pilote que le tout premier instant avant mouvement.
+        self.cameraDistanceMeters = settings.defaultRideZoomCameraMeters
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -234,7 +225,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         fastSpeedSustainedSince = nil
         currentBucketIndex = 0
         rideContext = .normal
-        hapticGenerator.prepare()
         detourClearedHapticGenerator.prepare()
         stopGuidanceHapticGenerator.prepare()
 
@@ -361,7 +351,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isGuidanceStopped = false
         track = nil
         checkpoints = []
-        currentCheckpointIndex = 0
         inflectionPoints = []
         currentInflection = nil
         distanceToCurrentInflectionMeters = nil
@@ -396,29 +385,36 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         UIApplication.shared.isIdleTimerDisabled = settings.keepScreenAwakeInRide
     }
 
-    /// Recalcule les checkpoints (ex : l'utilisateur change le seuil d'angle dans Réglages).
-    /// Prend effet immédiatement, pas besoin de relancer l'app.
+    /// Recalcule les événements roadbook (ex : l'utilisateur change un réglage sensibilité/
+    /// fenêtre dans Réglages > Roadbook, spec "roadbook-settings-wired", it14, Bloc 5). Prend
+    /// effet immédiatement, pas besoin de relancer l'app. `roadbookEnabled = false` vide tout
+    /// (activation/désactivation globale, Bloc 5) sans jamais toucher `track`/la trace.
     func rebuildCheckpoints() {
         guard let track else { return }
-        checkpoints = RoadbookAnalyzer.buildCheckpoints(
-            for: track,
-            turnThresholdDegrees: settings.turnThresholdDegrees,
-            turnMergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
-        )
-        currentCheckpointIndex = 0
-        distanceToCurrentCheckpointMeters = nil
-        isCloseToCheckpoint = false
-        flashedCheckpointIDs.removeAll()
-        hapticCheckpointIDs.removeAll()
+        guard settings.roadbookEnabled else {
+            checkpoints = []
+            inflectionPoints = []
+            currentInflection = nil
+            distanceToCurrentInflectionMeters = nil
+            flashedRoadbookEventIDs.removeAll()
+            return
+        }
 
-        inflectionPoints = RoadbookAnalyzer.buildInflectionPoints(
+        let events = RoadbookAnalyzer.buildRoadbookEvents(
             for: track,
-            thresholdDegrees: RideConstants.bannerInflectionThresholdDegrees,
-            windowMeters: RideConstants.bannerInflectionWindowMeters,
+            windowBeforeMeters: settings.roadbookWindowBeforeMeters,
+            windowAfterMeters: settings.roadbookWindowAfterMeters,
+            lightThresholdDegrees: settings.roadbookLightThresholdDegrees,
+            markedThresholdDegrees: settings.roadbookMarkedThresholdDegrees,
+            hardThresholdDegrees: settings.roadbookHardThresholdDegrees,
+            uTurnThresholdDegrees: settings.roadbookUTurnThresholdDegrees,
             mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
         )
+        checkpoints = events
+        inflectionPoints = events
         currentInflection = nil
         distanceToCurrentInflectionMeters = nil
+        flashedRoadbookEventIDs.removeAll()
     }
 
     func registerManualGesture() {
@@ -490,7 +486,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
             updateRoadbookProgress(from: location, projection: projection)
-            updateInflectionBanner(projection: projection)
+            updateRoadbookBanner(projection: projection)
             updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
         case .nav:
             updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
@@ -584,7 +580,14 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
     }
 
+    /// Spec "auto-zoom-speed-curve" (it14, Bloc 7) : `autoZoomEnabled = false` fige la caméra
+    /// à sa dernière valeur (le motard garde le contrôle manuel exclusif via +/-, voir
+    /// zoomIn/zoomOut) — jamais recalculée depuis la vitesse tant que désactivé. Quand activé,
+    /// le résultat des paliers/contexte est clampé à [autoZoomMinMeters, autoZoomMaxMeters]
+    /// (bornes réglables), APRÈS le calcul habituel — la courbe vitesse→zoom (paliers +
+    /// hystérésis, INCHANGÉE) définit la forme, les bornes en limitent juste l'amplitude.
     private func updateZoomBucket() {
+        guard settings.autoZoomEnabled else { return }
         let buckets = settings.zoomPreset.buckets
         guard !buckets.isEmpty else { return }
         currentBucketIndex = min(currentBucketIndex, buckets.count - 1)
@@ -607,11 +610,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         case .track: distance *= RideConstants.trackCameraDistanceMultiplier
         case .normal: break
         }
-        cameraDistanceMeters = distance
-    }
-
-    private var activeAlertDistanceMeters: Double {
-        rideContext == .fastRoad ? RideConstants.fastRoadAlertDistanceMeters : settings.checkpointAlertDistanceMeters
+        cameraDistanceMeters = min(max(distance, settings.autoZoomMinMeters), settings.autoZoomMaxMeters)
     }
 
     /// Bloc 2 "resync-hysteresis" (it10), seuils remplacés spec "offtrace-threshold-
@@ -642,46 +641,18 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 updateOffTrackResumeTarget(from: location, projection: projection)
                 return
             }
-            resyncCheckpointIndex(to: projection)
             isOffTrackPaused = false
             offTrackResumeCoordinate = nil
             offTrackResumeDistanceMeters = nil
         } else if projection.distanceToTrackMeters > RideConstants.horsTraceEnterMeters {
             isOffTrackPaused = true
             updateOffTrackResumeTarget(from: location, projection: projection)
-            return
         }
-
-        guard currentCheckpointIndex < checkpoints.count else {
-            distanceToCurrentCheckpointMeters = nil
-            isCloseToCheckpoint = false
-            return
-        }
-
-        let checkpoint = checkpoints[currentCheckpointIndex]
-        let distance = RoadbookAnalyzer.distanceMeters(location.coordinate, checkpoint.coordinate)
-        distanceToCurrentCheckpointMeters = distance
-
-        if distance <= RideConstants.checkpointPassedRadiusMeters {
-            currentCheckpointIndex += 1
-            isCloseToCheckpoint = false
-            return
-        }
-
-        if distance <= activeAlertDistanceMeters, !flashedCheckpointIDs.contains(checkpoint.id) {
-            flashedCheckpointIDs.insert(checkpoint.id)
-            flashSequenceToken = UUID()
-        }
-
-        if distance <= RideConstants.checkpointCloseRadiusMeters {
-            isCloseToCheckpoint = true
-            if !hapticCheckpointIDs.contains(checkpoint.id) {
-                hapticCheckpointIDs.insert(checkpoint.id)
-                hapticGenerator.impactOccurred()
-            }
-        } else {
-            isCloseToCheckpoint = false
-        }
+        // Plus de progression par INDEX ici depuis it14 (spec "roadbook-angle-buckets-replay") :
+        // `updateRoadbookBanner`, appelée juste après dans `handle(location:)`, est SANS état
+        // (reprend juste le prochain événement dont la distance cumulée dépasse la position
+        // actuelle) — s'auto-corrige seule à chaque fix, hors-trace ou reprise inclus, sans
+        // synchronisation d'index à maintenir ici.
     }
 
     /// Point de reprise (spec Bloc 2) : le premier point de trace atteignable plus loin —
@@ -697,60 +668,48 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         offTrackResumeDistanceMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, target)
     }
 
-    /// Resynchronise l'index de checkpoint sur la position curviligne actuelle — ne recule
-    /// JAMAIS (spec Bloc 2) : les checkpoints en arrière de l'index courant restent "passés".
-    private func resyncCheckpointIndex(to projection: TrackProjector.Projection) {
-        guard let firstAhead = checkpoints.firstIndex(where: { checkpointCumulativeDistanceMeters($0) > projection.cumulativeDistanceMeters }) else {
-            currentCheckpointIndex = checkpoints.count
-            return
-        }
-        currentCheckpointIndex = max(currentCheckpointIndex, firstAhead)
-    }
-
-    private func checkpointCumulativeDistanceMeters(_ checkpoint: Checkpoint) -> Double {
-        trackCumulativeDistances.indices.contains(checkpoint.sourcePointIndex)
-            ? trackCumulativeDistances[checkpoint.sourcePointIndex]
+    private func roadbookEventCumulativeDistanceMeters(_ event: Checkpoint) -> Double {
+        trackCumulativeDistances.indices.contains(event.sourcePointIndex)
+            ? trackCumulativeDistances[event.sourcePointIndex]
             : .infinity
     }
 
-    /// Bannière latérale cap (spec "lateral-cap-banner-countdown", it12) : SANS état propre
-    /// (pas d'index à avancer) — reprend juste la première inflexion dont la distance cumulée
-    /// dépasse la position curviligne actuelle. S'auto-corrige seul à chaque fix (hors-trace,
-    /// reprise, retour en arrière GPS) sans dupliquer l'hystérésis du roadbook : la bannière
-    /// est purement indicative, aucun flash/voix/haptique associé.
-    private func updateInflectionBanner(projection: TrackProjector.Projection?) {
+    /// Bannière latérale roadbook (spec "lateral-cap-banner-countdown" it12, détection
+    /// remplacée "roadbook-angle-buckets-replay" it14, Bloc 4) : SANS état propre (pas d'index
+    /// à avancer) — reprend juste le premier événement dont la distance cumulée dépasse la
+    /// position curviligne actuelle. S'auto-corrige seule à chaque fix (hors-trace, reprise,
+    /// retour en arrière GPS). Flash bref dans les `NavigationConstants.roadbookFlashMeters`
+    /// (100 m) derniers mètres — une seule fois par événement (dédup par id, remis à zéro à
+    /// chaque `rebuildCheckpoints()`), voir `flashedRoadbookEventIDs`.
+    private func updateRoadbookBanner(projection: TrackProjector.Projection?) {
         guard let projection,
-              let next = inflectionPoints.first(where: { inflectionCumulativeDistanceMeters($0) > projection.cumulativeDistanceMeters })
+              let next = inflectionPoints.first(where: { roadbookEventCumulativeDistanceMeters($0) > projection.cumulativeDistanceMeters })
         else {
             currentInflection = nil
             distanceToCurrentInflectionMeters = nil
             return
         }
         currentInflection = next
-        distanceToCurrentInflectionMeters = max(inflectionCumulativeDistanceMeters(next) - projection.cumulativeDistanceMeters, 0)
+        let distance = max(roadbookEventCumulativeDistanceMeters(next) - projection.cumulativeDistanceMeters, 0)
+        distanceToCurrentInflectionMeters = distance
+
+        guard settings.roadbookFlashEnabled, distance <= NavigationConstants.roadbookFlashMeters,
+              !flashedRoadbookEventIDs.contains(next.id)
+        else { return }
+        flashedRoadbookEventIDs.insert(next.id)
+        flashSequenceToken = UUID()
     }
 
-    private func inflectionCumulativeDistanceMeters(_ point: Checkpoint) -> Double {
-        trackCumulativeDistances.indices.contains(point.sourcePointIndex)
-            ? trackCumulativeDistances[point.sourcePointIndex]
-            : .infinity
-    }
-
-    /// Phase "active" du guidage "Reprendre ici" (Bloc 3) — deux façons de rejoindre le fil,
-    /// jamais de retour en arrière (réutilise `resyncCheckpointIndex`, déjà garanti par it8) :
+    /// Phase "active" du guidage "Reprendre ici" (Bloc 3) — deux façons de rejoindre le fil :
     /// jonction avec le pin atteinte (< 30 m), OU retour naturel sur la trace avant même
     /// d'y arriver ("hystérésis silencieuse" demandée — pas de confirmation, juste la reprise).
+    /// Ne resynchronise plus d'index depuis it14 (voir updateRoadbookProgress) : le roadbook
+    /// se recale seul, sans état, dès le prochain fix.
     private func updateResumeProgress(from location: CLLocation) {
         guard let guidance = resumeGuidance, let track, !trackCumulativeDistances.isEmpty else { return }
 
         let distanceToPin = RoadbookAnalyzer.distanceMeters(location.coordinate, guidance.pinCoordinate)
         if distanceToPin <= RideConstants.resumeJunctionDistanceMeters {
-            let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances)
-            if let projection {
-                resyncCheckpointIndex(to: projection)
-            } else if let firstAhead = checkpoints.firstIndex(where: { checkpointCumulativeDistanceMeters($0) > guidance.pinCumulativeDistanceMeters }) {
-                currentCheckpointIndex = max(currentCheckpointIndex, firstAhead)
-            }
             resumeTask?.cancel()
             resumeGuidance = nil
             resumeRoutingError = nil
@@ -758,8 +717,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
 
         guard let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: trackCumulativeDistances) else { return }
-        if projection.distanceToTrackMeters <= RideConstants.offTrackDistanceThresholdMeters {
-            resyncCheckpointIndex(to: projection)
+        if projection.distanceToTrackMeters <= RideConstants.horsTraceEnterMeters {
             resumeTask?.cancel()
             resumeGuidance = nil
             resumeRoutingError = nil

@@ -5,38 +5,20 @@ import Foundation
 enum RideConstants {
 
     // MARK: - Roadbook / checkpoints
+    //
+    // Fix "roadbook-angle-buckets-replay" (it14, Bloc 4) : l'ancien seuil ponctuel unique
+    // (turnThresholdDegreesDefault/Options, bearingLookaroundMeters ±20 m,
+    // uTurnThresholdDegrees=120, alerte/haptique par index de checkpoint) a été retiré —
+    // remplacé par la détection à paliers + fenêtre avant/après configurable de
+    // Config/NavigationConstants.swift (voir RoadbookAnalyzer.buildRoadbookEvents), pilotée
+    // par les réglages Réglages > Roadbook (spec "roadbook-settings-wired", Bloc 5).
 
-    /// Angle de virage (°) au-delà duquel un point de la trace devient un checkpoint.
-    /// Réglable dans Réglages (30 / 35 / 40) ; ceci est la valeur par défaut.
-    static let turnThresholdDegreesDefault: Double = 35
-    static let turnThresholdDegreesOptions: [Double] = [30, 35, 40]
-
-    /// Au-delà de cet angle, la flèche devient "demi-tour" plutôt que gauche/droite.
-    static let uTurnThresholdDegrees: Double = 120
-
-    /// Distance minimale (m) utilisée pour lisser le calcul de cap avant/après un point,
-    /// afin d'éviter le bruit dû à des points GPX très rapprochés.
-    static let bearingLookaroundMeters: Double = 20
-
-    /// Distance (m) sous laquelle un checkpoint est considéré "atteint" et on passe au suivant.
-    static let checkpointPassedRadiusMeters: Double = 25
-
-    /// Fusionne les checkpoints trop rapprochés (piste qui zigzague, sinon "196 virages"
-    /// pour une trace qui n'en a réellement qu'une poignée) — DISTINCT de
-    /// checkpointPassedRadiusMeters ci-dessus (rayon "checkpoint atteint" en Ride, un tout
-    /// autre usage) : les deux étaient auparavant confondus dans le même chiffre (25 m),
-    /// bien trop court pour déclencher une vraie fusion. Réglable en Réglages (item #15).
+    /// Fusionne les événements trop rapprochés (piste qui zigzague, sinon "196 virages" pour
+    /// une trace qui n'en a réellement qu'une poignée). Réglable en Réglages (item #15).
     static let turnMergeMinDistanceMetersDefault: Double = 150
     static let turnMergeMinDistanceMetersOptions: [Double] = [100, 150, 250]
 
-    /// Distance (m) sous laquelle la flèche grossit + haptique se déclenche.
-    static let checkpointCloseRadiusMeters: Double = 30
-
     // MARK: - Alerte flash
-
-    /// Distance d'alerte checkpoint (m). Réglable dans Réglages (100 / 200 / 300), défaut 200.
-    static let alertDistanceDefaultMeters: Double = 200
-    static let alertDistanceOptions: [Double] = [100, 200, 300]
 
     /// Nombre de flashs. Réglable (3 / 5), défaut 3.
     static let flashCountDefault: Int = 3
@@ -123,8 +105,6 @@ enum RideConstants {
     static let fastRoadCameraDistanceMultiplier: Double = 1.4
     static let trackCameraDistanceMultiplier: Double = 0.7
 
-    /// Distance d'alerte checkpoint forcée en contexte "route rapide" (remplace le réglage utilisateur).
-    static let fastRoadAlertDistanceMeters: Double = 300
     /// Multiplicateur du seuil hors-trace en contexte "piste" (resserré) — pour itération future.
     static let trackOffTrackToleranceMultiplier: Double = 0.6
 
@@ -216,15 +196,11 @@ enum RideConstants {
     static let glovedTapTargetSize: Double = 56
 
     // MARK: - Bannière latérale cap + countdown (spec "lateral-cap-banner-countdown", it12)
-
-    /// Seuil (°) d'angle CUMULÉ (signé, sur `bannerInflectionWindowMeters`) au-delà duquel un
-    /// point de la trace devient une "inflexion" pour la bannière latérale — DISTINCT du seuil
-    /// ponctuel du roadbook (`turnThresholdDegreesDefault`, ±20 m de lissage) : une fenêtre
-    /// glissante de 100-150 m couvre à la fois les vraies "splits" (tout l'angle dans un petit
-    /// sous-segment de la fenêtre) et les virages progressifs qu'aucun point isolé ne dépasse.
-    /// Voir RoadbookAnalyzer.buildInflectionPoints.
-    static let bannerInflectionThresholdDegrees: Double = 40
-    static let bannerInflectionWindowMeters: Double = 150
+    //
+    // Le SEUIL/la FENÊTRE de détection de "quand un point devient un événement" a déménagé
+    // dans Config/NavigationConstants.swift + Réglages > Roadbook (spec "roadbook-angle-
+    // buckets-replay", it14) — les constantes BANNER_* ci-dessous, qui ne pilotent QUE
+    // l'affichage du countdown (déjà existant, INCHANGÉ par it14), restent ici.
 
     /// BANNER_ALERT_START_M : distance (m) à laquelle la bannière latérale apparaît.
     static let bannerAlertStartMeters: Double = 600

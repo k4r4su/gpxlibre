@@ -49,7 +49,6 @@ final class RideSessionManagerPurgeTests: XCTestCase {
         session.stop()
 
         XCTAssertTrue(session.checkpoints.isEmpty, "stop() doit purger les checkpoints")
-        XCTAssertEqual(session.currentCheckpointIndex, 0)
         XCTAssertNil(session.detourRoute)
         XCTAssertNil(session.goToGuidance)
         XCTAssertFalse(session.isActive)

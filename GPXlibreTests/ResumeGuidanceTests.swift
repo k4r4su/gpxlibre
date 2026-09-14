@@ -43,13 +43,11 @@ final class ResumeGuidanceTests: XCTestCase {
         let track = makeTrack()
         session.start(track: track)
         let checkpointsBefore = session.checkpoints
-        let indexBefore = session.currentCheckpointIndex
 
         session.requestResume(pinCoordinate: track.points[10].coordinate, pinCumulativeDistanceMeters: 1000)
 
         XCTAssertEqual(session.resumeGuidance?.phase, .previewing)
         XCTAssertEqual(session.checkpoints.count, checkpointsBefore.count, "previewing ne doit jamais toucher les checkpoints")
-        XCTAssertEqual(session.currentCheckpointIndex, indexBefore)
     }
 
     /// Le pin et l'état "previewing" apparaissent immédiatement, AVANT toute réponse réseau

@@ -1,94 +1,93 @@
 import Foundation
 import CoreLocation
 
-/// Analyse une trace GPX une seule fois au chargement pour produire les checkpoints
-/// du roadbook (changements de cap). Ne modifie jamais la trace elle-même.
+/// Analyse une trace GPX une seule fois au chargement pour produire les événements du roadbook
+/// (changements de cap). Ne modifie jamais la trace elle-même.
+///
+/// Roadbook rebuilt from scratch (spec "roadbook-angle-buckets-replay", it14, Bloc 4) —
+/// REMPLACE les deux anciens détecteurs séparés (`buildCheckpoints` : seuil ponctuel ±20 m ;
+/// `buildInflectionPoints` : fenêtre glissante forward-only 150 m, un seul seuil 40°) par UN
+/// SEUL algorithme, source unique pour la bannière latérale ET les épingles carte : mesure la
+/// tangente sur une fenêtre AVANT/APRÈS chaque point (±40-80 m, configurable), classée en 5
+/// paliers (segmentation type Waze/MUTCD). "Aujourd'hui aucun déclenchement réel en roulage"
+/// (retour terrain) — fondations propres plutôt qu'un correctif de plus sur l'ancien système.
 enum RoadbookAnalyzer {
 
-    static func buildCheckpoints(for track: GPXTrack, turnThresholdDegrees: Double, turnMergeMinDistanceMeters: Double = RideConstants.turnMergeMinDistanceMetersDefault) -> [Checkpoint] {
-        let points = track.points
-        guard points.count > 2 else { return [] }
-
-        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
-
-        for i in 1..<(points.count - 1) {
-            guard let beforeCoord = coordinate(in: points, aroundIndex: i, stepBack: true),
-                  let afterCoord = coordinate(in: points, aroundIndex: i, stepBack: false) else { continue }
-
-            let incomingBearing = bearing(from: beforeCoord, to: points[i].coordinate)
-            let outgoingBearing = bearing(from: points[i].coordinate, to: afterCoord)
-            let delta = signedAngleDifference(from: incomingBearing, to: outgoingBearing)
-            let absDelta = abs(delta)
-
-            guard absDelta >= turnThresholdDegrees else { continue }
-
-            let direction: TurnDirection
-            if absDelta >= RideConstants.uTurnThresholdDegrees {
-                direction = .uTurn
-            } else if delta > 0 {
-                direction = .right
-            } else {
-                direction = .left
-            }
-
-            raw.append((points[i].coordinate, absDelta, direction, i))
-        }
-
-        return mergeNearby(raw, minDistanceMeters: turnMergeMinDistanceMeters)
-    }
-
-    /// Inflexions pour la bannière latérale (spec "lateral-cap-banner-countdown", it12) —
-    /// DISTINCT de `buildCheckpoints` ci-dessus : au lieu d'un seuil ponctuel (angle
-    /// avant/après un point, lissé sur ±`bearingLookaroundMeters`), on somme le cap SIGNÉ de
-    /// segment en segment sur une fenêtre glissante de `windowMeters` à partir de chaque point.
-    /// Un virage "dur" progressif (aucun point isolé au-delà du seuil ponctuel, mais qui tourne
-    /// net sur 100-150 m) déclenche donc ici alors qu'il ne générerait AUCUN checkpoint — c'est
-    /// précisément le cas que `buildCheckpoints` ne couvre pas. Une vraie "split" nette continue
-    /// de déclencher aussi (tout l'angle tombe dans un petit sous-segment de la fenêtre).
-    /// N'affecte JAMAIS `checkpoints`/le roadbook (flash/voix/haptique) : liste strictement
-    /// séparée, consommée uniquement par la bannière.
-    static func buildInflectionPoints(
+    /// - Parameters:
+    ///   - windowBeforeMeters/windowAfterMeters : ROADBOOK_WINDOW_BEFORE_M/AFTER_M — distance
+    ///     sur laquelle le cap entrant/sortant de chaque point est mesuré.
+    ///   - lightThresholdDegrees...uTurnThresholdDegrees : paliers croissants (light < marked
+    ///     < hard < uTurn) — un angle sous `lightThresholdDegrees` ne produit AUCUN événement.
+    static func buildRoadbookEvents(
         for track: GPXTrack,
-        thresholdDegrees: Double,
-        windowMeters: Double,
+        windowBeforeMeters: Double,
+        windowAfterMeters: Double,
+        lightThresholdDegrees: Double,
+        markedThresholdDegrees: Double,
+        hardThresholdDegrees: Double,
+        uTurnThresholdDegrees: Double,
         mergeMinDistanceMeters: Double
     ) -> [Checkpoint] {
         let points = track.points
-        guard points.count > 2, windowMeters > 0 else { return [] }
+        guard points.count > 2, windowBeforeMeters > 0, windowAfterMeters > 0 else { return [] }
 
+        // Cap par segment (bearing ET longueur), même patron que buildInflectionPoints (it12) —
+        // généralisé ici aux DEUX sens (avant ET après chaque point, pas seulement en avant).
         var segmentBearings: [Double] = []
+        var segmentLengths: [Double] = []
         segmentBearings.reserveCapacity(points.count - 1)
+        segmentLengths.reserveCapacity(points.count - 1)
         for i in 0..<(points.count - 1) {
             segmentBearings.append(bearing(from: points[i].coordinate, to: points[i + 1].coordinate))
+            segmentLengths.append(distanceMeters(points[i].coordinate, points[i + 1].coordinate))
         }
 
-        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
+        var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
 
-        for i in 0..<segmentBearings.count {
-            var cumulativeDistance: Double = 0
-            var cumulativeTurn: Double = 0
-            var j = i
-            while j < segmentBearings.count, cumulativeDistance < windowMeters {
-                if j > i {
-                    cumulativeTurn += signedAngleDifference(from: segmentBearings[j - 1], to: segmentBearings[j])
-                }
-                cumulativeDistance += distanceMeters(points[j].coordinate, points[j + 1].coordinate)
-                j += 1
+        for i in 1..<(points.count - 1) {
+            // Segment le plus ANCIEN considéré : recule depuis i-1 (le segment qui MÈNE à `i`,
+            // toujours inclus) tant que windowBeforeMeters n'est pas couvert.
+            var startSeg = i - 1
+            var distBefore: Double = 0
+            while startSeg > 0, distBefore < windowBeforeMeters {
+                distBefore += segmentLengths[startSeg - 1]
+                startSeg -= 1
             }
+            // Segment le plus AVANCÉ considéré : avance depuis i (le segment qui PART de `i`,
+            // toujours inclus) tant que windowAfterMeters n'est pas couvert.
+            var endSeg = i
+            var distAfter: Double = 0
+            while endSeg < segmentBearings.count - 1, distAfter < windowAfterMeters {
+                distAfter += segmentLengths[endSeg]
+                endSeg += 1
+            }
+            guard endSeg > startSeg else { continue }
 
-            let absTurn = abs(cumulativeTurn)
-            guard absTurn >= thresholdDegrees else { continue }
+            // Somme des deltas segment à segment de startSeg à endSeg (PAS une simple
+            // différence d'angle entre les deux bornes — un virage > 180° sur la fenêtre serait
+            // alors mal reconstruit ; la somme pas-à-pas, chacun normalisé dans (-180,180],
+            // reste correcte même au-delà).
+            var totalTurn: Double = 0
+            for m in startSeg..<endSeg {
+                totalTurn += signedAngleDifference(from: segmentBearings[m], to: segmentBearings[m + 1])
+            }
+            let absDelta = abs(totalTurn)
+            guard absDelta >= lightThresholdDegrees else { continue }
 
-            let direction: TurnDirection
-            if absTurn >= RideConstants.uTurnThresholdDegrees {
-                direction = .uTurn
-            } else if cumulativeTurn > 0 {
-                direction = .right
+            let tier: RoadbookTier
+            if absDelta >= uTurnThresholdDegrees {
+                tier = .uTurn
+            } else if absDelta >= hardThresholdDegrees {
+                tier = .hard
+            } else if absDelta >= markedThresholdDegrees {
+                tier = .marked
             } else {
-                direction = .left
+                tier = .light
             }
 
-            raw.append((points[i].coordinate, absTurn, direction, i))
+            let direction: TurnDirection = tier == .uTurn ? .uTurn : (totalTurn > 0 ? .right : .left)
+
+            raw.append((points[i].coordinate, absDelta, direction, tier, i))
         }
 
         return mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
@@ -99,10 +98,10 @@ enum RoadbookAnalyzer {
     /// plus marqué — le total affiché (X/Y) reflète donc toujours la liste FUSIONNÉE, jamais
     /// le nombre brut de candidats détectés.
     private static func mergeNearby(
-        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)],
+        _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)],
         minDistanceMeters: Double
     ) -> [Checkpoint] {
-        var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, pointIndex: Int)] = []
+        var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
 
         for candidate in raw {
             if let lastIndex = merged.indices.last,
@@ -116,28 +115,8 @@ enum RoadbookAnalyzer {
         }
 
         return merged.enumerated().map { index, item in
-            Checkpoint(coordinate: item.coordinate, turnAngleDegrees: item.angle, direction: item.direction, sequenceIndex: index + 1, sourcePointIndex: item.pointIndex)
+            Checkpoint(coordinate: item.coordinate, turnAngleDegrees: item.angle, direction: item.direction, tier: item.tier, sequenceIndex: index + 1, sourcePointIndex: item.pointIndex)
         }
-    }
-
-    /// Point situé à ~`RideConstants.bearingLookaroundMeters` avant/après `aroundIndex`,
-    /// pour lisser le calcul de cap et éviter le bruit des points GPX rapprochés.
-    private static func coordinate(in points: [GPXPoint], aroundIndex: Int, stepBack: Bool) -> CLLocationCoordinate2D? {
-        let origin = points[aroundIndex].coordinate
-        var cumulative: Double = 0
-        var i = aroundIndex
-
-        while stepBack ? i > 0 : i < points.count - 1 {
-            let next = stepBack ? i - 1 : i + 1
-            cumulative += distanceMeters(points[i].coordinate, points[next].coordinate)
-            i = next
-            if cumulative >= RideConstants.bearingLookaroundMeters {
-                return points[i].coordinate
-            }
-        }
-
-        let fallback = points[i].coordinate
-        return distanceMeters(origin, fallback) > 0 ? fallback : nil
     }
 
     static func distanceMeters(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {

@@ -11,6 +11,9 @@ import SwiftUI
 /// apparition/disparition (voir RideView.lateralCapBannerLayer).
 struct LateralCapBannerView: View {
     let direction: TurnDirection
+    /// Palier d'angle (spec "roadbook-angle-buckets-replay", it14) — pilote l'icône affichée,
+    /// distincte par palier (léger/prononcé/fort/demi-tour).
+    let tier: RoadbookTier
     let distanceMeters: Double
     let sequenceIndex: Int
     let totalCount: Int
@@ -19,7 +22,7 @@ struct LateralCapBannerView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: direction.systemImageName)
+            Image(systemName: tier.systemImageName(direction: direction))
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(.white)
             Text(Self.steppedDistanceText(distanceMeters))

@@ -662,7 +662,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             if let checkpointAnnotation = annotation as? CheckpointMLNAnnotation {
-                return annotationView(on: mapView, identifier: "checkpoint", annotation: checkpointAnnotation, tint: .systemRed, systemImageName: checkpointAnnotation.checkpoint.direction.systemImageName, size: 34)
+                // Icône par PALIER (spec "roadbook-angle-buckets-replay", it14) — cohérente
+                // avec la bannière latérale, voir LateralCapBannerView.
+                let checkpoint = checkpointAnnotation.checkpoint
+                return annotationView(on: mapView, identifier: "checkpoint", annotation: checkpointAnnotation, tint: .systemRed, systemImageName: checkpoint.tier.systemImageName(direction: checkpoint.direction), size: 34)
             }
             if let waypointAnnotation = annotation as? RollingWaypointMLNAnnotation {
                 return annotationView(on: mapView, identifier: "waypoint", annotation: waypointAnnotation, tint: .systemBlue, systemImageName: waypointAnnotation.waypoint.category.systemImageName, size: 28)
