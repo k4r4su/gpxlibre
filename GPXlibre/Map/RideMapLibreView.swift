@@ -127,14 +127,26 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
 
         let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
+        // Fix "explore-zoom-anchoring" (it14, Bloc 11, bug terrain confirmé : "pan carte puis
+        // tap +/- revient sur la position GPS au lieu de zoomer le secteur") : un tap +/- (ou
+        // recentrage) pendant l'exploration (drag actif, isManualOverrideActive) doit zoomer
+        // AUTOUR DU CENTRE ÉCRAN ACTUEL, pas re-sauter sur le GPS — seul `recenterCamera()`
+        // doit ramener sur la position réelle, et il le fait déjà en désarmant
+        // `isManualOverrideActive` avant ce point (voir RideSessionManager.recenterCamera),
+        // donc cette branche ne le concerne jamais. En suivi normal (non exploré),
+        // `mapView.camera.centerCoordinate` vaut de toute façon déjà `currentLocation.coordinate`
+        // (dernière caméra appliquée) : comportement inchangé dans ce cas.
+        let lookingAtCenter = (isForcedCommand && isManualOverrideActive)
+            ? mapView.camera.centerCoordinate
+            : currentLocation.coordinate
         // Spec "2d-only" (it11) : la vue reste TOUJOURS plate, plus de pitch pilotable — la
         // carte ne bascule plus jamais en perspective, y compris en Ride cap-en-haut.
         // Fix "position-anchor" (Bug 2) : plus de décalage géographique heuristique vers
-        // l'avant — lookingAtCenter est TOUJOURS la position réelle ; tout l'ancrage vertical
+        // l'avant — lookingAtCenter est la position réelle EN SUIVI ; tout l'ancrage vertical
         // (POSITION_ANCHOR_RATIO) vient de `contentInset.top`, déjà appliqué via
         // `updateContentInset` ci-dessus. Voir RideOverlayLayout.computeMapInsets.
         let camera = MLNMapCamera(
-            lookingAtCenter: currentLocation.coordinate,
+            lookingAtCenter: lookingAtCenter,
             acrossDistance: cameraDistanceMeters,
             pitch: 0,
             heading: heading
