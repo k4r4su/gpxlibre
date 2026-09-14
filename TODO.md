@@ -1,5 +1,31 @@
 # TODO
 
+## Itération 15 (horodatage traces Biblio / sheets translucides / Stop↔Pause/Play toggle)
+
+- **Vérification de cette itération** : builds simulateur + device (compile-only) + suite de
+  tests (58, 0 échec, 1 skip) verts après chaque bloc. Le test du Bloc 1 (tri par date GPX
+  metadata) exerce le vrai chemin `importTrack` de bout en bout (pas un raccourci de test) et
+  importe volontairement les traces dans l'ordre INVERSE de leur date pour ne pas laisser un
+  tri par insertion se faire passer pour un tri par date par coïncidence. Comme d'habitude,
+  aucun item visuel/tactile (sous-titre date effectivement lisible en Biblio, translucidité du
+  sheet effectivement lisible en plein soleil, geste appui-long → menu contextuel Stop
+  effectivement déclenché du doigt) n'a pu être confirmé dans cet environnement — pas
+  d'automatisation tactile disponible (limite documentée depuis it9).
+
+- **Décision de design tranchée avec le propriétaire avant codage (Bloc 3)** : le prompt
+  laissait explicitement ouvert le mécanisme du Stop défini ("to decide : appui long = Stop
+  définitif, appui simple = Pause↔Play"). En creusant le code existant, appui long s'est avéré
+  être DÉJÀ la convention systématique de toute l'app pour afficher une infobulle
+  (`longPressTooltip`, sur tout bouton à icône seule) — le réutiliser pour déclencher un arrêt
+  définitif aurait cassé ce réflexe partout ailleurs, avec un vrai risque d'arrêt accidentel du
+  guidage en conditions gantées. Question posée, réponse : menu contextuel (`.contextMenu`)
+  plutôt qu'un appui long fonctionnel direct — voir CLAUDE.md, section
+  `isGuidanceStopped`/toggle, pour le détail.
+
+- **Filet de secours conservé (Bloc 3)** : `RideConstants.guidanceButtonMode` permet de
+  revenir instantanément au comportement à 2 boutons empilés d'it14 (`.twoButtons`) si le
+  bouton toggle unique s'avère mal compris sur le terrain — code intact, pas supprimé.
+
 ## Itération 14 (roadbook rebuild / layout ride final / zoom)
 
 - **Vérification de cette itération** : builds simulateur + device (compile-only) + suite de

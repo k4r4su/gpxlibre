@@ -27,7 +27,8 @@ GPXlibre/
                    explicitement à cet emplacement plutôt que RideConstants.swift. Ajouté à
                    `sources:` dans project.yml — si ce dossier disparaît d'un futur `xcodegen
                    generate`, vérifier que project.yml le liste toujours.
-  Models/         GPXPoint, GPXTrack (struct value type, reordered() pur — voir Trace sacrée)
+  Models/         GPXPoint, GPXTrack (struct value type, reordered() pur — voir Trace sacrée ;
+                   `contentDate: Date?` depuis it15, voir section horodatage Biblio ci-dessous)
   Services/       GPXParser (XMLParser maison), LibraryStore (source de vérité des traces,
                    voir section dédiée), LocationManager, NetworkMonitor
   Ride/           Le cœur du produit — RideView (orchestrateur SwiftUI de l'onglet Ride),
@@ -218,21 +219,44 @@ GPS continue d'être consommé à la cadence normale) alimente UNIQUEMENT le spe
 (RideStatsBadge/RideStatsPanel). Demande terrain explicite pour le speedo seul ("m'enfou que
 ça oscille") : ne jamais brancher `rawSpeedKmh` sur une décision automatique.
 
-## `isGuidanceStopped` vs `isRecordingPaused` (spec "stop-guidance-semantics", it14)
+## `isGuidanceStopped` vs `isRecordingPaused` (spec "stop-guidance-semantics", it14 ; bouton
+## toggle Pause/Play, "guidance-toggle-stop-pause-play", it15, Bloc 3)
 
 DEUX états distincts sur `RideSessionManager`, ne jamais les confondre :
 `isRecordingPaused` (préexistant) suspend l'ENREGISTREMENT de la session (le tracé parcouru
 n'avance plus), typiquement via le bouton pause de l'écran d'enregistrement libre.
-`isGuidanceStopped` (nouveau, bouton Stop de la colonne de contrôles) arrête uniquement le
-GUIDAGE actif : la trace chargée reste affichée, le roadbook/bannières latérales se rétractent
+`isGuidanceStopped` (bouton toggle de la colonne de contrôles) arrête uniquement le GUIDAGE
+actif : la trace chargée reste affichée, le roadbook/bannières latérales se rétractent
 (`hasDirectionPanel`/`isLateralBannerVisible` passent à `false` tant que `isGuidanceStopped`),
 la vitesse continue d'être affichée, on reste sur l'écran Ride — la session de suivi/
-enregistrement, elle, N'EST PAS arrêtée. Haptic + toast "Guidage arrêté" au moment du Stop
-(`.rideToast`). Reprise : soit un tap sur une nouvelle trace, soit le bouton recentrer/cibler
-(`recenterCamera()`), soit le nouveau bouton discret "play" de la colonne
-(`resumeGuidanceAfterStop()`) si une trace reste sélectionnée — dans les trois cas
+enregistrement, elle, N'EST PAS arrêtée.
+
+Deux façons d'atteindre CE MÊME état depuis it15, mutation factorisée dans
+`haltActiveGuidance()` (stopNav/stopGoTo/cancelDetour/`isGuidanceStopped = true`), seule la
+présentation diffère :
+- **Pause** (`pauseGuidance()`, tap court sur `RideGuidanceToggleButton`) : haptique LÉGÈRE
+  (`UIImpactFeedbackGenerator .light`), PAS de toast — une pause de routine.
+- **Stop défini** (`stopGuidance()`, item destructif du menu contextuel du même bouton, appui
+  long) : haptique FORTE (`UINotificationFeedbackGenerator`), toast "Guidage arrêté"
+  (`.rideToast`, déclenché côté RideView, pas dans le manager).
+
+Pourquoi un menu contextuel plutôt qu'un second geste sur le bouton : l'appui long est déjà,
+dans toute l'app, la convention de `longPressTooltip` (infobulle explicative + haptique légère)
+sur tout bouton à icône SEULE — réutiliser ce même geste pour déclencher un arrêt aurait cassé
+ce réflexe partout ailleurs. `RideGuidanceToggleButton` garde un label texte permanent
+(Pause/Reprendre), il n'a donc jamais fait partie de cette convention, d'où l'absence de
+conflit à y poser un `.contextMenu`. Décision tranchée avec le propriétaire avant codage
+(prompt it15 la laissait explicitement ouverte).
+
+Reprise (`resumeGuidanceAfterStop()`, identique dans les deux cas) : tap sur le bouton toggle
+quand il affiche Play, tap sur une nouvelle trace, ou recentrage (`recenterCamera()`) —
 `isGuidanceStopped` repasse à `false` et le roadbook/bannière réapparaissent naturellement
 (aucun état d'index à resynchroniser, voir section roadbook ci-dessus).
+
+`RideConstants.guidanceButtonMode` (`GUIDANCE_BUTTON_MODE`, défaut `.toggle`) : l'ancien
+comportement it14 à 2 boutons empilés (Stop + icône Play séparée, avec
+`confirmationDialog`) est conservé intact derrière `.twoButtons` — filet de secours si le
+bouton unique s'avère mal compris sur le terrain, pas du code mort à supprimer sans y penser.
 
 ## Seuil hors-trace à hystérésis (spec "offtrace-threshold-hysteresis", it14, Bloc 8)
 
@@ -259,6 +283,31 @@ l'aperçu carte pendant l'ajustement (`CameraPreviewMapView`) et seul le tap sur
 écrit dans `RideSettingsStore` (`settings.defaultRideZoomCameraMeters`/`settings.autoZoomEnabled`
 etc.). Ne pas généraliser ce patron à un nouveau réglage sans qu'une spec future le demande
 explicitement — c'est une exception, pas le nouveau défaut.
+
+## Horodatage Biblio (spec "biblio-date-display", it15, Bloc 1)
+
+`GPXTrack.contentDate: Date?` — DISTINCT d'`importDate` (préexistant, toujours défini) :
+priorité `<metadata><time>` du GPX (parsé par `GPXParser`, distinct du `<time>` par point,
+attention aux deux éléments XML homonymes) > date de création du fichier `.gpx` écrit sur
+disque à l'import (`LibraryStore.addTrack`) > `nil` si aucun des deux. `GPXTrack.displayDate`
+fait le repli sur `importDate` si `contentDate` est `nil` ; `displayDateLabel` choisit le
+préfixe ("Tracée le" si `contentDate` connue, "Importée le" sinon). `LibraryStore.sortTracks()`
+trie par `displayDate` décroissante puis alpha en repli, appelé après import/renommage/
+chargement — piloté par `LibraryConstants.sortKey`/`dateDisplayEnabled`
+(BIBLIO_SORT_KEY/BIBLIO_DATE_DISPLAY, toggles de code, pas de réglage UI).
+
+## Sheets à aperçu carte live : fond translucide (spec "translucent-settings-preview-sheets",
+## it15, Bloc 2)
+
+Les 3 sheets Réglages > Navigation qui montrent une carte en direct derrière un slider
+(Position point bleu, Zoom par défaut, Zoom automatique) utilisent
+`translucentPreviewBackground()` (View extension privée, `NavigationSettingsView.swift`) —
+teinte noire 0.45 + `.ultraThinMaterial` (le blur seul peut se faire "laver" par un fond de
+carte très clair, illisible en plein soleil) + `.environment(\.colorScheme, .dark)` forcé sur
+la carte pour que `.primary`/`.secondary` restent clairs dessus quel que soit le mode système
+— même patron que RideStatsBadge/Panel pour un calque posé sur la carte. Réservé à CES 3
+sheets précisément ; un réglage administratif classique (nom/version...) reste en sheet opaque
+standard — ne pas généraliser sans qu'une spec future le demande.
 
 ## Règles absolues (non négociables, violées = régression critique)
 
