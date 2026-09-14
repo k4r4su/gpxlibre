@@ -56,3 +56,17 @@ Décision de scope assumée : le dimming nuit (filtre luminosité/saturation) ne
 qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour l'instant (voir
 `docs/tuile-sources.md` pour une piste future, VersaTiles fournit déjà clair+sombre).
 
+## Chevrons : densité adaptative au zoom (fix "chevrons-zoom-adaptive", it17, Bloc 3)
+
+Bug corrigé : les chevrons disparaissaient totalement en dessous d'un zoom donné —
+`chevronLayer.minimumZoomLevel` (coupure binaire sur la couche). Root cause du principe même :
+le rendering distance-driven ne peut pas dépendre du zoom natif d'une couche, seulement des
+FEATURES qui existent dans la source. Fix : plus de `minimumZoomLevel` sur
+`direction-chevron-layer` — la densité est pilotée par `RideMapLibreView.updateChevronShape`,
+qui recombine l'espacement CONFIGURÉ par trace (it11, jamais perdu) avec un palier dérivé du
+zoom courant via `DirectionChevronComputer.adaptiveSpacingMeters` (le plus GRAND des deux —
+jamais resserré par la table, seulement élargi). Recalculé en continu pendant un geste via le
+delegate `regionIsChangingWith` (vérifié contre le header vendored MLNMapViewDelegate.h) pour
+un rendu "sans saut" ; le dedup déjà existant sur l'espacement effectif limite le vrai
+recalcul aux seules transitions de palier (~6 valeurs), pas à chaque frame.
+

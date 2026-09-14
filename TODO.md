@@ -1,5 +1,40 @@
 # TODO
 
+## Itération 17 (zones hors-ligne, explication tuiles, chevrons dézoom, replay v2, fiche trace A/B)
+
+Cinq blocs livrés : `feat:"offline-zones-outline"`, `docs:"tiles-zoom-explainer"`,
+`feat:"chevrons-zoom-adaptive"`, `feat:"replay-marker-heading-x2"`,
+`feat:"trace-fiche-map-ab-markers"` — plus un passage `/doctor` en cours de route
+(`docs:"claude-md-lazy-load-migration"`, réorganisation de la mémoire de travail en
+CLAUDE.md par dossier, aucun rapport avec le produit).
+
+- **Vérification de cette itération** : builds simulateur + device (compile-only) + suite de
+  tests (76, 0 échec, 1 skip) verts après chaque bloc. Comme toujours, **aucun** des 6 tests
+  manuels de la checklist du prompt n'a pu être exécuté dans cet environnement (pas
+  d'automatisation tactile) — contour de zone visible, encart tuiles lisible, dézoom
+  progressif sans saut, replay ×2/×8 avec virage connu, toggle A↔B ×5 sur la fiche trace,
+  sortie réelle 10-15 min : tout reste à confirmer par le propriétaire.
+
+- **Décision de scope assumée (Bloc 5)** : `TrackMapView` (MapKit) et `TrackThumbnailView`
+  (Canvas) ne sont plus appelés depuis `TrackSettingsView` (remplacés par
+  `TrackFicheMapView`), mais ni l'un ni l'autre n'a été supprimé. `TrackMapView` garde un
+  autre consommateur réel (`TrackDetailView`, it13). `TrackThumbnailView` devient orphelin
+  (plus aucun point d'entrée UI) mais suit le même patron déjà établi pour
+  `RideModeSegmentedControl`/`TrackDetailView` : fichier intact, pas de suppression tant
+  qu'un besoin de le réutiliser n'est pas confirmé.
+
+- **Décision de scope assumée (Bloc 1)** : `DownloadedRegion.boundingBox` affiche un
+  rectangle englobant pour TOUTES les zones, y compris les corridors de trace (non
+  rectangulaires en réalité) — repli explicitement autorisé par le prompt, pas une
+  approximation cachée. Une vraie géométrie de corridor demanderait de re-dériver la forme
+  depuis la trace d'origine (si elle est encore en Biblio), non fait ce tour-ci.
+
+- **Bug trouvé et corrigé en cours de route (pas un TODO, tracé pour mémoire)** : les 4
+  nouveaux `CLAUDE.md` par dossier créés pendant le passage `/doctor` faisaient planter le
+  build (xcodegen les traitait comme des ressources à copier dans le bundle, collision de 4
+  fichiers homonymes sur le même chemin de sortie) — corrigé par des `excludes:` explicites
+  dans `project.yml`. À surveiller si un futur `CLAUDE.md` par dossier est ajouté.
+
 ## Itération 16 (corrections terrain — retours de tests tactiles réels du propriétaire)
 
 Six bugs remontés par un vrai passage terrain sur les fonctionnalités it14/it15 (checklist de

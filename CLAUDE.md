@@ -115,10 +115,20 @@ GPXlibre/
                    RETIRÉ it14, spec "remove-start-choice", redondant avec le sens A→B/it12 ;
                    `TrackRideSettings.customStartPointIndex` reste dans le modèle/persistance
                    pour ne pas casser une valeur héritée, juste plus d'UI pour en DÉFINIR une
-                   nouvelle), TrackMapView (simplifié it14, plus de tap-to-pick, juste un
-                   aperçu), RootView (TabView)
+                   nouvelle), TrackFicheMapView (it17, Bloc 5 : carte unique MapLibre —
+                   trace + chevrons agrandis taille fixe + repères A/B, cadrage auto sur
+                   l'emprise — remplace dans TrackSettingsView le duo TrackMapView/
+                   TrackThumbnailView), TrackMapView (simplifié it14 ; reste utilisé par
+                   TrackDetailView UNIQUEMENT depuis it17, ne plus l'appeler depuis
+                   TrackSettingsView), RootView (TabView)
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
-                   TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure
+                   TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure,
+                   ORPHELINE depuis it17 (plus de point d'entrée UI, remplacée par
+                   TrackFicheMapView dans TrackSettingsView) mais fichier intact, même patron
+                   que TrackDetailView/RideModeSegmentedControl (voir TODO.md) ; algorithme
+                   d'échantillonnage équitable des chevrons (`capChevrons`) généralisé en
+                   coordonnées réelles dans `DirectionChevronComputer.evenlySpacedSubset`
+                   (it17) plutôt que réutilisé tel quel (types différents)
                    de la trace avec chevrons + pastille de sens, aucune carte interactive.
                    Gotcha (fix "biblio-direction-live-refresh", it12) : un `Canvas` dans une
                    `Form`/`List` peut rester visuellement figé après un changement de state

@@ -67,3 +67,22 @@ consécutifs n'existe plus, remplacé par cette comparaison directe de distance 
 rien d'autre ne change. Se valide via le mode replay debug (voir section roadbook ci-dessus),
 pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
 
+## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
+
+Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne
+suit PAS les positions synthétiques du replay — piloté par le vrai CoreLocation du device,
+jamais par `session.handle(location:)`. D'où `RideMapLibreView`'s marqueur blanc dédié
+(`MLNPointAnnotation`, seul usage de cette classe concrète sur cette carte).
+
+Sandbox : `RideSessionManager.isDebugReplayActive`/`debugReplayForcesHeadingUp` sont
+volontairement SANS `#if DEBUG` (pour ne pas propager la compilation conditionnelle dans
+RideView/RideMapLibreView, déjà partagés) mais écrits UNIQUEMENT par `debugSetReplayActive`,
+appelé UNIQUEMENT depuis `DebugReplayDriver` (fichier entier `#if DEBUG`, absent des builds
+Release) — restent inertes (`false`) en usage normal. Le marqueur lui-même est passé à
+`RideMapLibreView` via `.environment(\.isDebugReplayMarkerActive, ...)`, PAS en paramètre
+d'init : son init est contractuel (protocole `MapProvider`, signature fixe, voir
+`MapProvider.swift`), y ajouter un paramètre casse la conformité (déjà rencontré, corrigé).
+`is2DNorthUp` réel de l'utilisateur n'est jamais modifié — `RideView.effectiveIs2DNorthUp`
+calcule la valeur AFFICHÉE (force cap-en-haut si `debugReplayForcesHeadingUp`) sans toucher à
+l'état persistant.
+

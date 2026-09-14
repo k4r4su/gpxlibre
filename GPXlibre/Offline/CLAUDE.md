@@ -23,3 +23,18 @@ liste réelle. Donner une caméra initiale raisonnable à une carte de sélectio
 PAS une protection suffisante — un utilisateur peut toujours pincer manuellement jusqu'au zoom
 monde, le garde-fou de compte reste la seule protection qui couvre tous les cas.
 
+## Contour des zones hors-ligne (spec "offline-zones-outline", it17, Bloc 1)
+
+`DownloadedRegion.boundingBox` dérive un rectangle englobant depuis la liste de tuiles —
+UNIQUEMENT celles du zoom le PLUS BAS présent (le moins nombreuses ; un corridor peut compter
+des dizaines de milliers de tuiles au zoom max, inutile de toutes les parcourir pour une bbox).
+C'est un repli assumé, explicitement autorisé par le prompt ("rectangle englobant si la
+géométrie exacte n'est pas accessible") : le modèle ne stocke JAMAIS la bbox/le polygone
+d'origine, donc même un corridor de trace (non rectangulaire en réalité) s'affiche comme une
+bbox — approximation documentée, pas un bug. `RegionPickerMapView` affiche le contour de
+CHAQUE zone déjà téléchargée (trait ambré + remplissage léger, `MLNPolygon` en annotation
+legacy) en cadrant une nouvelle zone, diffé par signature (id+nombre de tuiles). Piège vérifié
+dans le header vendored : `lineWidthForPolylineAnnotation` ne s'applique PAS à un `MLNPolygon`
+(classe distincte de `MLNPolyline`) — pas de contrôle d'épaisseur de contour possible via cette
+API legacy, reste au défaut du SDK.
+
