@@ -28,4 +28,23 @@ final class TileCoordinateTests: XCTestCase {
 
         XCTAssertEqual(count, 0)
     }
+
+    // MARK: - northWestCorner (spec "offline-zones-outline", it17, Bloc 1)
+
+    /// Round-trip avec `covering` : le coin NO de la tuile qui couvre un point doit être au
+    /// nord-ouest (ou exactement sur) ce point, jamais au-delà.
+    func testNorthWestCornerIsConsistentWithCovering() {
+        let coordinate = CLLocationCoordinate2D(latitude: 45.5, longitude: 5.5)
+        let tile = TileCoordinate.covering(latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: 10)
+        let corner = TileCoordinate.northWestCorner(z: tile.z, x: tile.x, y: tile.y)
+
+        XCTAssertLessThanOrEqual(corner.longitude, coordinate.longitude)
+        XCTAssertGreaterThanOrEqual(corner.latitude, coordinate.latitude)
+    }
+
+    func testNorthWestCornerOfTile000IsTopLeftOfTheWorld() {
+        let corner = TileCoordinate.northWestCorner(z: 0, x: 0, y: 0)
+        XCTAssertEqual(corner.longitude, -180, accuracy: 0.001)
+        XCTAssertEqual(corner.latitude, 85.05, accuracy: 0.01, "limite de Mercator standard (~85.0511°)")
+    }
 }

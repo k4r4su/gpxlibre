@@ -225,10 +225,13 @@ private struct TrackRow: View {
                     Text(track.name)
                         .font(.headline)
                     if isFullyOffline {
-                        Label("100% hors-ligne", systemImage: "checkmark.seal.fill")
+                        // Spec "offline-zones-outline" (it17, Bloc 1) : libellé aligné sur le
+                        // texte demandé par le prompt ("hors-ligne OK"), badge discret inchangé
+                        // (icône seule dans la ligne Biblio, déjà en place depuis it10).
+                        Label("Hors-ligne OK", systemImage: "checkmark.seal.fill")
                             .labelStyle(.iconOnly)
                             .foregroundStyle(.green)
-                            .accessibilityLabel("Carte 100% hors-ligne")
+                            .accessibilityLabel("Trace entièrement hors-ligne — Hors-ligne OK")
                     }
                 }
                 // Spec "biblio-date-display" (it15, Bloc 1) : sobre, gris secondaire, sous le

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02E07B3DEEE5DD13C029CDE3 /* OfflineExplainerText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E068E9FC78377B3BBA88756 /* OfflineExplainerText.swift */; };
 		07215900E4D166483B5F7D81 /* Checkpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B74ED338BF91B332800AAB /* Checkpoint.swift */; };
 		08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */; };
 		099C5A7623BE0FD97D227F0E /* MapSourceResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D97555B8E452AABE6A2E11 /* MapSourceResolverTests.swift */; };
@@ -29,6 +30,7 @@
 		2DE43FA7A50D38FCCEC75174 /* RoadbookTier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B5A65A3321670DE2922CCD /* RoadbookTier.swift */; };
 		2F059C71ECD7B3EBFFD8BFD3 /* ZoomPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D22E5E8DC826672C1444EB1 /* ZoomPreset.swift */; };
 		3221BF7F8584B39F70929E3F /* TileDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B395D30C56F450B0CA73BA8 /* TileDownloadQueue.swift */; };
+		3364D5FC23D064C76BEAD23E /* DownloadedRegionBoundingBoxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9E3A3ECFCF6413F2F3861F /* DownloadedRegionBoundingBoxTests.swift */; };
 		353F9A7552DADBF1C5C6D118 /* WaypointConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01B0DE3FE656FC8A6063BDEE /* WaypointConstants.swift */; };
 		3C218C6758F9CB63343BE646 /* ResumeGuidanceCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C0D10C0B8B572A8B761630 /* ResumeGuidanceCardView.swift */; };
 		3CD0F2C319A84BB124A07908 /* DownloadedRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */; };
@@ -185,6 +187,7 @@
 		45B74ED338BF91B332800AAB /* Checkpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkpoint.swift; sourceTree = "<group>"; };
 		47F7B9E74AA4BCA11F14DC74 /* GPXPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXPoint.swift; sourceTree = "<group>"; };
 		4B0A792C3701FF9CCF989D33 /* RideSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSettingsStore.swift; sourceTree = "<group>"; };
+		4B9E3A3ECFCF6413F2F3861F /* DownloadedRegionBoundingBoxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedRegionBoundingBoxTests.swift; sourceTree = "<group>"; };
 		4E060D0D1BA1FF825888EE35 /* TrackFullSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFullSheetView.swift; sourceTree = "<group>"; };
 		50F6B4CC1371445701229DA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		52E7A97540684CC96DCBEE99 /* BlockageLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockageLogStore.swift; sourceTree = "<group>"; };
@@ -211,6 +214,7 @@
 		7B7845E29E404A5D52E24239 /* RoadbookInflectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookInflectionTests.swift; sourceTree = "<group>"; };
 		7B9096A18F5E400501B3D925 /* TrackProjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackProjector.swift; sourceTree = "<group>"; };
 		7BD55F72C9A2DD6669A079B8 /* VectorPackagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorPackagesView.swift; sourceTree = "<group>"; };
+		7E068E9FC78377B3BBA88756 /* OfflineExplainerText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineExplainerText.swift; sourceTree = "<group>"; };
 		7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedRegion.swift; sourceTree = "<group>"; };
 		7EBC2E5A5E3A9151D4632F8A /* RegionPickerMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionPickerMapView.swift; sourceTree = "<group>"; };
 		806DB1F8EA1D1847C7264FCB /* VectorPackageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorPackageStore.swift; sourceTree = "<group>"; };
@@ -403,6 +407,7 @@
 				B474A0CD23D4910F89D3D0F7 /* CorridorPrecacheEstimator.swift */,
 				7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */,
 				D45900199AF18B7481E52EDA /* OfflineConstants.swift */,
+				7E068E9FC78377B3BBA88756 /* OfflineExplainerText.swift */,
 				DA6F6ACEFE13A55FAA120D3D /* PrecacheConfirmationView.swift */,
 				C5FE91CFBDF5BB2AF127AF9A /* RegionDownloadView.swift */,
 				7EBC2E5A5E3A9151D4632F8A /* RegionPickerMapView.swift */,
@@ -487,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				CF7AFFBB5B4ABA6BCF1B3951 /* DirectionChevronComputerTests.swift */,
+				4B9E3A3ECFCF6413F2F3861F /* DownloadedRegionBoundingBoxTests.swift */,
 				88B543FE9512085C6439D729 /* GoToGuidanceTests.swift */,
 				193A05F4F7F2CBEEEF686F9E /* GuidanceToggleTests.swift */,
 				5C34BDEDDCA85102570904CE /* LateralCapBannerViewTests.swift */,
@@ -681,6 +687,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DA4268BBF0D1120BAA978229 /* DirectionChevronComputerTests.swift in Sources */,
+				3364D5FC23D064C76BEAD23E /* DownloadedRegionBoundingBoxTests.swift in Sources */,
 				A7541430D60DA3C2CD3D1825 /* GoToGuidanceTests.swift in Sources */,
 				3D4F6B73F2188153466D078A /* GuidanceToggleTests.swift in Sources */,
 				75F5D6CBD67B404FFCB65F1A /* LateralCapBannerViewTests.swift in Sources */,
@@ -751,6 +758,7 @@
 				7A11B4D762CACFC34BCF5E40 /* NominatimGeocodingService.swift in Sources */,
 				520BFDFCBE94788B4FD75EC7 /* OSMAttributionView.swift in Sources */,
 				EEF06EDE0AB369C7B4525E74 /* OfflineConstants.swift in Sources */,
+				02E07B3DEEE5DD13C029CDE3 /* OfflineExplainerText.swift in Sources */,
 				E5A500AA9CF53E8DA446808F /* OnboardingView.swift in Sources */,
 				A6A7BA1FB4E8A4D41C6F4769 /* PrecacheConfirmationView.swift in Sources */,
 				A72E159D4959780D1CB213BD /* RecordingConstants.swift in Sources */,

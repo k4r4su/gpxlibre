@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 struct DownloadedRegion: Codable, Identifiable {
     enum Kind: String, Codable {
@@ -27,6 +28,25 @@ struct DownloadedRegion: Codable, Identifiable {
 
     var tileCount: Int { tiles.count }
     var estimatedBytes: Int64 { Int64(tiles.count) * OfflineConstants.averageTileSizeBytes }
+
+    /// Rectangle englobant (spec "offline-zones-outline", it17, Bloc 1) : "contour fin ambré
+    /// ... ou rectangle englobant si la géométrie exacte n'est pas accessible" — le modèle ne
+    /// stocke que la liste de tuiles (`tiles`), jamais la bbox/le polygone d'origine, donc
+    /// systématiquement le repli bbox explicitement autorisé par le prompt, y compris pour un
+    /// corridor de trace (non rectangulaire en réalité — approximation assumée, documentée).
+    /// Dérivée SEULEMENT des tuiles du zoom le PLUS BAS présent (le moins nombreuses, un
+    /// corridor à 6 niveaux de zoom peut compter des dizaines de milliers de tuiles au zoom
+    /// max — inutile de toutes les parcourir pour une simple bbox).
+    var boundingBox: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)? {
+        guard let minZ = tiles.map(\.z).min() else { return nil }
+        let tilesAtMinZoom = tiles.filter { $0.z == minZ }
+        guard let minX = tilesAtMinZoom.map(\.x).min(), let maxX = tilesAtMinZoom.map(\.x).max(),
+              let minY = tilesAtMinZoom.map(\.y).min(), let maxY = tilesAtMinZoom.map(\.y).max()
+        else { return nil }
+        let northWest = TileCoordinate.northWestCorner(z: minZ, x: minX, y: minY)
+        let southEast = TileCoordinate.northWestCorner(z: minZ, x: maxX + 1, y: maxY + 1)
+        return (minLat: southEast.latitude, maxLat: northWest.latitude, minLon: northWest.longitude, maxLon: southEast.longitude)
+    }
 }
 
 /// Persiste la liste des zones téléchargées (corridors de traces + zones manuelles), pour

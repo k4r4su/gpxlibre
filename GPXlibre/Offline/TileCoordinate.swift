@@ -49,6 +49,16 @@ struct TileCoordinate: Hashable {
         return result
     }
 
+    /// Coin nord-ouest (lat/lon) d'une tuile z/x/y — inverse de `covering` — spec "offline-
+    /// zones-outline" (it17, Bloc 1) : dérive une bbox lat/lon depuis un ensemble de tuiles
+    /// SANS avoir besoin de la géométrie source d'origine (jamais stockée telle quelle).
+    static func northWestCorner(z: Int, x: Int, y: Int) -> CLLocationCoordinate2D {
+        let n = pow(2.0, Double(z))
+        let lon = Double(x) / n * 360.0 - 180.0
+        let latRad = atan(sinh(.pi * (1 - 2 * Double(y) / n)))
+        return CLLocationCoordinate2D(latitude: latRad * 180.0 / .pi, longitude: lon)
+    }
+
     /// Compte O(1) (fix "region-picker-huge-bbox-crash") — À APPELER avant `tiles(...)` pour
     /// vérifier `OfflineConstants.regionTileCountHardCap` sans jamais matérialiser la liste
     /// complète : une zone "monde" au zoom 16 représente des milliards d'éléments, largement
