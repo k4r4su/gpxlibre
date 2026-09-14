@@ -538,7 +538,7 @@ struct RideView: View {
         .rideToast(message: toastMessage)
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
-                trackName: track?.name ?? "Sortie Nav",
+                originalTrackName: track?.name,
                 points: session.recordedPoints,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 onFinished: { showEndRideSheet = false }

@@ -1,21 +1,37 @@
 import SwiftUI
 
-/// Terminer la sortie : commentaire d'une ligne (optionnel), enregistrement de la trace
+/// Terminer la sortie : nom + commentaire d'une ligne (optionnel), enregistrement de la trace
 /// roulée dans la Bibliothèque, puis partage du .gpx via le share sheet système.
 struct EndRideView: View {
-    let trackName: String
+    /// Nom de la trace SUIVIE pendant le Ride (référence, jamais modifiée) — sert uniquement
+    /// à préremplir `trackName` ci-dessous, jamais écrit tel quel : fix
+    /// "end-ride-default-name" (bug terrain, it16) : la trace ENREGISTRÉE reprenait
+    /// auparavant ce nom À L'IDENTIQUE, donc indiscernable de la trace d'origine dans Biblio
+    /// une fois importée.
+    let originalTrackName: String?
     let points: [GPXPoint]
     let waypoints: [RollingWaypoint]
     let onFinished: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var session: RideSessionManager
+    @State private var trackName = ""
     @State private var comment = ""
     @State private var exportURL: URL?
+
+    private static let defaultNameDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter
+    }()
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Nom de la trace enregistrée") {
+                    TextField("Nom", text: $trackName)
+                }
                 Section("Commentaire de fin de sortie") {
                     TextField("Une ligne, optionnel", text: $comment)
                 }
@@ -44,10 +60,15 @@ struct EndRideView: View {
                         }
                     } else {
                         Button("Enregistrer") { save() }
-                            .disabled(points.count < 2)
+                            .disabled(points.count < 2 || trackName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
             }
+        }
+        .onAppear {
+            guard trackName.isEmpty else { return }
+            let base = originalTrackName ?? "Sortie"
+            trackName = "\(base) – \(Self.defaultNameDateFormatter.string(from: Date()))"
         }
     }
 
