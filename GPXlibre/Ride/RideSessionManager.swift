@@ -138,12 +138,12 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var offTrackAccumulatedDistance: Double = 0
     private var lastOffTrackLocation: CLLocation?
 
-    // MARK: - Resync hors-trace (spec "resync-hysteresis") — hystérésis de reprise, distincte
-    // du minuteur "Portion bloquée ?" ci-dessus (celui-ci propose un détour après 30s/200m ;
-    // la pause roadbook ci-dessous s'active IMMÉDIATEMENT dès la sortie de trace, pour ne
-    // plus rappeler un checkpoint largué).
-    private var onTrackStableSinceDate: Date?
-    private var onTrackStableFixCount: Int = 0
+    // MARK: - Resync hors-trace (spec "resync-hysteresis" it10, seuils remplacés
+    // "offtrace-threshold-hysteresis" it14) — pause roadbook DISTINCTE du minuteur "Portion
+    // bloquée ?" ci-dessus (celui-ci propose un détour après 30s/200m ; la pause roadbook
+    // ci-dessous s'active IMMÉDIATEMENT dès la sortie de trace, pour ne plus rappeler un
+    // checkpoint largué) — plus de bookkeeping temporel séparé depuis it14 (voir
+    // updateRoadbookProgress, hystérésis à deux seuils de distance uniquement).
     private var detourTask: Task<Void, Never>?
 
     private var rideStartDate: Date?
@@ -383,8 +383,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isOffTrackPaused = false
         offTrackResumeCoordinate = nil
         offTrackResumeDistanceMeters = nil
-        onTrackStableSinceDate = nil
-        onTrackStableFixCount = 0
         resumeTask?.cancel()
         resumeGuidance = nil
         isRequestingResume = false
@@ -616,12 +614,17 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         rideContext == .fastRoad ? RideConstants.fastRoadAlertDistanceMeters : settings.checkpointAlertDistanceMeters
     }
 
-    /// Bloc 2 "resync-hysteresis" — tant que hors trace (au-delà du seuil d'alerte), le
-    /// roadbook s'arrête (plus de rappel d'un checkpoint déjà largué) : affiche à la place un
-    /// indicateur "hors trace" + le point de reprise le plus proche plus loin sur la trace
-    /// (même mécanique que le détour direct sans réseau). Le retour au guidage complet
-    /// n'intervient qu'après une période stable ON trace (hystérésis), et reprend TOUJOURS à
-    /// l'index courant ou plus loin — jamais de rattrapage des checkpoints déjà passés.
+    /// Bloc 2 "resync-hysteresis" (it10), seuils remplacés spec "offtrace-threshold-
+    /// hysteresis" (it14, Bloc 8, bug terrain confirmé par capture du 14/09 : bandeau "Hors
+    /// trace" persistant alors que la position était proche de la trace) — tant que hors
+    /// trace (au-delà de `horsTraceEnterMeters`), le roadbook s'arrête (plus de rappel d'un
+    /// checkpoint déjà largué) : affiche à la place un indicateur "hors trace" + le point de
+    /// reprise le plus proche plus loin sur la trace (même mécanique que le détour direct sans
+    /// réseau). Hystérésis à DEUX seuils distincts (30 m entrée / 25 m sortie) plutôt qu'un
+    /// seuil unique + hystérésis temporelle (20 s/2 fixs) : la bande 25-30 m EST l'anti-rebond,
+    /// aucun état ne change tant que la distance y reste — plus besoin de bookkeeping temporel
+    /// séparé. Le retour au guidage complet reprend TOUJOURS à l'index courant ou plus loin —
+    /// jamais de rattrapage des checkpoints déjà passés.
     private func updateRoadbookProgress(from location: CLLocation, projection: TrackProjector.Projection?) {
         // "Reprendre la trace ici" confirmé (Bloc 3) : la progression normale est gelée tant
         // que le guidage vers le pin n'a pas atteint sa jonction — en phase "previewing"
@@ -634,31 +637,19 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         guard let projection else { return }
 
-        guard projection.distanceToTrackMeters <= RideConstants.offTrackDistanceThresholdMeters else {
-            onTrackStableSinceDate = nil
-            onTrackStableFixCount = 0
-            isOffTrackPaused = true
-            updateOffTrackResumeTarget(from: location, projection: projection)
-            return
-        }
-
         if isOffTrackPaused {
-            if onTrackStableSinceDate == nil {
-                onTrackStableSinceDate = location.timestamp
-                onTrackStableFixCount = 0
+            guard projection.distanceToTrackMeters <= RideConstants.horsTraceExitMeters else {
+                updateOffTrackResumeTarget(from: location, projection: projection)
+                return
             }
-            onTrackStableFixCount += 1
-            let stableElapsed = location.timestamp.timeIntervalSince(onTrackStableSinceDate ?? location.timestamp)
-            let isStableEnough = stableElapsed >= RideConstants.resyncHysteresisSeconds
-                || onTrackStableFixCount >= RideConstants.resyncMinConsecutiveStableFixes
-            guard isStableEnough else { return }
-
             resyncCheckpointIndex(to: projection)
             isOffTrackPaused = false
             offTrackResumeCoordinate = nil
             offTrackResumeDistanceMeters = nil
-            onTrackStableSinceDate = nil
-            onTrackStableFixCount = 0
+        } else if projection.distanceToTrackMeters > RideConstants.horsTraceEnterMeters {
+            isOffTrackPaused = true
+            updateOffTrackResumeTarget(from: location, projection: projection)
+            return
         }
 
         guard currentCheckpointIndex < checkpoints.count else {

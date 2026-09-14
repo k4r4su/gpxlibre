@@ -134,8 +134,20 @@ enum RideConstants {
 
     // MARK: - Chemin bloqué / détour temporaire (la trace originale n'est JAMAIS modifiée)
 
-    /// Distance perpendiculaire à la trace (m) au-delà de laquelle on est considéré "hors trace".
+    /// Distance perpendiculaire à la trace (m) au-delà de laquelle on est considéré "hors
+    /// trace" pour "Portion bloquée ?" (30 s/200 m avant proposition de détour) — DISTINCT du
+    /// panneau/bannière "Hors trace" du roadbook, voir HORS_TRACE_ENTER_M/EXIT_M ci-dessous
+    /// (spec "offtrace-threshold-hysteresis", it14, Bloc 8), non touché par ce fix.
     static let offTrackDistanceThresholdMeters: Double = 50
+
+    /// HORS_TRACE_ENTER_M / HORS_TRACE_EXIT_M (spec "offtrace-threshold-hysteresis", it14,
+    /// Bloc 8, bug terrain confirmé par capture du 14/09 : bandeau "Hors trace" persistant
+    /// alors que la position était proche de la trace). Hystérésis à DEUX seuils distincts —
+    /// remplace l'ancienne hystérésis à seuil unique (50 m) + temporelle (20 s ou 2 fixs
+    /// stables) : la bande ENTER-EXIT (30 m > distance > 25 m) EST l'anti-rebond, aucun état
+    /// ne change tant que la distance y reste, donc plus besoin de bookkeeping temporel séparé.
+    static let horsTraceEnterMeters: Double = 30
+    static let horsTraceExitMeters: Double = 25
 
     /// Temps continu hors trace avant proposition de contournement.
     static let offTrackStagnantDurationSeconds: Double = 30
@@ -161,14 +173,6 @@ enum RideConstants {
     /// avoir à zoomer. Le slider garde toutes les valeurs précédentes.
     static let directionArrowSpacingMetersDefault: Double = 100
     static let directionArrowSpacingMetersOptions: [Double] = [100, 200, 500, 1000]
-
-    /// RESYNC_HYSTERESIS_S : durée stable ON trace avant reprise complète du roadbook — évite
-    /// un rebond d'un seul point GPS dérivant near la trace. Voir aussi
-    /// resyncMinConsecutiveStableFixes (OU logique : le premier des deux déclenche la reprise).
-    static let resyncHysteresisSeconds: Double = 20
-    /// Alternative "au moins N points GPS consécutifs proches de la trace" — peu importe le
-    /// temps exact, l'important est une vraie reprise, pas un rebond isolé.
-    static let resyncMinConsecutiveStableFixes: Int = 2
 
     static let detourRoutingTimeoutSeconds: Double = 12
 
