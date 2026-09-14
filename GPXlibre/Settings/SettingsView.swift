@@ -89,7 +89,10 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Trace") {
+                // Renommée "Trace" → "Apparence" (spec "controls-side-setting", it14, Bloc 2 :
+                // "Réglages > Apparence > Position contrôles") — regroupe désormais aussi le
+                // côté de la colonne de contrôles Ride, pas seulement le rendu de la trace.
+                Section("Apparence") {
                     Picker("Épaisseur", selection: $settings.traceWidthPreset) {
                         ForEach(TraceWidthPreset.allCases) { preset in
                             Text(preset.label).tag(preset)
@@ -107,6 +110,14 @@ struct SettingsView: View {
                             .tag(preset)
                         }
                     }
+
+                    Picker("Position contrôles", selection: $settings.controlsSide) {
+                        ForEach(ControlsSide.allCases) { side in
+                            Text(side.label).tag(side)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .longPressTooltip("Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté")
                 }
 
                 Section("Écran") {

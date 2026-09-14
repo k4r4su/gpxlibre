@@ -100,6 +100,11 @@ final class RideSettingsStore: ObservableObject {
     @Published var rideAnchorYFraction: Double {
         didSet { defaults.set(rideAnchorYFraction, forKey: Keys.rideAnchorYFraction) }
     }
+    /// Côté de la colonne de contrôles Ride (spec "controls-side-setting", it14, Bloc 2) — le
+    /// badge vitesse permute automatiquement du côté opposé, voir RideView.
+    @Published var controlsSide: ControlsSide {
+        didSet { defaults.set(controlsSide.rawValue, forKey: Keys.controlsSide) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -172,5 +177,11 @@ final class RideSettingsStore: ObservableObject {
         let storedAnchor = defaults.object(forKey: Keys.rideAnchorYFraction) as? Double
         rideAnchorYFraction = storedAnchor.map { min(max($0, anchorRange.lowerBound), anchorRange.upperBound) }
             ?? RideConstants.rideAnchorYFractionDefault
+
+        if let rawSide = defaults.string(forKey: Keys.controlsSide), let side = ControlsSide(rawValue: rawSide) {
+            controlsSide = side
+        } else {
+            controlsSide = .right
+        }
     }
 }

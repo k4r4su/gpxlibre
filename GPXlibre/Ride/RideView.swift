@@ -328,18 +328,31 @@ struct RideView: View {
         }
     }
 
-    /// Bas-droite (fix "overlay-layout-grid", Bug 3) : colonne verticale ANCRÉE EN BAS
-    /// (au-dessus de la tab bar, jamais au centre) — ordre figé : Me recentrer, +, −, Stop,
-    /// Bloqué/Signaler, espacés uniformément de 12 pt. Plus jamais mélangée au badge vitesse
-    /// (bas-gauche, zone totalement séparée).
+    /// Colonne de contrôles (fix "overlay-layout-grid", Bug 3 ; côté réglable depuis spec
+    /// "controls-side-setting", it14, Bloc 2) : ANCRÉE EN BAS (au-dessus de la tab bar, jamais
+    /// au centre) — ordre figé : Me recentrer, bannière roadbook (empilée au-dessus des boutons
+    /// de zoom, spec Bloc 2), +, −, Stop, Bloqué/Signaler, espacés uniformément de 12 pt. Le
+    /// badge vitesse (`speedoBadgeLayer`) permute TOUJOURS du côté opposé (voir
+    /// `RideSettingsStore.controlsSide`) — jamais de chevauchement possible, les deux zones
+    /// bougent ensemble. Largeur FIXE (92 pt, celle de la bannière) : l'apparition/disparition
+    /// de la bannière ne doit jamais faire bouger horizontalement les boutons en dessous.
     @ViewBuilder
-    private var bottomRightColumn: some View {
+    private var bottomControlsColumn: some View {
         HStack {
-            Spacer()
+            if settings.controlsSide == .right { Spacer() }
             VStack(spacing: RideOverlayLayout.rightStackSpacing) {
                 Spacer()
                 if session.isManualOverrideActive {
                     RideRecenterButton { session.recenterCamera() }
+                }
+                if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
+                    LateralCapBannerView(
+                        direction: inflection.direction,
+                        distanceMeters: distance,
+                        sequenceIndex: inflection.sequenceIndex,
+                        totalCount: session.inflectionPoints.count
+                    )
+                    .transition(.ridePanel)
                 }
                 RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
                 RideStopButton { showStopConfirmation = true }
@@ -349,17 +362,21 @@ struct RideView: View {
                     NavReportButton()
                 }
             }
+            .frame(width: 92)
             .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
-            .padding(.trailing, 20)
+            .animation(.ridePanel, value: isLateralBannerVisible)
+            .padding(settings.controlsSide == .right ? .trailing : .leading, 20)
             .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
+            if settings.controlsSide == .left { Spacer() }
         }
     }
 
-    /// Bas-gauche (fix "overlay-layout-grid", Bug 3) : badge vitesse ancré juste au-dessus de
-    /// la tab bar — plus au top-droite (ancienne position, source de chevauchement avec les
-    /// bannières hautes).
-    private var bottomLeftBadge: some View {
+    /// Badge vitesse (fix "overlay-layout-grid", Bug 3) : ancré juste au-dessus de la tab bar,
+    /// TOUJOURS du côté opposé à `bottomControlsColumn` (spec "controls-side-setting", it14) —
+    /// zone totalement séparée de la colonne de contrôles, jamais mélangée.
+    private var speedoBadgeLayer: some View {
         HStack {
+            if settings.controlsSide == .left { Spacer() }
             VStack {
                 Spacer()
                 if showStatsPanel {
@@ -381,9 +398,9 @@ struct RideView: View {
                     }
                 }
             }
-            .padding(.leading, 20)
+            .padding(settings.controlsSide == .left ? .trailing : .leading, 20)
             .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
-            Spacer()
+            if settings.controlsSide == .right { Spacer() }
         }
     }
 
@@ -399,30 +416,6 @@ struct RideView: View {
             && !session.isOffTrackPaused
             && session.currentInflection != nil
             && (session.distanceToCurrentInflectionMeters ?? .infinity) <= RideConstants.bannerAlertStartMeters
-    }
-
-    @ViewBuilder
-    private var lateralCapBannerLayer: some View {
-        if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
-            // Même patron que leftMiddleLayer : le ZStack parent est aligné .bottom, donc sans
-            // ce sandwich Spacer/contenu/Spacer la bannière tomberait en bas de l'écran au lieu
-            // d'être centrée verticalement (bug vu en capture, corrigé avant tout livrable).
-            HStack {
-                Spacer()
-                VStack {
-                    Spacer()
-                    LateralCapBannerView(
-                        direction: inflection.direction,
-                        distanceMeters: distance,
-                        sequenceIndex: inflection.sequenceIndex,
-                        totalCount: session.inflectionPoints.count
-                    )
-                    Spacer()
-                }
-                .padding(.trailing, 16)
-            }
-            .transition(.move(edge: .trailing).combined(with: .opacity))
-        }
     }
 
     /// Point d'entrée : mesure la VRAIE safe area (encoche/Dynamic Island en haut ; tab bar +
@@ -464,13 +457,11 @@ struct RideView: View {
 
             topStackLayer(track: track)
             leftMiddleLayer
-            bottomRightColumn
-            bottomLeftBadge
-            lateralCapBannerLayer
+            bottomControlsColumn
+            speedoBadgeLayer
 
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
-        .animation(.ridePanel, value: isLateralBannerVisible)
         .confirmationDialog("Chemin bloqué", isPresented: $showDetourConfirmation, titleVisibility: .visible) {
             Button("Contourner (route)") { session.requestDetour(profile: .route) }
             Button("Contourner (piste)") { session.requestDetour(profile: .offroad) }
