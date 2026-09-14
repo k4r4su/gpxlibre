@@ -15,6 +15,9 @@ struct RegionDownloadView: View {
     @State private var estimate: PrecacheEstimate?
     /// Fix "region-picker-huge-bbox-crash" (bug terrain, it16) — voir OfflineConstants.
     @State private var isZoneTooLarge = false
+    /// Spec "tiles-zoom-explainer" (it17, Bloc 2) — replié par défaut, pas besoin d'imposer le
+    /// texte à qui sait déjà ce qu'est un niveau de zoom.
+    @State private var isExplainerExpanded = false
 
     /// La zone téléchargée suit toujours le thème carte actif (#10), Relief inclus.
     private var activeSource: TileSource { TileSource.active(for: settings.mapThemePreset) }
@@ -26,9 +29,27 @@ struct RegionDownloadView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                RegionPickerMapView(bounds: $visibleBounds)
+                // Spec "offline-zones-outline" (it17, Bloc 1) : contour des zones DÉJÀ
+                // téléchargées visible en cadrant une nouvelle zone, pour voir la couverture
+                // existante d'un coup d'œil.
+                RegionPickerMapView(bounds: $visibleBounds, downloadedRegions: downloadedRegions.regions)
                     .frame(height: 220)
                     .listRowInsets(EdgeInsets())
+
+                // Spec "tiles-zoom-explainer" (it17, Bloc 2) : "l'utilisateur final ne
+                // comprend pas 'zoom max 12/13'" — encart pédagogique repliable juste
+                // au-dessus du sélecteur concerné, pas une page d'aide séparée qu'il faudrait
+                // aller chercher.
+                DisclosureGroup(isExpanded: $isExplainerExpanded) {
+                    Text(OfflineExplainerText.body)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                } label: {
+                    Label(OfflineExplainerText.title, systemImage: "info.circle")
+                        .font(.subheadline)
+                }
 
                 VStack(alignment: .leading) {
                     Text("Zoom max : \(Int(maxZoom))")
