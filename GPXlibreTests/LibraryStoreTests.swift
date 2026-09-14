@@ -120,6 +120,36 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertFalse(store.isDisplayed(track.id))
     }
 
+    /// Spec "biblio-date-display" (it15, Bloc 1) : tri par date décroissante — importe D'ABORD
+    /// la trace la plus ANCIENNE (metadata GPX 2020) puis la plus RÉCENTE (2024), et vérifie
+    /// que l'ordre d'affichage se réordonne bien par date malgré un ordre d'import inverse
+    /// (sinon le tri par défaut it10 "dernière importée en tête" masquerait un tri par
+    /// insertion qui semblerait correct par coïncidence).
+    func testSortsByGPXMetadataDateMostRecentFirstRegardlessOfImportOrder() {
+        let suite = "LibraryStoreTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let store = makeStore()
+
+        func importDated(name: String, isoTime: String) {
+            let gpx = """
+            <?xml version="1.0"?>
+            <gpx><metadata><time>\(isoTime)</time></metadata><trk><name>\(name)</name><trkseg>
+            <trkpt lat="45.0" lon="5.0"></trkpt>
+            <trkpt lat="45.01" lon="5.01"></trkpt>
+            </trkseg></trk></gpx>
+            """
+            let fileURL = tempDirectory.appendingPathComponent("\(UUID().uuidString).gpx")
+            try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+            try? gpx.write(to: fileURL, atomically: true, encoding: .utf8)
+            store.importTrack(from: fileURL)
+        }
+
+        importDated(name: "Ancienne", isoTime: "2020-01-01T10:00:00Z")
+        importDated(name: "Récente", isoTime: "2024-06-15T10:00:00Z")
+
+        XCTAssertEqual(store.tracks.map(\.name), ["Récente", "Ancienne"], "la trace la plus récente (metadata GPX) doit apparaître en tête, indépendamment de l'ordre d'import")
+    }
+
     func testReimportAfterFullDeletionBehavesLikeAFreshImport() {
         let store = makeStore()
         let track = importSampleTrack(into: store, name: "T")

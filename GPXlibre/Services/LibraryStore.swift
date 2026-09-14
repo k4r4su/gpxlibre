@@ -121,6 +121,7 @@ final class LibraryStore: ObservableObject {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = tracks.firstIndex(where: { $0.id == track.id }) else { return }
         tracks[index].name = trimmed
+        sortTracks()
         saveIndex()
     }
 
@@ -142,11 +143,15 @@ final class LibraryStore: ObservableObject {
         let fileName = "\(UUID().uuidString).gpx"
         let destination = tracksDirectory.appendingPathComponent(fileName)
         try data.write(to: destination)
+        // Spec "biblio-date-display" (it15, Bloc 1) : priorité metadata GPX > date de création
+        // fichier > (repli implicite sur importDate côté GPXTrack.displayDate si les deux sont nil).
+        let fileCreationDate = (try? fileManager.attributesOfItem(atPath: destination.path))?[.creationDate] as? Date
         let track = GPXTrack(
             id: UUID(),
             name: parsed.name ?? suggestedName,
             fileName: fileName,
             importDate: Date(),
+            contentDate: parsed.metadataDate ?? fileCreationDate,
             points: parsed.points,
             waypoints: parsed.waypoints
         )
@@ -157,14 +162,31 @@ final class LibraryStore: ObservableObject {
         if activeTrackID == nil {
             activeTrackID = track.id
         }
+        sortTracks()
         saveIndex()
         persistActiveState()
+    }
+
+    /// Tri Biblio (spec "biblio-date-display", it15, Bloc 1) — appliqué après chaque mutation
+    /// qui peut changer l'ordre (import, renommage) et au chargement ; `delete`/`setActive`/
+    /// `setDisplayed` ne changent ni date ni nom, pas besoin d'y retrier.
+    private func sortTracks() {
+        switch LibraryConstants.sortKey {
+        case .dateDescending:
+            tracks.sort { a, b in
+                if a.displayDate != b.displayDate { return a.displayDate > b.displayDate }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+        case .alphabetical:
+            tracks.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
     }
 
     private func loadIndex() {
         guard let data = try? Data(contentsOf: indexFileURL),
               let decoded = try? JSONDecoder().decode([GPXTrack].self, from: data) else { return }
         tracks = decoded
+        sortTracks()
     }
 
     private func saveIndex() {

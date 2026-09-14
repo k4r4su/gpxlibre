@@ -6,10 +6,50 @@ struct GPXTrack: Identifiable, Codable, Hashable {
     var name: String
     let fileName: String
     let importDate: Date
+    /// Date du CONTENU de la trace (spec "biblio-date-display", it15, Bloc 1) — distincte
+    /// d'`importDate` : `<metadata><time>` du GPX en priorité, sinon la date de création du
+    /// fichier au moment de l'import (voir `LibraryStore.addTrack`), `nil` si ni l'un ni
+    /// l'autre n'a pu être déterminé. `Optional` pour rester décodable depuis un `index.json`
+    /// pré-it15 (clé absente → `nil` via `decodeIfPresent` synthétisé, aucune migration requise).
+    let contentDate: Date?
     let points: [GPXPoint]
     let waypoints: [GPXPoint]
 
+    init(
+        id: UUID,
+        name: String,
+        fileName: String,
+        importDate: Date,
+        contentDate: Date? = nil,
+        points: [GPXPoint],
+        waypoints: [GPXPoint]
+    ) {
+        self.id = id
+        self.name = name
+        self.fileName = fileName
+        self.importDate = importDate
+        self.contentDate = contentDate
+        self.points = points
+        self.waypoints = waypoints
+    }
+
     var pointCount: Int { points.count }
+
+    /// Date affichée en Biblio (spec Bloc 1) : `contentDate` si connue, repli sur `importDate`.
+    var displayDate: Date { contentDate ?? importDate }
+
+    /// Libellé convivial en Biblio, ex. « Tracée le 7 sept. » ou « Importée le 12 sept. 2026 »
+    /// — préfixe "Tracée le" si une date de contenu réelle est connue (métadonnée GPX ou date
+    /// de création fichier), "Importée le" en repli pur sur `importDate`. Année omise si
+    /// l'année en cours, pour rester sobre au quotidien.
+    var displayDateLabel: String {
+        let prefix = contentDate != nil ? "Tracée le" : "Importée le"
+        let sameYear = Calendar.current.isDate(displayDate, equalTo: Date(), toGranularity: .year)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
+        return "\(prefix) \(formatter.string(from: displayDate))"
+    }
 
     var totalDistanceMeters: Double {
         guard points.count > 1 else { return 0 }
@@ -65,6 +105,6 @@ struct GPXTrack: Identifiable, Codable, Hashable {
         if let startIndex = settings.customStartPointIndex, reordered.indices.contains(startIndex), startIndex > 0 {
             reordered = Array(reordered[startIndex...] + reordered[..<startIndex])
         }
-        return GPXTrack(id: id, name: name, fileName: fileName, importDate: importDate, points: reordered, waypoints: waypoints)
+        return GPXTrack(id: id, name: name, fileName: fileName, importDate: importDate, contentDate: contentDate, points: reordered, waypoints: waypoints)
     }
 }

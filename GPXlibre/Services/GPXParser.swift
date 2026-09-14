@@ -28,12 +28,18 @@ final class GPXParser: NSObject, XMLParserDelegate {
     private var currentContext: PointContext = .none
 
     private var parsedName: String?
+    /// `<metadata><time>` (spec "biblio-date-display", it15, Bloc 1) — DISTINCT du `<time>` par
+    /// point (`currentTime`/`endPoint()`) : capturé uniquement quand on est dans `<metadata>`
+    /// ET hors de tout point (`currentContext == .none`), sinon un `<trkpt><time>` écraserait
+    /// la même variable partagée `currentTextBuffer`/`time` element name.
+    private var isInMetadata = false
+    private var parsedMetadataTime: Date?
 
     private enum PointContext {
         case none, trkpt, wpt, rtept
     }
 
-    static func parse(data: Data) throws -> (name: String?, points: [GPXPoint], waypoints: [GPXPoint]) {
+    static func parse(data: Data) throws -> (name: String?, points: [GPXPoint], waypoints: [GPXPoint], metadataDate: Date?) {
         let parser = GPXParser()
         let xmlParser = XMLParser(data: data)
         xmlParser.delegate = parser
@@ -44,7 +50,7 @@ final class GPXParser: NSObject, XMLParserDelegate {
         guard !points.isEmpty || !parser.waypoints.isEmpty else {
             throw GPXParserError.noTrackData
         }
-        return (parser.parsedName, points, parser.waypoints)
+        return (parser.parsedName, points, parser.waypoints, parser.parsedMetadataTime)
     }
 
     func parser(
@@ -62,6 +68,8 @@ final class GPXParser: NSObject, XMLParserDelegate {
             beginPoint(.wpt, attributes: attributeDict)
         case "rtept":
             beginPoint(.rtept, attributes: attributeDict)
+        case "metadata":
+            isInMetadata = true
         default:
             break
         }
@@ -83,10 +91,15 @@ final class GPXParser: NSObject, XMLParserDelegate {
             currentEle = trimmed
         case "time":
             currentTime = trimmed
+            if isInMetadata, currentContext == .none, parsedMetadataTime == nil {
+                parsedMetadataTime = ISO8601DateFormatter().date(from: trimmed)
+            }
         case "name":
             if currentContext == .none, parsedName == nil, !trimmed.isEmpty {
                 parsedName = trimmed
             }
+        case "metadata":
+            isInMetadata = false
         case "trkpt", "wpt", "rtept":
             endPoint()
         default:

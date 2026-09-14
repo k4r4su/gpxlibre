@@ -231,6 +231,13 @@ private struct TrackRow: View {
                             .accessibilityLabel("Carte 100% hors-ligne")
                     }
                 }
+                // Spec "biblio-date-display" (it15, Bloc 1) : sobre, gris secondaire, sous le
+                // nom — masquable entièrement via LibraryConstants.dateDisplayEnabled.
+                if LibraryConstants.dateDisplayEnabled {
+                    Text(track.displayDateLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 HStack(spacing: 12) {
                     Label(String(format: "%.1f km", track.totalDistanceKm), systemImage: "ruler")
                     Label("\(track.pointCount) pts", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
