@@ -13,36 +13,21 @@ struct TrackSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var localSettings = TrackRideSettings.default
-    @State private var isPickingStart = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    // Fix "remove-start-choice" (it14, Bloc 10) : plus de sélection tactile de
+                    // départ ici (voir plus bas) — cet aperçu reste un simple aperçu, pas
+                    // interactif.
                     TrackMapView(
                         track: track,
                         currentLocation: nil,
-                        traceAppearance: previewAppearance,
-                        onPickStartIndex: isPickingStart ? { index in
-                            localSettings.customStartPointIndex = index
-                            isPickingStart = false
-                        } : nil,
-                        startIndexToHighlight: localSettings.customStartPointIndex
+                        traceAppearance: previewAppearance
                     )
                     .frame(height: 220)
                     .listRowInsets(EdgeInsets())
-                    .overlay(alignment: .bottom) {
-                        if isPickingStart {
-                            Text("Touche un point de la trace pour le définir comme départ")
-                                .font(.caption.bold())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(.black.opacity(0.7))
-                                .clipShape(Capsule())
-                                .padding(.bottom, 8)
-                        }
-                    }
                 }
 
                 Section {
@@ -104,14 +89,16 @@ struct TrackSettingsView: View {
                     Text("Ne modifie jamais le fichier GPX — un paramètre d'affichage et de navigation uniquement.")
                 }
 
-                Section("Départ") {
-                    Button(isPickingStart ? "Choix en cours… touche la carte ci-dessus" : "Choisir le début") {
-                        isPickingStart.toggle()
-                    }
-                    if localSettings.hasCustomStart {
-                        Button("Revenir au début d'origine") {
+                // Fix "remove-start-choice" (it14, Bloc 10) : "redondant depuis le toggle
+                // A→B/it12 — retire le contrôle et la logique." Le sélecteur tactile de départ
+                // a disparu (voir TrackMapView, plus interactif) ; seul un bouton de retrait
+                // reste, UNIQUEMENT si une trace a déjà une valeur stockée d'avant ce fix — ne
+                // casse pas la persistance existante, mais ne propose plus d'en définir une
+                // nouvelle (le sens A→B/B→A est désormais la SEULE source pour "où ça commence").
+                if localSettings.hasCustomStart {
+                    Section {
+                        Button("Revenir au début d'origine (départ personnalisé hérité)") {
                             localSettings.customStartPointIndex = nil
-                            isPickingStart = false
                         }
                         .foregroundStyle(.red)
                     }
