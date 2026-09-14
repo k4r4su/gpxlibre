@@ -48,4 +48,15 @@ struct TileCoordinate: Hashable {
         }
         return result
     }
+
+    /// Compte O(1) (fix "region-picker-huge-bbox-crash") — À APPELER avant `tiles(...)` pour
+    /// vérifier `OfflineConstants.regionTileCountHardCap` sans jamais matérialiser la liste
+    /// complète : une zone "monde" au zoom 16 représente des milliards d'éléments, largement
+    /// de quoi geler le thread principal si on la construit avant de la compter.
+    static func tileCount(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, zoom: Int, source: TileSource = .osmStandard) -> Int {
+        let topLeft = covering(latitude: maxLat, longitude: minLon, zoom: zoom, source: source)
+        let bottomRight = covering(latitude: minLat, longitude: maxLon, zoom: zoom, source: source)
+        guard topLeft.x <= bottomRight.x, topLeft.y <= bottomRight.y else { return 0 }
+        return (bottomRight.x - topLeft.x + 1) * (bottomRight.y - topLeft.y + 1)
+    }
 }

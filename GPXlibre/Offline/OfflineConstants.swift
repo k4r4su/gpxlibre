@@ -14,6 +14,16 @@ enum OfflineConstants {
     static let regionMinZoomSliderValue = 12
     static let regionMaxZoomSliderValue = 16
 
+    /// Fix "region-picker-huge-bbox-crash" (bug terrain, itération 16) : `RegionPickerMapView`
+    /// démarre sans caméra initiale — MapLibre part alors sur une vue "monde" (zoom ~0), et le
+    /// tout premier `visibleCoordinateBounds` rapporté couvre potentiellement la planète.
+    /// `RegionDownloadView.updateEstimate()` bloquait le thread principal en énumérant les
+    /// tuiles d'une telle zone jusqu'au zoom 16 (des milliards de tuiles) → app tuée par le
+    /// watchdog après ~10 s d'absence de réponse. Ce plafond est vérifié par un calcul O(1)
+    /// AVANT toute énumération réelle (voir `TileCoordinate.tileCount`), donc protège aussi
+    /// contre un pincement manuel jusqu'au zoom monde, pas seulement l'état initial.
+    static let regionTileCountHardCap = 200_000
+
     /// Estimation grossière (tuiles OSM raster réelles : ~10-25 Ko selon la densité) —
     /// affichée avant téléchargement, jamais garantie au octet près.
     static let averageTileSizeBytes: Int64 = 16_000

@@ -13,6 +13,8 @@ struct RegionDownloadView: View {
     @State private var maxZoom: Double = Double(OfflineConstants.regionMaxZoomSliderValue)
     @State private var wifiOnly = true
     @State private var estimate: PrecacheEstimate?
+    /// Fix "region-picker-huge-bbox-crash" (bug terrain, it16) — voir OfflineConstants.
+    @State private var isZoneTooLarge = false
 
     /// La zone téléchargée suit toujours le thème carte actif (#10), Relief inclus.
     private var activeSource: TileSource { TileSource.active(for: settings.mapThemePreset) }
@@ -41,6 +43,10 @@ struct RegionDownloadView: View {
                     Text("\(estimate.tileCount) tuiles · \(estimate.formattedSize) · \(estimate.formattedDuration)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else if isZoneTooLarge {
+                    Text("Zone trop grande pour ce zoom — pince pour réduire la zone visible ou baisse le zoom max.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
 
                 Toggle("Wi-Fi uniquement", isOn: $wifiOnly)
@@ -109,12 +115,31 @@ struct RegionDownloadView: View {
     }
 
     private func updateEstimate() {
+        isZoneTooLarge = false
         guard let bounds = visibleBounds else {
             estimate = nil
             return
         }
-        var tileSet = Set<TileCoordinate>()
         let cappedMaxZoom = min(Int(maxZoom), activeSource.maxZoomLevel)
+        guard cappedMaxZoom >= OfflineConstants.regionMinZoomSliderValue else {
+            estimate = nil
+            return
+        }
+        // Fix "region-picker-huge-bbox-crash" (bug terrain, it16) : compte D'ABORD en O(1) —
+        // une zone "monde" (caméra initiale non cadrée, ou pincement manuel jusqu'au zoom
+        // monde) énumérée directement jusqu'au zoom 16 gèle le thread principal (watchdog ~10 s).
+        var projectedTileCount = 0
+        for zoom in OfflineConstants.regionMinZoomSliderValue...cappedMaxZoom {
+            projectedTileCount += TileCoordinate.tileCount(
+                minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom, source: activeSource
+            )
+            if projectedTileCount > OfflineConstants.regionTileCountHardCap {
+                estimate = nil
+                isZoneTooLarge = true
+                return
+            }
+        }
+        var tileSet = Set<TileCoordinate>()
         for zoom in OfflineConstants.regionMinZoomSliderValue...cappedMaxZoom {
             let tiles = TileCoordinate.tiles(
                 minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom, source: activeSource

@@ -20,6 +20,13 @@ struct RegionPickerMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.showsAttributionButton = true
         mapView.logoView.isHidden = true
+        // Fix "region-picker-huge-bbox-crash" (bug terrain, it16) : sans caméra initiale,
+        // MapLibre démarre en vue "monde" (zoom ~0) — le tout premier bounds rapporté à
+        // updateEstimate() couvrirait la planète. Zoom "pays" raisonnable en attendant que
+        // l'utilisateur cadre sa vraie zone ; le garde-fou de compte O(1) reste la protection
+        // réelle (voir OfflineConstants.regionTileCountHardCap), ceci n'est qu'un confort pour
+        // éviter le message "zone trop grande" à chaque ouverture de l'écran.
+        mapView.setZoomLevel(5, animated: false)
         return mapView
     }
 
