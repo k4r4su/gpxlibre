@@ -2,6 +2,23 @@ import SwiftUI
 import MapLibre
 import CoreLocation
 
+/// Spec "replay-marker-heading-x2" (it17, Bloc 4) : passé par `.environment(...)` plutôt
+/// qu'en paramètre d'init — `RideMapLibreView` conforme à `MapProvider`, dont l'init requis
+/// par le protocole a une signature EXACTE et fixe (voir MapProvider.swift) ; y ajouter un
+/// paramètre casse la conformité (le memberwise init synthétisé ne correspond plus). Lu via
+/// `context.environment` dans `updateUIView`, patron standard pour un `UIViewRepresentable`
+/// qui a besoin d'une donnée sans toucher à son init.
+private struct DebugReplayMarkerActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isDebugReplayMarkerActive: Bool {
+        get { self[DebugReplayMarkerActiveKey.self] }
+        set { self[DebugReplayMarkerActiveKey.self] = newValue }
+    }
+}
+
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
 /// raster OSM, trace + détour + route Nav en sources vectorielles stylées localement,
 /// checkpoints/waypoints en annotations. Même contrat que RideMapView (MapKit), conservé
@@ -117,6 +134,10 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateResumeShape(on: mapView, context: context)
         context.coordinator.updateChevronShape(track: track, configuredSpacingMeters: chevronSpacingMeters, on: mapView)
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
+        context.coordinator.updateDebugReplayMarker(
+            coordinate: context.environment.isDebugReplayMarkerActive ? currentLocation?.coordinate : nil,
+            on: mapView
+        )
         context.coordinator.updateContentInset(
             UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
             on: mapView
@@ -691,7 +712,62 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             onManualGesture?()
         }
 
+        /// Marqueur replay debug (spec "replay-marker-heading-x2", it17, Bloc 4) — `MLNPoint
+        /// Annotation` du SDK directement (pas de sous-classe dédiée) : c'est le seul usage de
+        /// cette classe concrète sur cette carte, donc `annotation is MLNPointAnnotation` dans
+        /// `viewFor annotation` reste sans ambiguïté. Repositionné en mutant `.coordinate` sur
+        /// l'annotation déjà ajoutée (déplacement fluide géré nativement par le SDK, propriété
+        /// `(nonatomic, assign)` vérifiée dans MLNPointAnnotation.h) plutôt que retiré/reposé à
+        /// chaque fix — sinon un clignotement à chaque position durant tout le replay.
+        private var debugReplayMarkerAnnotation: MLNPointAnnotation?
+
+        func updateDebugReplayMarker(coordinate: CLLocationCoordinate2D?, on mapView: MLNMapView) {
+            guard let coordinate else {
+                if let existing = debugReplayMarkerAnnotation {
+                    mapView.removeAnnotation(existing)
+                    debugReplayMarkerAnnotation = nil
+                }
+                return
+            }
+            if let existing = debugReplayMarkerAnnotation {
+                existing.coordinate = coordinate
+            } else {
+                let marker = MLNPointAnnotation()
+                marker.coordinate = coordinate
+                mapView.addAnnotation(marker)
+                debugReplayMarkerAnnotation = marker
+            }
+        }
+
+        /// Rond blanc 16 pt, léger contour + ombre portée (spec : "14 à 18 pt, contour discret")
+        /// — volontairement PAS le style icône-dans-cercle-coloré des checkpoints/waypoints
+        /// (`annotationView(on:...)` ci-dessous) : un simple marqueur de position, pas un point
+        /// d'intérêt catégorisé.
+        private func debugReplayMarkerView(on mapView: MLNMapView) -> MLNAnnotationView {
+            let size: CGFloat = 16
+            let identifier = "debugReplayMarker"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MLNAnnotationView(reuseIdentifier: identifier)
+            view.frame = CGRect(x: 0, y: 0, width: size, height: size)
+            view.subviews.forEach { $0.removeFromSuperview() }
+
+            let dot = UIView(frame: view.bounds)
+            dot.backgroundColor = .white
+            dot.layer.cornerRadius = size / 2
+            dot.layer.borderWidth = 1.5
+            dot.layer.borderColor = UIColor.black.withAlphaComponent(0.35).cgColor
+            dot.layer.shadowColor = UIColor.black.cgColor
+            dot.layer.shadowOpacity = 0.4
+            dot.layer.shadowRadius = 2
+            dot.layer.shadowOffset = CGSize(width: 0, height: 1)
+            view.addSubview(dot)
+
+            return view
+        }
+
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
+            if annotation is MLNPointAnnotation {
+                return debugReplayMarkerView(on: mapView)
+            }
             if let checkpointAnnotation = annotation as? CheckpointMLNAnnotation {
                 // Icône par PALIER (spec "roadbook-angle-buckets-replay", it14) — cohérente
                 // avec la bannière latérale, voir LateralCapBannerView.

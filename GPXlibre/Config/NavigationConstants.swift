@@ -36,8 +36,9 @@ enum NavigationConstants {
     // MARK: - Mode debug replay (spec Bloc 4 : "obligatoire pour valider les paliers sans
     // sortir en voiture")
 
-    /// Multiplicateurs de vitesse de rejeu disponibles.
-    static let debugReplaySpeedMultipliers: [Double] = [4, 8]
+    /// Multiplicateurs de vitesse de rejeu disponibles — ×2 ajouté (spec "replay-marker-
+    /// heading-x2", it17, Bloc 4) en plus de ×4/×8 déjà en place.
+    static let debugReplaySpeedMultipliers: [Double] = [2, 4, 8]
 
     /// Fix "debug-replay-erratic-speed" (bug terrain, it16) : le rejeu utilisait un délai FIXE
     /// entre deux points bruts — or les points GPX sont espacés très irrégulièrement (parfois

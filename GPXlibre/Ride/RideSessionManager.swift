@@ -87,6 +87,20 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// menu contextuel) : "Haptique différente pour Pause (légère) vs Stop défini (forte)".
     private let pauseGuidanceHapticGenerator = UIImpactFeedbackGenerator(style: .light)
 
+    // MARK: - Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4) — sandbox : ces
+    // deux propriétés ne sont JAMAIS écrites ailleurs que par `debugSetReplayActive`, lui-même
+    // appelé UNIQUEMENT depuis DebugReplayDriver (fichier entier #if DEBUG, absent des builds
+    // Release). Volontairement SANS #if DEBUG ici, pour ne pas propager la compilation
+    // conditionnelle jusque dans RideView/RideMapLibreView (déjà partagés par tout le monde) —
+    // restent simplement inertes (false) en Release, aucun coût fonctionnel ni visuel.
+    @Published private(set) var isDebugReplayActive = false
+    @Published private(set) var debugReplayForcesHeadingUp = false
+
+    func debugSetReplayActive(_ active: Bool, forcesHeadingUp: Bool) {
+        isDebugReplayActive = active
+        debugReplayForcesHeadingUp = active && forcesHeadingUp
+    }
+
     // MARK: - Aller à universel (Bloc 4) — guidage PARALLÈLE, jamais un remplacement de la
     // trace sacrée ni de la route Nav principale. Fonctionne en Mode Trace ET Mode Nav.
     @Published private(set) var goToGuidance: GoToGuidance?

@@ -20,6 +20,14 @@ struct RideView: View {
     @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
     @State private var is2DNorthUp = false
+    /// Spec "replay-marker-heading-x2" (it17, Bloc 4) : force cap-en-haut pendant un replay
+    /// debug si le toggle du menu est activé — NE modifie JAMAIS `is2DNorthUp` lui-même (le
+    /// vrai réglage de l'utilisateur reste intact, repris tel quel dès que le replay s'arrête).
+    /// `session.debugReplayForcesHeadingUp` reste `false` en usage normal (voir
+    /// RideSessionManager.debugSetReplayActive, jamais écrit hors DebugReplayDriver).
+    private var effectiveIs2DNorthUp: Bool {
+        session.debugReplayForcesHeadingUp ? false : is2DNorthUp
+    }
     @State private var pendingGoToCoordinate: CLLocationCoordinate2D?
     @State private var pendingGoToLabel = ""
     @State private var showGoToActionSheet = false
@@ -484,8 +492,10 @@ struct RideView: View {
                 isLandscape: geometry.size.width > geometry.size.height,
                 // Spec "ride-anchor-lowered-setting" (it14) : le réglage utilisateur ne
                 // s'applique qu'en mode suivi cap-en-haut (la "conduite" réelle) — nord-en-haut
-                // garde sa valeur centrée fixe, inchangée.
-                positionAnchorRatio: is2DNorthUp ? RideConstants.positionAnchorRatio2D : settings.rideAnchorYFraction
+                // garde sa valeur centrée fixe, inchangée. `effectiveIs2DNorthUp` (it17, Bloc 4)
+                // remplace `is2DNorthUp` : force cap-en-haut pendant un replay debug si le
+                // toggle du menu est activé, sans jamais toucher au réglage réel de l'utilisateur.
+                positionAnchorRatio: effectiveIs2DNorthUp ? RideConstants.positionAnchorRatio2D : settings.rideAnchorYFraction
             )
             rideContentBody(track: track, insets: insets)
         }
@@ -666,7 +676,7 @@ struct RideView: View {
                 cameraContentInsetLeft: insets.cameraLeft,
                 cameraContentInsetRight: insets.cameraRight,
                 northUp: settings.mapOrientationNorthUp,
-                is2DNorthUp: is2DNorthUp,
+                is2DNorthUp: effectiveIs2DNorthUp,
                 isManualOverrideActive: session.isManualOverrideActive,
                 cameraCommandToken: session.cameraCommandToken,
                 detourRoute: session.detourRoute,
@@ -685,6 +695,10 @@ struct RideView: View {
                     handleTrackTap(track: track, coordinate: coordinate, toleranceMeters: toleranceMeters)
                 }
             )
+            // Spec "replay-marker-heading-x2" (it17, Bloc 4) : passé par environnement plutôt
+            // qu'en paramètre d'init — voir RideMapLibreView.swift pour le pourquoi (conformité
+            // au protocole MapProvider, signature d'init fixe).
+            .environment(\.isDebugReplayMarkerActive, session.isDebugReplayActive)
         case .mapKit:
             RideMapView(
                 track: track,

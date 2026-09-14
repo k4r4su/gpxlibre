@@ -18,18 +18,43 @@ final class DebugReplayDriver: ObservableObject {
     @Published private(set) var totalPointCount = 0
 
     private var task: Task<Void, Never>?
+    /// Retenue UNIQUEMENT pour que `stop()` (et la fin naturelle du replay) puisse lever le
+    /// flag sandbox posé au démarrage — spec "replay-marker-heading-x2", it17, Bloc 4 : "état
+    /// replay totalement séparé de l'état ride". `weak` : jamais responsable du cycle de vie
+    /// de la session, purement pour retrouver le point de sortie propre.
+    private weak var activeSession: RideSessionManager?
 
     /// Vitesse simulée constante (km/h) injectée dans chaque fix — juste assez réaliste pour
     /// alimenter `smoothedSpeedKmh`/`rideContext` sans prétendre reproduire un vrai profil de
     /// vitesse (hors sujet ici, seul le roadbook est à valider).
     private static let simulatedSpeedKmh: Double = 45
 
-    func start(track: GPXTrack, speedMultiplier: Double, session: RideSessionManager) {
+    /// Délai réel (s) avant d'injecter le POINT SUIVANT — extrait en fonction pure et statique
+    /// (spec "Vérifications automatiques", it17 : "distance parcourue = vitesse × temps, sans
+    /// dérive cumulative") pour être testable directement : AUCUN état accumulé d'un appel à
+    /// l'autre (chaque distance est recalculée depuis les coordonnées réelles, jamais depuis un
+    /// compteur qui avancerait tout seul), donc structurellement sans dérive possible. Bornée
+    /// (voir NavigationConstants) pour éviter une rafale quasi instantanée sur des points très
+    /// rapprochés ou un blocage visible sur un grand trou de la trace (fix "debug-replay-
+    /// erratic-speed", it16).
+    nonisolated static func stepWaitSeconds(distanceToNextMeters: Double, speedMultiplier: Double) -> Double {
+        let metersPerSecond = simulatedSpeedKmh / 3.6
+        let travelSeconds = distanceToNextMeters / metersPerSecond
+        let boundedSeconds = min(max(travelSeconds, NavigationConstants.debugReplayMinStepSeconds), NavigationConstants.debugReplayMaxStepSeconds)
+        return boundedSeconds / max(speedMultiplier, 0.01)
+    }
+
+    /// - Parameter forceHeadingUp: spec "replay-marker-heading-x2", it17, Bloc 4 — toggle menu
+    ///   debug, indépendant du réglage nord-en-haut/cap-en-haut réel de l'utilisateur (jamais
+    ///   touché, voir `RideSessionManager.debugSetReplayActive`).
+    func start(track: GPXTrack, speedMultiplier: Double, session: RideSessionManager, forceHeadingUp: Bool) {
         stop()
         guard track.points.count > 1 else { return }
         isPlaying = true
         currentPointIndex = 0
         totalPointCount = track.points.count
+        activeSession = session
+        session.debugSetReplayActive(true, forcesHeadingUp: forceHeadingUp)
 
         // Vrai (re)démarrage de session pour CETTE trace, comme RideView.onAppear le ferait —
         // pas un simple switchMode (spec "camera-mode-stability") : le replay doit repartir
@@ -37,7 +62,6 @@ final class DebugReplayDriver: ObservableObject {
         session.start(track: track)
 
         let points = track.points
-        let metersPerSecond = Self.simulatedSpeedKmh / 3.6
 
         task = Task { [weak self] in
             for index in points.indices {
@@ -65,13 +89,11 @@ final class DebugReplayDriver: ObservableObject {
                 // irrégulièrement, donnaient un point bleu erratique ("un oiseau qui vole").
                 if index < points.count - 1 {
                     let distanceToNext = RoadbookAnalyzer.distanceMeters(point.coordinate, points[index + 1].coordinate)
-                    let travelSeconds = distanceToNext / metersPerSecond
-                    let boundedSeconds = min(max(travelSeconds, NavigationConstants.debugReplayMinStepSeconds), NavigationConstants.debugReplayMaxStepSeconds)
-                    let waitSeconds = boundedSeconds / max(speedMultiplier, 0.01)
+                    let waitSeconds = Self.stepWaitSeconds(distanceToNextMeters: distanceToNext, speedMultiplier: speedMultiplier)
                     try? await Task.sleep(nanoseconds: UInt64(waitSeconds * 1_000_000_000))
                 }
             }
-            self?.isPlaying = false
+            self?.stop()
         }
     }
 
@@ -79,6 +101,8 @@ final class DebugReplayDriver: ObservableObject {
         task?.cancel()
         task = nil
         isPlaying = false
+        activeSession?.debugSetReplayActive(false, forcesHeadingUp: false)
+        activeSession = nil
     }
 }
 #endif

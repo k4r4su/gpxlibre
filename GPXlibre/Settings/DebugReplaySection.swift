@@ -9,6 +9,9 @@ struct DebugReplaySection: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var rideSession: RideSessionManager
     @StateObject private var driver = DebugReplayDriver()
+    /// Spec "replay-marker-heading-x2" (it17, Bloc 4) — activé par défaut : l'intérêt premier
+    /// du replay est justement de voir les virages comme en conduite réelle (cap-en-haut).
+    @State private var forceHeadingUp = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -24,9 +27,11 @@ struct DebugReplaySection: View {
                         .foregroundStyle(.secondary)
                     Button("Arrêter le replay", role: .destructive) { driver.stop() }
                 } else {
+                    Toggle("Cap en haut pendant le replay", isOn: $forceHeadingUp)
+                        .font(.caption2)
                     ForEach(NavigationConstants.debugReplaySpeedMultipliers, id: \.self) { multiplier in
                         Button("Rejouer à ×\(Int(multiplier))") {
-                            driver.start(track: track, speedMultiplier: multiplier, session: rideSession)
+                            driver.start(track: track, speedMultiplier: multiplier, session: rideSession, forceHeadingUp: forceHeadingUp)
                         }
                     }
                 }
