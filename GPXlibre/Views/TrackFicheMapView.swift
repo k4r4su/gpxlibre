@@ -66,60 +66,57 @@ struct TrackFicheMapView: UIViewRepresentable {
         private var startAnnotation: MLNPointAnnotation?
         private var endAnnotation: MLNPointAnnotation?
         /// Fix "trace-sheet-auto-frame" (it18, Bloc 6, bug terrain : "la carte reste centrée
-        /// monde") : `fitCamera` était déjà appelé dans `apply(track:...)`, mais celui-ci peut
-        /// s'exécuter dès `didFinishLoading` (style JSON embarqué, chargement quasi instantané,
-        /// pas d'attente réseau) — potentiellement AVANT que SwiftUI ait fini de donner à la
-        /// `MLNMapView` (créée `frame: .zero`) sa vraie taille de layout. `setVisibleCoordinate
-        /// Bounds` calculé sur une vue de taille nulle produit un zoom aberrant (quasi le monde
-        /// entier). On retient les coordonnées du dernier cadrage tenté et on le REJOUE une
-        /// fois, dès que le premier rendu réel confirme une vue de taille non nulle — idempotent
-        /// (mêmes bounds) si le premier appel avait déjà réussi.
+        /// monde") : `fitCamera` peut s'exécuter AVANT que SwiftUI ait fini de donner à la
+        /// `MLNMapView` (créée `frame: .zero`, intégrée dans un `Form`/`List`) sa vraie taille de
+        /// layout. `setVisibleCoordinateBounds` calculé sur une vue de taille nulle produit un
+        /// zoom aberrant (quasi le monde entier — bug terrain confirmé par capture). On retient
+        /// les coordonnées du dernier cadrage tenté et on le REJOUE une fois, dès que le premier
+        /// rendu réel confirme une vue de taille non nulle — idempotent (mêmes bounds) si le
+        /// premier appel avait déjà réussi.
         private var pendingCameraFitCoordinates: [CLLocationCoordinate2D]?
         private var didRetryCameraFit = false
-        /// Le style se charge de façon asynchrone — si `sync` est appelé avant
-        /// `didFinishLoading`, on retient la dernière demande pour l'appliquer dès que les
-        /// sources/couches existent, plutôt que de la perdre silencieusement.
+        /// Repli si `sync` est appelé alors que `mapView.style` est encore `nil` — retenu pour
+        /// être appliqué dès qu'un style existe (voir `sync`). Dans la pratique, `mapView.style`
+        /// s'est avéré déjà disponible dès le tout premier appel (style JSON raster minimal
+        /// embarqué, analysé quasi instantanément) — ce chemin est un filet de sécurité, pas le
+        /// chemin normal.
         private var pendingSync: (track: GPXTrack, isReversed: Bool, appearance: TraceAppearance)?
 
+        /// Fix "trace-fiche-map-never-renders" (bug terrain, it19-bis : "toujours rien" malgré
+        /// deux correctifs précédents) — ROOT CAUSE trouvée en instrumentant le vrai code et en
+        /// observant une vraie capture simulateur (pas en supposant) : `mapView(_:didFinish
+        /// Loading:)` ne se déclenche JAMAIS pour cette carte, confirmé après 20 s d'attente —
+        /// alors que `mapView.style` EST déjà disponible dès le tout premier appel de `sync`.
+        /// Cause probable : cette `MLNMapView` vit dans un `Form`/`List` (contrairement à
+        /// `RideMapLibreView`, plein écran, où ce délégué se déclenche normalement) — un détail
+        /// du cycle de vie MapLibre/UIKit dans ce contexte précis, non élucidé plus avant (pas
+        /// nécessaire : le fix ci-dessous n'en dépend plus du tout). Au lieu de dépendre de ce
+        /// callback pour créer nos sources/couches (`setupLayers`), `sync` le fait directement
+        /// dès que `mapView.style` est là — ce qui, empiriquement, est le cas dès le premier
+        /// appel. `didFinishLoading` reste implémenté comme filet de sécurité redondant
+        /// (`setupLayers` est désormais idempotent, voir plus bas) au cas où il se déclencherait
+        /// malgré tout sur une autre version du SDK/de l'OS.
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             setupLayers(style: style)
             guard let pending = pendingSync else { return }
             pendingSync = nil
-            currentTrackID = nil
             apply(track: pending.track, isReversed: pending.isReversed, appearance: pending.appearance, on: mapView)
         }
 
-        /// Fix "trace-ab-line-invisible" (bug terrain : "les pastilles A/B apparaissent, pas le
-        /// tracé") — root cause : `mapView.style` peut devenir non-nil DÈS que le JSON est
-        /// analysé, un instant AVANT que `didFinishLoading` (qui seul appelle `setupLayers`, donc
-        /// crée `trackSourceIdentifier`) ne soit invoqué — un vrai gap documenté du cycle de vie
-        /// MapLibre/Mapbox GL, d'autant plus probable ici que le style est un JSON raster minimal
-        /// embarqué (quasi instantané à analyser). Si `sync` tombait dans cette fenêtre, l'ancien
-        /// garde `mapView.style != nil` prenait le chemin "direct apply" AVANT que la source
-        /// existe : `apply` marquait quand même `currentTrackID`/`currentIsReversed` comme
-        /// "déjà posé" (voir plus bas), verrouillant `sync` pour de bon sur ce couple (id,
-        /// isReversed) — plus aucun nouvel essai possible ensuite, y compris une fois
-        /// `didFinishLoading` réellement passé. Les annotations A/B, elles, ne dépendent pas du
-        /// style (mapView.addAnnotations fonctionne dès l'instanciation), d'où le symptôme exact
-        /// rapporté : pastilles visibles, ligne jamais posée. Fix : vérifier l'existence RÉELLE de
-        /// notre source (donc que `setupLayers` a bien tourné) plutôt que la seule non-nullité de
-        /// `mapView.style`.
         func sync(orderedTrack: GPXTrack, isReversed: Bool, traceAppearance: TraceAppearance, on mapView: MLNMapView) {
-            guard let style = mapView.style, style.source(withIdentifier: TrackFicheMapView.trackSourceIdentifier) != nil else {
+            guard let style = mapView.style else {
                 pendingSync = (orderedTrack, isReversed, traceAppearance)
                 return
             }
+            setupLayers(style: style)
             guard orderedTrack.id != currentTrackID || isReversed != currentIsReversed else { return }
             apply(track: orderedTrack, isReversed: isReversed, appearance: traceAppearance, on: mapView)
         }
 
         private func apply(track: GPXTrack, isReversed: Bool, appearance: TraceAppearance, on mapView: MLNMapView) {
-            // Filet de sécurité supplémentaire (défense en profondeur) : le bookkeeping de dédup
-            // n'est marqué "posé" qu'APRÈS confirmation que le style/nos couches existent bel et
-            // bien — jamais avant, pour ne plus jamais pouvoir verrouiller `sync` sur un échec
-            // silencieux (voir commentaire ci-dessus, cause racine réelle déjà neutralisée par le
-            // garde de `sync`, mais ce filet reste correct même si une autre voie d'appel futur
-            // contournait ce garde).
+            // Le bookkeeping de dédup n'est marqué "posé" qu'APRÈS confirmation que le style/nos
+            // couches existent bel et bien — jamais avant, pour ne jamais pouvoir verrouiller
+            // `sync` sur un échec silencieux.
             guard let style = mapView.style, track.points.count > 1 else { return }
             currentTrackID = track.id
             currentIsReversed = isReversed
@@ -230,7 +227,12 @@ struct TrackFicheMapView: UIViewRepresentable {
             applyCameraFit(coordinates: coordinates, on: mapView)
         }
 
+        /// IDEMPOTENT (spec "trace-fiche-map-never-renders", it19-bis) : peut désormais être
+        /// appelée à la fois depuis `sync` (chemin normal, voir plus haut) ET depuis
+        /// `didFinishLoading` (filet de sécurité redondant) — sans ce garde, un double appel
+        /// ferait planter `style.addSource`/`addLayer` sur un identifiant déjà existant.
         private func setupLayers(style: MLNStyle) {
+            guard style.source(withIdentifier: TrackFicheMapView.trackSourceIdentifier) == nil else { return }
             let trackSource = MLNShapeSource(identifier: TrackFicheMapView.trackSourceIdentifier, shape: nil, options: nil)
             style.addSource(trackSource)
             let casingLayer = MLNLineStyleLayer(identifier: TrackFicheMapView.trackCasingLayerIdentifier, source: trackSource)
