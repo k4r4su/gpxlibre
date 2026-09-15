@@ -81,8 +81,23 @@ struct TrackFicheMapView: UIViewRepresentable {
             apply(track: pending.track, isReversed: pending.isReversed, appearance: pending.appearance, on: mapView)
         }
 
+        /// Fix "trace-ab-line-invisible" (bug terrain : "les pastilles A/B apparaissent, pas le
+        /// tracé") — root cause : `mapView.style` peut devenir non-nil DÈS que le JSON est
+        /// analysé, un instant AVANT que `didFinishLoading` (qui seul appelle `setupLayers`, donc
+        /// crée `trackSourceIdentifier`) ne soit invoqué — un vrai gap documenté du cycle de vie
+        /// MapLibre/Mapbox GL, d'autant plus probable ici que le style est un JSON raster minimal
+        /// embarqué (quasi instantané à analyser). Si `sync` tombait dans cette fenêtre, l'ancien
+        /// garde `mapView.style != nil` prenait le chemin "direct apply" AVANT que la source
+        /// existe : `apply` marquait quand même `currentTrackID`/`currentIsReversed` comme
+        /// "déjà posé" (voir plus bas), verrouillant `sync` pour de bon sur ce couple (id,
+        /// isReversed) — plus aucun nouvel essai possible ensuite, y compris une fois
+        /// `didFinishLoading` réellement passé. Les annotations A/B, elles, ne dépendent pas du
+        /// style (mapView.addAnnotations fonctionne dès l'instanciation), d'où le symptôme exact
+        /// rapporté : pastilles visibles, ligne jamais posée. Fix : vérifier l'existence RÉELLE de
+        /// notre source (donc que `setupLayers` a bien tourné) plutôt que la seule non-nullité de
+        /// `mapView.style`.
         func sync(orderedTrack: GPXTrack, isReversed: Bool, traceAppearance: TraceAppearance, on mapView: MLNMapView) {
-            guard mapView.style != nil else {
+            guard let style = mapView.style, style.source(withIdentifier: TrackFicheMapView.trackSourceIdentifier) != nil else {
                 pendingSync = (orderedTrack, isReversed, traceAppearance)
                 return
             }
@@ -91,9 +106,15 @@ struct TrackFicheMapView: UIViewRepresentable {
         }
 
         private func apply(track: GPXTrack, isReversed: Bool, appearance: TraceAppearance, on mapView: MLNMapView) {
+            // Filet de sécurité supplémentaire (défense en profondeur) : le bookkeeping de dédup
+            // n'est marqué "posé" qu'APRÈS confirmation que le style/nos couches existent bel et
+            // bien — jamais avant, pour ne plus jamais pouvoir verrouiller `sync` sur un échec
+            // silencieux (voir commentaire ci-dessus, cause racine réelle déjà neutralisée par le
+            // garde de `sync`, mais ce filet reste correct même si une autre voie d'appel futur
+            // contournait ce garde).
+            guard let style = mapView.style, track.points.count > 1 else { return }
             currentTrackID = track.id
             currentIsReversed = isReversed
-            guard let style = mapView.style, track.points.count > 1 else { return }
 
             let coordinates = track.points.map(\.coordinate)
 

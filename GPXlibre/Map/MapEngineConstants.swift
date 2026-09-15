@@ -134,35 +134,46 @@ enum MapEngineConstants {
         return json
     }
 
-    /// SYMBOLS_CAP_UP_MODE (spec "rotating-symbols-cap-up", it18, Bloc 7) — bug terrain : en
-    /// suivi cap-en-haut, la caméra tourne pour suivre le cap, et les labels/icônes du fond
-    /// vectoriel (villes, POI…) tournaient AVEC elle plutôt que de rester lisibles à l'écran.
+    /// SYMBOLS_CAP_UP_MODE (spec "rotating-symbols-cap-up", it18, Bloc 7 ; précisé it18-bis,
+    /// retour propriétaire "cap au nord → OK, cap-en-haut → les textes doivent suivre") — DEUX
+    /// familles de symboles, comportement voulu DISTINCT pour chacune, jamais le même réglage
+    /// partout :
+    /// - Placement POINT (labels de lieu/POI, villes) → `viewport` : le texte reste DROIT À
+    ///   L'ÉCRAN quel que soit le cap, jamais tourné avec la caméra — sinon illisible dès qu'on
+    ///   ne roule pas plein nord (bug d'origine : "nord-locked... illisible"). Comportement
+    ///   standard du marché (Google/Apple/Waze en mode conduite : les noms de ville ne tournent
+    ///   jamais).
+    /// - Placement LINE/LINE-CENTER (noms de route/rivière, flèches de sens unique) → `map` :
+    ///   le texte DOIT suivre la ligne/la carte (littéralement "les textes doivent suivre"),
+    ///   donc tourner avec la caméra en cap-en-haut — comportement standard du marché pour un
+    ///   nom de route (imprimé LE LONG de la route, peut apparaître de travers/inversé dans un
+    ///   virage serré, c'est normal et volontaire, jamais lié à un bug).
     /// Vérifié dans les headers vendored (`MLNSymbolStyleLayer.h`) : `text`/`icon-rotation-
-    /// alignment` valent `auto` par défaut quand omis dans le style, qui EST censé résoudre en
-    /// `viewport` pour un symbole à placement `point` (labels de lieu/POI) et en `map` pour un
-    /// placement `line` (noms de route/rivière, qui DOIVENT suivre la ligne — comportement
-    /// standard, jamais touché ici, "n'agrège pas les labels routiers"). Plutôt que de compter
-    /// sur cette résolution implicite (le style embarqué omet la propriété partout), on la
-    /// rend EXPLICITE pour les seuls calques à placement point — même résultat visuel si
-    /// l'implémentation était déjà correcte, mais robuste à un bug de résolution `auto` sur la
-    /// version épinglée du SDK. `true` par défaut, appliqué au chargement du style (pas de
-    /// mutation live nécessaire : correct quel que soit le mode d'orientation, y compris
-    /// nord-en-haut où bearing=0 rend les deux alignements équivalents).
+    /// alignment` valent `auto` par défaut quand omis, qui DEVRAIT déjà résoudre exactement ainsi
+    /// (viewport pour point, map pour line) — mais plutôt que de compter sur cette résolution
+    /// implicite (risque de bug de la version épinglée du SDK, non vérifiable sans device
+    /// physique), les DEUX valeurs sont désormais rendues EXPLICITES pour CHAQUE calque symbol du
+    /// style, sans aucune exception qui resterait sur l'implicite. `true` par défaut, appliqué au
+    /// chargement du style (pas de mutation live nécessaire : correct quel que soit le mode
+    /// d'orientation, y compris nord-en-haut où bearing=0 rend les deux alignements équivalents
+    /// visuellement).
     static let symbolsCapUpMode = true
 
     /// `internal` plutôt que `private` uniquement pour la testabilité (même patron que
     /// `DetourRoutingService.route`) — jamais appelée hors `buildVectorStyleJSON` en production.
     static func patchedSymbolLayerForCapUp(_ layer: [String: Any]) -> [String: Any] {
         guard layer["type"] as? String == "symbol", var layout = layer["layout"] as? [String: Any] else { return layer }
-        // Seuls les calques SANS placement explicite (défaut spec "point") ou explicitement
-        // "point" sont concernés — "line"/"line-center" (noms de route/rivière, flèches de sens
-        // unique) et toute valeur d'expression zoom-dépendante (ex. "highway-shield-*", déjà
-        // patchés en dur "viewport" dans le style source) restent inchangés.
-        let placement = layout["symbol-placement"] as? String ?? "point"
-        guard placement == "point" else { return layer }
+        // Une valeur d'expression zoom-dépendante (ex. "highway-shield-*", tableau
+        // ["step", ["zoom"], "point", 11, "line"]) n'est jamais un simple `"line"` fixe — traitée
+        // comme point (déjà explicitement "viewport" dans le style source pour ces calques
+        // précis : des badges numéro de route doivent rester lisibles à l'écran, jamais collés à
+        // la ligne comme un nom de route).
+        let placementString = layout["symbol-placement"] as? String
+        let isLinePlacement = placementString == "line" || placementString == "line-center"
+        let alignment = isLinePlacement ? "map" : "viewport"
         var patched = layer
-        if layout["text-field"] != nil { layout["text-rotation-alignment"] = "viewport" }
-        if layout["icon-image"] != nil { layout["icon-rotation-alignment"] = "viewport" }
+        if layout["text-field"] != nil { layout["text-rotation-alignment"] = alignment }
+        if layout["icon-image"] != nil { layout["icon-rotation-alignment"] = alignment }
         patched["layout"] = layout
         return patched
     }

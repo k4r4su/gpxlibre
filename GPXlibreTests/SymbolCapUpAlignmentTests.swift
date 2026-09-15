@@ -33,20 +33,20 @@ final class SymbolCapUpAlignmentTests: XCTestCase {
         XCTAssertEqual(layout?["text-rotation-alignment"] as? String, "viewport")
     }
 
-    func testExplicitLinePlacementIsLeftUntouched() {
+    func testLinePlacementTextGetsExplicitMapAlignment() {
         let layer: [String: Any] = [
             "id": "highway-name-major",
             "type": "symbol",
-            "layout": ["symbol-placement": "line", "text-field": "{name}", "text-rotation-alignment": "map"],
+            "layout": ["symbol-placement": "line", "text-field": "{name}"],
         ]
 
         let patched = MapEngineConstants.patchedSymbolLayerForCapUp(layer)
 
         let layout = patched["layout"] as? [String: Any]
-        XCTAssertEqual(layout?["text-rotation-alignment"] as? String, "map", "les noms de route doivent continuer à suivre la ligne")
+        XCTAssertEqual(layout?["text-rotation-alignment"] as? String, "map", "les noms de route doivent suivre la carte/la ligne, pas rester droits à l'écran")
     }
 
-    func testLinePlacementIconArrowIsLeftUntouched() {
+    func testLinePlacementIconArrowGetsExplicitMapAlignment() {
         let layer: [String: Any] = [
             "id": "road_one_way_arrow",
             "type": "symbol",
@@ -56,7 +56,23 @@ final class SymbolCapUpAlignmentTests: XCTestCase {
         let patched = MapEngineConstants.patchedSymbolLayerForCapUp(layer)
 
         let layout = patched["layout"] as? [String: Any]
-        XCTAssertNil(layout?["icon-rotation-alignment"], "les flèches de sens unique suivent la route, jamais l'écran")
+        XCTAssertEqual(layout?["icon-rotation-alignment"] as? String, "map", "les flèches de sens unique doivent suivre la route, jamais rester droites à l'écran")
+    }
+
+    /// Zoom-dépendant (tableau `step`, ex. les badges numéro de route) : jamais un `"line"` fixe,
+    /// traité comme un placement point — doit rester lisible à l'écran comme un badge/icône,
+    /// jamais collé à la ligne.
+    func testZoomDependentPlacementExpressionIsTreatedAsPoint() {
+        let layer: [String: Any] = [
+            "id": "highway-shield-non-us",
+            "type": "symbol",
+            "layout": ["symbol-placement": ["step", ["zoom"], "point", 11, "line"], "icon-image": "shield"],
+        ]
+
+        let patched = MapEngineConstants.patchedSymbolLayerForCapUp(layer)
+
+        let layout = patched["layout"] as? [String: Any]
+        XCTAssertEqual(layout?["icon-rotation-alignment"] as? String, "viewport")
     }
 
     func testNonSymbolLayerIsLeftUntouched() {
