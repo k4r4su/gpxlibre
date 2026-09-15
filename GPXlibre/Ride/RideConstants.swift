@@ -137,6 +137,16 @@ enum RideConstants {
     /// Multiplicateur du seuil hors-trace en contexte "piste" (resserré) — pour itération future.
     static let trackOffTrackToleranceMultiplier: Double = 0.6
 
+    // MARK: - Traces enregistrées (spec "ride-record-tracks-visible", it18, Bloc 2)
+
+    /// RECORDED_TRACK_DISPLAY_COLOR : couleur distinctive appliquée par défaut (override
+    /// par-trace, `TrackRideSettings.colorOverride`) à toute trace fraîchement enregistrée
+    /// depuis le Ride — pour la reconnaître au premier coup d'œil face à une trace importée/
+    /// curée (couleur globale par défaut : orange). Ambre = jaune, le plus proche du "ambre"
+    /// demandé parmi les presets existants (voir TraceColorPreset) ; reste un override
+    /// éditable comme tout autre, jamais figé.
+    static let recordedTrackColorPreset: TraceColorPreset = .jaune
+
     // MARK: - Localisation Ride
 
     static let rideDistanceFilterMeters: Double = 5

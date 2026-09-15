@@ -15,9 +15,16 @@ struct EndRideView: View {
 
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var session: RideSessionManager
+    @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @State private var trackName = ""
     @State private var comment = ""
     @State private var exportURL: URL?
+    /// Spec "ride-record-tracks-visible" (it18, Bloc 2) : la trace enregistrée reste seulement
+    /// "affichée" en Biblio (décision du propriétaire : ne pas voler l'état actif de la trace
+    /// suivie, voir TODO.md) — cet aperçu, réutilisant TrackFicheMapView (même cadrage auto sur
+    /// l'emprise que la fiche Biblio), est le seul moyen de "voir la trace sur la carte
+    /// immédiatement après validation save" sans y toucher.
+    @State private var savedTrack: GPXTrack?
 
     private static let defaultNameDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -44,6 +51,21 @@ struct EndRideView: View {
                     Section {
                         Label("Enregistrée dans la Bibliothèque", systemImage: "checkmark.seal.fill")
                             .foregroundStyle(.green)
+                    }
+                    if let savedTrack {
+                        Section {
+                            TrackFicheMapView(
+                                orderedTrack: savedTrack,
+                                isReversed: false,
+                                traceAppearance: TraceAppearance(colorPreset: RideConstants.recordedTrackColorPreset)
+                            )
+                            .frame(height: 220)
+                            .listRowInsets(EdgeInsets())
+                        } header: {
+                            Text("Trace enregistrée")
+                        } footer: {
+                            Text("Reste \"affichée\" en Bibliothèque sans remplacer la trace suivie active — coche-la depuis la Biblio pour la voir sur la carte du Ride.")
+                        }
                     }
                 }
             }
@@ -82,7 +104,14 @@ struct EndRideView: View {
         let fileName = "\(trackName)-\(Int(Date().timeIntervalSince1970)).gpx"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? data.write(to: url)
-        library.importTrack(from: url)
+        if let newID = library.importTrack(from: url) {
+            // RECORDED_TRACK_DISPLAY_COLOR (spec "ride-record-tracks-visible", it18, Bloc 2) :
+            // couleur distinctive par défaut, éditable ensuite comme tout override par trace.
+            var recordedSettings = trackRideSettings.settings(for: newID)
+            recordedSettings.colorOverride = RideConstants.recordedTrackColorPreset
+            trackRideSettings.setSettings(recordedSettings, for: newID)
+            savedTrack = library.tracks.first { $0.id == newID }
+        }
         session.resetRecording()
         exportURL = url
     }

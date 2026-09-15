@@ -54,6 +54,38 @@ final class LibraryStoreTests: XCTestCase {
         return imported
     }
 
+    /// Spec "ride-record-tracks-visible" (it18, Bloc 2) : `importTrack` doit retourner l'id de
+    /// la trace créée — EndRideView s'en sert pour appliquer la couleur ambre par défaut et
+    /// afficher l'aperçu, sans avoir à la retrouver par nom/heure.
+    func testImportTrackReturnsNewTrackID() {
+        let store = makeStore()
+        let gpx = """
+        <?xml version="1.0"?>
+        <gpx><trk><name>Retour</name><trkseg>
+        <trkpt lat="45.0" lon="5.0"></trkpt>
+        <trkpt lat="45.01" lon="5.01"></trkpt>
+        </trkseg></trk></gpx>
+        """
+        let fileURL = tempDirectory.appendingPathComponent("\(UUID().uuidString).gpx")
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        try? gpx.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let returnedID = store.importTrack(from: fileURL)
+
+        XCTAssertNotNil(returnedID)
+        XCTAssertEqual(store.tracks.first(where: { $0.id == returnedID })?.name, "Retour")
+    }
+
+    func testImportTrackReturnsNilOnFailure() {
+        let store = makeStore()
+        let fileURL = tempDirectory.appendingPathComponent("does-not-exist.gpx")
+
+        let returnedID = store.importTrack(from: fileURL)
+
+        XCTAssertNil(returnedID)
+        XCTAssertNotNil(store.lastError)
+    }
+
     func testImportBecomesActiveAndDisplayedWhenNoneActive() {
         let store = makeStore()
         let a = importSampleTrack(into: store, name: "A")

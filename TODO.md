@@ -2,6 +2,12 @@
 
 ## Itération 18 (compacité bannières / traces enregistrées visibles / zoom reset / cap-en-haut vrai)
 
+- **Hygiène de staging git, documentée par honnêteté (aucun risque fonctionnel)** : le Bloc 4
+  (`manualZoomBackTapsForDefaultRideZoom` 4→5, `fix:"default-zoom-persist-rework"`) a été édité
+  dans `RideConstants.swift` avant le premier commit de cette itération, et s'est retrouvé
+  entraîné dans le commit `fix:"offtrack-compact-chip"` (Bloc 1) faute d'avoir `git add -p`
+  séparé les deux hunks du même fichier — même situation déjà rencontrée et documentée à
+  l'identique en it14. Contenu correct des deux côtés, juste une frontière de commit imparfaite.
 - **Backlog explicite du prompt (Bloc 1, "offtrack-compact-chip")** : action contextuelle par
   appui-long sur le chip hors-trace (`OffTrackChipView`), popup "Marquer portion bloquée &
   Contourner" — le prompt demandait de ne l'ajouter QUE si le chip reste visuellement propre

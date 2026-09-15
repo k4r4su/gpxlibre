@@ -67,7 +67,7 @@ struct LibraryView: View {
             ) { result in
                 switch result {
                 case .success(let urls):
-                    urls.forEach(library.importTrack(from:))
+                    urls.forEach { library.importTrack(from: $0) }
                 case .failure(let error):
                     library.lastError = error.localizedDescription
                 }

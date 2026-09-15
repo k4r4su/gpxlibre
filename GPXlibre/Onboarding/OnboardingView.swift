@@ -54,7 +54,7 @@ struct OnboardingView: View {
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result {
-                urls.forEach(library.importTrack(from:))
+                urls.forEach { library.importTrack(from: $0) }
             }
             finish()
         }

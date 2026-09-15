@@ -92,15 +92,21 @@ final class LibraryStore: ObservableObject {
     }
 
     /// Import déclenché depuis le partage système iOS (Mail/Safari/Fichiers → "Ouvrir dans GPXlibre")
-    /// ou depuis le sélecteur de fichiers manuel.
-    func importTrack(from url: URL) {
+    /// ou depuis le sélecteur de fichiers manuel. Retourne l'id de la trace créée (spec
+    /// "ride-record-tracks-visible", it18, Bloc 2 — permet à l'appelant, ex. EndRideView, d'agir
+    /// sur la trace qu'il vient d'enregistrer, sans avoir à la retrouver par nom/heure) ou `nil`
+    /// si l'import échoue (voir `lastError`). `@discardableResult` : la plupart des appelants
+    /// (partage système, sélecteur multi-fichiers) ignorent la valeur, comme avant ce changement.
+    @discardableResult
+    func importTrack(from url: URL) -> UUID? {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
-            try addTrack(named: url.deletingPathExtension().lastPathComponent, data: data)
+            return try addTrack(named: url.deletingPathExtension().lastPathComponent, data: data)
         } catch {
             lastError = "Import impossible : \(error.localizedDescription)"
+            return nil
         }
     }
 
@@ -138,7 +144,8 @@ final class LibraryStore: ObservableObject {
         persistActiveState()
     }
 
-    private func addTrack(named suggestedName: String, data: Data) throws {
+    @discardableResult
+    private func addTrack(named suggestedName: String, data: Data) throws -> UUID {
         let parsed = try GPXParser.parse(data: data)
         let fileName = "\(UUID().uuidString).gpx"
         let destination = tracksDirectory.appendingPathComponent(fileName)
@@ -165,6 +172,7 @@ final class LibraryStore: ObservableObject {
         sortTracks()
         saveIndex()
         persistActiveState()
+        return track.id
     }
 
     /// Tri Biblio (spec "biblio-date-display", it15, Bloc 1) — appliqué après chaque mutation
