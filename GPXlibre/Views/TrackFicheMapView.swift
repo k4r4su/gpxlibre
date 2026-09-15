@@ -57,6 +57,17 @@ struct TrackFicheMapView: UIViewRepresentable {
         private var currentIsReversed: Bool?
         private var startAnnotation: MLNPointAnnotation?
         private var endAnnotation: MLNPointAnnotation?
+        /// Fix "trace-sheet-auto-frame" (it18, Bloc 6, bug terrain : "la carte reste centrée
+        /// monde") : `fitCamera` était déjà appelé dans `apply(track:...)`, mais celui-ci peut
+        /// s'exécuter dès `didFinishLoading` (style JSON embarqué, chargement quasi instantané,
+        /// pas d'attente réseau) — potentiellement AVANT que SwiftUI ait fini de donner à la
+        /// `MLNMapView` (créée `frame: .zero`) sa vraie taille de layout. `setVisibleCoordinate
+        /// Bounds` calculé sur une vue de taille nulle produit un zoom aberrant (quasi le monde
+        /// entier). On retient les coordonnées du dernier cadrage tenté et on le REJOUE une
+        /// fois, dès que le premier rendu réel confirme une vue de taille non nulle — idempotent
+        /// (mêmes bounds) si le premier appel avait déjà réussi.
+        private var pendingCameraFitCoordinates: [CLLocationCoordinate2D]?
+        private var didRetryCameraFit = false
         /// Le style se charge de façon asynchrone — si `sync` est appelé avant
         /// `didFinishLoading`, on retient la dernière demande pour l'appliquer dès que les
         /// sources/couches existent, plutôt que de la perdre silencieusement.
@@ -127,6 +138,12 @@ struct TrackFicheMapView: UIViewRepresentable {
         }
 
         private func fitCamera(coordinates: [CLLocationCoordinate2D], on mapView: MLNMapView) {
+            pendingCameraFitCoordinates = coordinates
+            didRetryCameraFit = false
+            applyCameraFit(coordinates: coordinates, on: mapView)
+        }
+
+        private func applyCameraFit(coordinates: [CLLocationCoordinate2D], on mapView: MLNMapView) {
             guard let first = coordinates.first else { return }
             var minLat = first.latitude, maxLat = first.latitude
             var minLon = first.longitude, maxLon = first.longitude
@@ -141,6 +158,17 @@ struct TrackFicheMapView: UIViewRepresentable {
                 ne: CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon)
             )
             mapView.setVisibleCoordinateBounds(bounds, edgePadding: TrackFicheMapView.cameraEdgePadding, animated: false, completionHandler: nil)
+        }
+
+        /// Fix "trace-sheet-auto-frame" : rejoue le cadrage une seule fois dès que la vue a une
+        /// taille réelle — couvre le cas où `fitCamera` a été appelé pendant que `mapView.bounds`
+        /// était encore `.zero` (voir commentaire sur `pendingCameraFitCoordinates`).
+        func mapViewDidFinishRenderingMap(_ mapView: MLNMapView, fullyRendered: Bool) {
+            guard !didRetryCameraFit, mapView.bounds.width > 0, mapView.bounds.height > 0,
+                  let coordinates = pendingCameraFitCoordinates
+            else { return }
+            didRetryCameraFit = true
+            applyCameraFit(coordinates: coordinates, on: mapView)
         }
 
         private func setupLayers(style: MLNStyle) {
