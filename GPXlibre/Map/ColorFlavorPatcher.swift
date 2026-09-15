@@ -43,7 +43,11 @@ enum ColorFlavorPatcher {
         guard let color = parseColor(string) else { return nil }
         var hue = (color.h + flavor.hueShiftDegrees).truncatingRemainder(dividingBy: 360)
         if hue < 0 { hue += 360 }
-        let saturation = min(max(color.s * flavor.saturationMultiplier, 0), 1)
+        // Fix "flavor-parameters-imperceptible" (it19-bis) : terme ADDITIF après le
+        // multiplicateur — un multiplicateur seul n'a aucun effet visible sur une couleur déjà
+        // proche du gris/neutre (majorité de la surface d'un fond de carte clair), voir
+        // MapColorFlavor.saturationBoost.
+        let saturation = min(max(color.s * flavor.saturationMultiplier + flavor.saturationBoost, 0), 1)
         let contrasted = 0.5 + (color.l - 0.5) * flavor.contrastFactor
         let lightness = min(max(contrasted + flavor.lightnessDelta, 0), 1)
         return "hsla(\(formatted(hue)), \(formatted(saturation * 100))%, \(formatted(lightness * 100))%, \(formatted(color.a, decimals: 3)))"

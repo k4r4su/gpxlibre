@@ -59,10 +59,14 @@ final class ColorFlavorPatcherTests: XCTestCase {
     }
 
     func testHueShiftWrapsAroundThreeSixtyDegrees() {
-        // hsl(350, ...) + 10° (terreux) doit revenir à 0°, pas 360°.
+        // hsl(350, ...) + le décalage de "terreux" doit revenir près de 0°, jamais ≥ 360°
+        // (indépendant de la valeur exacte du décalage, pour ne pas coupler ce test à une
+        // constante de réglage amenée à changer).
         let transformed = ColorFlavorPatcher.transformedColorString("hsl(350,50%,50%)", flavor: .terreux)!
         let reparsed = ColorFlavorPatcher.parseColor(transformed)!
-        XCTAssertEqual(reparsed.h, 0, accuracy: 0.5)
+        let expectedWrapped = (350 + MapColorFlavor.terreux.hueShiftDegrees).truncatingRemainder(dividingBy: 360)
+        XCTAssertEqual(reparsed.h, expectedWrapped, accuracy: 0.5)
+        XCTAssertLessThan(reparsed.h, 350, "doit avoir bouclé, pas juste additionné sans borne")
     }
 
     func testHauteContrasteBoostsSaturationAndSpreadsLightness() {
@@ -74,6 +78,21 @@ final class ColorFlavorPatcherTests: XCTestCase {
         let lightColor = ColorFlavorPatcher.transformedColorString("hsl(200,40%,80%)", flavor: .hauteContraste)!
         let lightParsed = ColorFlavorPatcher.parseColor(lightColor)!
         XCTAssertGreaterThan(lightParsed.l, 0.80, "une couleur déjà claire doit devenir encore plus claire (contraste)")
+    }
+
+    /// Fix "flavor-parameters-imperceptible" (retour terrain, it19-bis : "standard et les
+    /// autres se ressemblent") — un fond de carte quasi neutre (saturation très basse, typique
+    /// d'un style clair) doit devenir VISIBLEMENT plus coloré sous "Contraste élevé"/"Terreux",
+    /// pas juste marginalement (un multiplicateur seul est insuffisant sur une valeur proche de
+    /// zéro, voir MapColorFlavor.saturationBoost).
+    func testNearNeutralBackgroundColorBecomesVisiblyColoredUnderNonStandardFlavors() {
+        let nearNeutral = "hsl(60,4%,95%)"
+
+        let hauteContrasteResult = ColorFlavorPatcher.parseColor(ColorFlavorPatcher.transformedColorString(nearNeutral, flavor: .hauteContraste)!)!
+        let terreuxResult = ColorFlavorPatcher.parseColor(ColorFlavorPatcher.transformedColorString(nearNeutral, flavor: .terreux)!)!
+
+        XCTAssertGreaterThan(hauteContrasteResult.s, 0.15, "un multiplicateur seul (0.04×1.5=0.06) resterait imperceptible sans le terme additif")
+        XCTAssertGreaterThan(terreuxResult.s, 0.08)
     }
 
     func testSaturationNeverExceedsValidRange() {

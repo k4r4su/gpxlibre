@@ -32,6 +32,35 @@ dialog système, changement plus visible/plus de surface à valider) :
 - `PrecacheConfirmationView` : choix Wi-Fi/mobile (vue custom, pas un system alert — fréquente
   en pratique, affichée avant chaque Ride sur une trace non entièrement en cache)
 
+## Retour terrain it19 (via /powerup) — 2 bugs réels trouvés et corrigés
+
+Le propriétaire a testé les livrables d'it19 sur simulateur/device et donné un retour concret
+sur 5 points demandés. Deux résultats attendus ("pas grave", à re-tester avec une trace plus
+pentue) et un déjà correct (rotation labels). Les deux autres ont révélé de VRAIS bugs :
+
+- **Palettes de couleur "invisibles"** : diagnostiqué en rejouant `ColorFlavorPatcher` contre le
+  VRAI style embarqué (pas une supposition) — la transformation s'appliquait bien
+  techniquement (confirmé), mais un simple MULTIPLICATEUR de saturation n'a quasiment aucun
+  effet sur les teintes déjà peu saturées (fond de carte, zones neutres — la majorité de la
+  surface visible). Fix : terme ADDITIF de saturation (`MapColorFlavor.saturationBoost`) en plus
+  du multiplicateur, paramètres globalement plus marqués. Voir section dédiée ci-dessous.
+- **Fiche trace A→B "toujours rien"** : root cause trouvée en LANÇANT RÉELLEMENT l'app dans le
+  simulateur (screenshot + logs de diagnostic temporaires, plutôt qu'une troisième supposition)
+  — `mapView(_:didFinishLoading:)` ne se déclenche JAMAIS pour cette carte (confirmé après 20 s
+  d'attente), très probablement parce que cette `MLNMapView` vit dans un `Form`/`List`
+  (contrairement à la Ride map, plein écran, où ce délégué fonctionne normalement). Les DEUX
+  correctifs précédents (it18-bis) partaient d'une fausse prémisse (une course sur la
+  disponibilité du style) et n'ont donc rien résolu. Fix réel : `sync()` ne dépend plus DU TOUT
+  de `didFinishLoading` pour créer les sources/couches — il le fait dès que `mapView.style` est
+  disponible (empiriquement déjà le cas dès le tout premier appel). `didFinishLoading` reste un
+  filet de sécurité redondant, `setupLayers` rendue idempotente pour supporter un double appel
+  sans planter. **Vérifié visuellement** (capture simulateur : tracé + chevrons + pastille B
+  visibles, bon cadrage) — pas juste "ça devrait marcher" cette fois.
+- Leçon methodologique retenue : pour ce bug précis, deviner à partir de la lecture de code
+  seule a échoué deux fois de suite — lancer l'app réellement (simulateur + logs temporaires)
+  a trouvé la vraie cause en un seul passage. À privilégier plus tôt pour tout bug qui résiste
+  à un premier correctif "raisonné".
+
 ## Palettes de carte "maison" (spec "map-color-flavors", it19, décision tranchée avec le
 ## propriétaire)
 

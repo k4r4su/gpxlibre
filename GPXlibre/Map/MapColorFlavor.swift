@@ -43,16 +43,36 @@ enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
         switch self {
         case .standard: return 0
         case .hauteContraste: return 0
-        case .terreux: return 10
+        case .terreux: return 14
         }
     }
 
-    /// Multiplicateur de saturation (clampé après application, jamais négatif).
+    /// Multiplicateur de saturation (clampé après application avec `saturationBoost`, jamais
+    /// négatif). Fix "flavor-parameters-imperceptible" (retour terrain, it19-bis :
+    /// "standard et les autres se ressemblent") — diagnostiqué en rejouant le patch sur le VRAI
+    /// style embarqué (111 calques) : le calcul était correct (confirmé, ex. landcover_wood
+    /// 61%→82% de saturation), mais un simple MULTIPLICATEUR n'a quasiment aucun effet sur les
+    /// teintes DÉJÀ peu saturées (fond de carte, zones neutres — la majorité de la surface
+    /// visible à l'écran) : 1.35 × une saturation proche de 0 reste proche de 0. Voir
+    /// `saturationBoost` ci-dessous, qui corrige ce problème par un terme ADDITIF.
     var saturationMultiplier: Double {
         switch self {
         case .standard: return 1.0
-        case .hauteContraste: return 1.35
-        case .terreux: return 0.85
+        case .hauteContraste: return 1.5
+        case .terreux: return 0.9
+        }
+    }
+
+    /// Terme ADDITIF de saturation (après multiplication, avant clamp) — garantit un effet
+    /// visible même sur une couleur de départ quasi grise/neutre, où un multiplicateur seul
+    /// n'a aucune prise. C'est ce terme qui rend "Terreux" visible sur un fond de carte clair
+    /// (teinte chaude qui apparaît enfin) et "Contraste élevé" franchement plus vif partout,
+    /// pas seulement sur les couleurs déjà saturées.
+    var saturationBoost: Double {
+        switch self {
+        case .standard: return 0
+        case .hauteContraste: return 0.15
+        case .terreux: return 0.06
         }
     }
 
@@ -63,7 +83,7 @@ enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
     var contrastFactor: Double {
         switch self {
         case .standard: return 1.0
-        case .hauteContraste: return 1.25
+        case .hauteContraste: return 1.4
         case .terreux: return 1.0
         }
     }
@@ -74,13 +94,14 @@ enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
         switch self {
         case .standard: return 0
         case .hauteContraste: return 0
-        case .terreux: return 0.03
+        case .terreux: return 0.04
         }
     }
 
     /// `true` si ce flavor ne change rien (évite tout parcours/ré-encodage JSON inutile pour
     /// "Standard", et sert de garde générique si un futur flavor était ajouté à l'identique).
     var isIdentity: Bool {
-        hueShiftDegrees == 0 && saturationMultiplier == 1 && contrastFactor == 1 && lightnessDelta == 0
+        hueShiftDegrees == 0 && saturationMultiplier == 1 && saturationBoost == 0
+            && contrastFactor == 1 && lightnessDelta == 0
     }
 }
