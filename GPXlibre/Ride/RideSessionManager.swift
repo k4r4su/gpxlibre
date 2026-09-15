@@ -61,7 +61,18 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var resumeGuidance: ResumeGuidance?
     @Published private(set) var isRequestingResume = false
     @Published private(set) var resumeRoutingError: String?
+    /// Distance EN CONTINU jusqu'au pin/jonction (spec "rejoin-trace-guidance-banner", it18,
+    /// Bloc 5, "compte en continu, pas de stale") — recalculée à chaque fix GPS tant qu'un
+    /// guidage de reprise est actif, `nil` sinon. Alimente RejoinGuidanceBannerView.
+    @Published private(set) var resumeGuidanceLiveDistanceMeters: Double?
     private var resumeTask: Task<Void, Never>?
+    /// Depuis quand la divergence dépasse RECOMPUTE_DIVERGENCE_M en continu (spec "link-
+    /// recompute-on-divergence", it18, Bloc 3) — `nil` tant que sous le seuil ou déjà déclenché.
+    private var autoRecomputeSinceDate: Date?
+    /// Change à chaque recalcul automatique déclenché : RideView observe ce token pour afficher
+    /// un toast bref "Recalcul" (spec explicite "notification silencieuse, pas de bannière
+    /// permanente").
+    @Published var autoRecomputeToastToken: UUID?
 
     // MARK: - Mesures en cours
     @Published private(set) var averageSpeedKmh: Double = 0
@@ -399,6 +410,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         resumeGuidance = nil
         isRequestingResume = false
         resumeRoutingError = nil
+        resumeGuidanceLiveDistanceMeters = nil
+        autoRecomputeSinceDate = nil
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
@@ -509,6 +522,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
             updateRoadbookProgress(from: location, projection: projection)
+            updateAutoRecompute(from: location, projection: projection)
             updateRoadbookBanner(projection: projection)
             updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
         case .nav:
@@ -732,13 +746,18 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// Ne resynchronise plus d'index depuis it14 (voir updateRoadbookProgress) : le roadbook
     /// se recale seul, sans état, dès le prochain fix.
     private func updateResumeProgress(from location: CLLocation) {
-        guard let guidance = resumeGuidance, let track, !trackCumulativeDistances.isEmpty else { return }
+        guard let guidance = resumeGuidance, let track, !trackCumulativeDistances.isEmpty else {
+            resumeGuidanceLiveDistanceMeters = nil
+            return
+        }
 
         let distanceToPin = RoadbookAnalyzer.distanceMeters(location.coordinate, guidance.pinCoordinate)
+        resumeGuidanceLiveDistanceMeters = distanceToPin
         if distanceToPin <= RideConstants.resumeJunctionDistanceMeters {
             resumeTask?.cancel()
             resumeGuidance = nil
             resumeRoutingError = nil
+            resumeGuidanceLiveDistanceMeters = nil
             return
         }
 
@@ -747,7 +766,37 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             resumeTask?.cancel()
             resumeGuidance = nil
             resumeRoutingError = nil
+            resumeGuidanceLiveDistanceMeters = nil
         }
+    }
+
+    /// Recalcul automatique de liaison (spec "link-recompute-on-divergence", it18, Bloc 3) :
+    /// divergence soutenue > RECOMPUTE_DIVERGENCE_M pendant > RECOMPUTE_DURATION_S déclenche le
+    /// MÊME guidage que "Reprendre la trace ici" (Bloc 3, it10), auto-confirmé — voir
+    /// `ResumeGuidance.isAutomatic`. Jamais déclenché si un guidage de reprise (manuel ou
+    /// automatique) existe déjà, ni pendant un guidage arrêté. Cible : la prochaine jonction
+    /// atteignable plus loin sur la trace, même mécanique que `updateOffTrackResumeTarget`/
+    /// `requestDirectDetour` (detourAheadMinMeters), pas un nouvel algorithme de recherche.
+    private func updateAutoRecompute(from location: CLLocation, projection: TrackProjector.Projection?) {
+        guard resumeGuidance == nil, !isGuidanceStopped, let track, !trackCumulativeDistances.isEmpty, let projection else {
+            autoRecomputeSinceDate = nil
+            return
+        }
+        guard projection.distanceToTrackMeters > RideConstants.recomputeDivergenceThresholdMeters else {
+            autoRecomputeSinceDate = nil
+            return
+        }
+        guard let since = autoRecomputeSinceDate else {
+            autoRecomputeSinceDate = location.timestamp
+            return
+        }
+        guard location.timestamp.timeIntervalSince(since) >= RideConstants.recomputeDivergenceDurationSeconds else { return }
+        autoRecomputeSinceDate = nil
+
+        let targetCumulative = projection.cumulativeDistanceMeters + RideConstants.detourAheadMinMeters
+        guard let target = TrackProjector.coordinate(in: track.points, cumulativeDistances: trackCumulativeDistances, atCumulativeDistance: targetCumulative) else { return }
+        requestResume(pinCoordinate: target, pinCumulativeDistanceMeters: targetCumulative, isAutomatic: true)
+        autoRecomputeToastToken = UUID()
     }
 
     // MARK: - Chemin bloqué / détour
@@ -911,13 +960,17 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// réseau), puis lance le calcul d'itinéraire route (miroir exact de `requestDetour`,
     /// même `DetourRoutingService`) — la réponse met à jour l'objet EN PLACE sans changer de
     /// phase : rien n'est figé tant que `confirmResume()` n'a pas été appelé.
-    func requestResume(pinCoordinate: CLLocationCoordinate2D, pinCumulativeDistanceMeters: Double) {
+    func requestResume(pinCoordinate: CLLocationCoordinate2D, pinCumulativeDistanceMeters: Double, isAutomatic: Bool = false) {
         resumeTask?.cancel()
         resumeRoutingError = nil
         resumeGuidance = ResumeGuidance(
             pinCoordinate: pinCoordinate,
             pinCumulativeDistanceMeters: pinCumulativeDistanceMeters,
-            phase: .previewing
+            // Automatique (spec "link-recompute-on-divergence") : auto-confirmé, jamais de
+            // preview à valider — "recalcule routage" est présenté comme un fait accompli
+            // (toast bref), pas une proposition.
+            phase: isAutomatic ? .active : .previewing,
+            isAutomatic: isAutomatic
         )
 
         guard let origin = currentLocation?.coordinate else { return }
@@ -965,6 +1018,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         resumeGuidance = nil
         isRequestingResume = false
         resumeRoutingError = nil
+        resumeGuidanceLiveDistanceMeters = nil
     }
 
     private func routeLengthMeters(_ coordinates: [CLLocationCoordinate2D]) -> Double {

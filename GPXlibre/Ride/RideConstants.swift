@@ -187,6 +187,24 @@ enum RideConstants {
     /// Distance de retour sur la trace (m) qui efface automatiquement le détour (+ haptique).
     static let detourRejoinClearRadiusMeters: Double = 20
 
+    // MARK: - Recalcul automatique de liaison (spec "link-recompute-on-divergence" /
+    // "rejoin-trace-guidance-banner", it18, Blocs 3/5)
+
+    /// RECOMPUTE_DIVERGENCE_M : distance perpendiculaire (m) à la trace au-delà de laquelle,
+    /// soutenue pendant RECOMPUTE_DURATION_S, un guidage de reprise (même mécanisme que
+    /// "Reprendre la trace ici", Bloc 3 it10) se déclenche AUTOMATIQUEMENT — plus strict que
+    /// horsTraceEnterMeters (30 m, pause immédiate du roadbook) : celui-ci réagit tout de suite
+    /// à un simple écart, celui-là attend une vraie divergence soutenue avant de calculer un
+    /// itinéraire de liaison. Constantes strictes demandées par le prompt, non réglables.
+    static let recomputeDivergenceThresholdMeters: Double = 100
+    static let recomputeDivergenceDurationSeconds: Double = 2
+
+    /// REJOINDRE_GUIDANCE_BANNER : feature flag (même patron que `guidanceButtonMode`) — permet
+    /// de revenir instantanément au comportement précédent (pas de bannière latérale dédiée
+    /// pendant un recalcul automatique, seul le tracé pointillé bleu sur la carte) sans toucher
+    /// à la logique de déclenchement, si la bannière s'avère mal comprise sur le terrain.
+    static let rejoindreGuidanceBannerEnabled = true
+
     // MARK: - Resync hors-trace (spec "resync-hysteresis")
 
     // MARK: - Chevrons de direction par trace (spec "per-track-settings")

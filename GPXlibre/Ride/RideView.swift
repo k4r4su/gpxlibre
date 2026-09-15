@@ -135,7 +135,11 @@ struct RideView: View {
             // Backlog (non implémenté ce tour-ci, voir TODO.md) : action contextuelle par
             // appui-long sur le chip hors-trace, "Marquer portion bloquée & Contourner".
             if let detour = session.detourRoute { return .detour(detour) }
-            if let resume = session.resumeGuidance { return .resumeGuidance(resume) }
+            // Spec "rejoin-trace-guidance-banner" (it18, Bloc 5) : un guidage AUTOMATIQUE
+            // (divergence soutenue, voir ResumeGuidance.isAutomatic) n'affiche jamais la
+            // bannière du haut avec confirmation — celle-ci reste réservée au tap manuel sur la
+            // trace. La bannière latérale dédiée (bottomControlsColumn) le remplace.
+            if let resume = session.resumeGuidance, !resume.isAutomatic { return .resumeGuidance(resume) }
             if let guidance = session.goToGuidance { return .goTo(guidance) }
             if let alert = nearbySharedBlockageAlert(track: track) { return .sharedBlockageAlert(alert) }
             return nil
@@ -388,10 +392,17 @@ struct RideView: View {
                     .longPressTooltip("Reprendre le guidage")
                     .transition(.scale.combined(with: .opacity))
                 }
-                // Fix "offtrack-compact-chip" (it18, Bloc 1) : même slot que la bannière latérale
-                // roadbook ci-dessous — les deux états sont mutuellement exclusifs (hors-trace vs
-                // virage à venir sur trace), donc jamais empilés ni de reflow des boutons sous eux.
-                if isOffTrackChipVisible, let offTrackInfo = offTrackPanelInfo {
+                // Priorité de la colonne latérale (mutuellement exclusifs, jamais empilés) :
+                // 1. liaison automatique en cours (spec "rejoin-trace-guidance-banner", it18,
+                //    Bloc 5) — plus informative qu'un simple chip une fois qu'un itinéraire de
+                //    reprise a été calculé ; 2. chip hors-trace compact (Bloc 1) ; 3. bannière
+                //    virage à venir sur trace (it12).
+                if RideConstants.rejoindreGuidanceBannerEnabled,
+                   let resume = session.resumeGuidance, resume.isAutomatic,
+                   let distance = session.resumeGuidanceLiveDistanceMeters {
+                    RejoinGuidanceBannerView(distanceMeters: distance)
+                        .transition(.ridePanel)
+                } else if isOffTrackChipVisible, let offTrackInfo = offTrackPanelInfo {
                     OffTrackChipView(
                         relativeBearingDegrees: offTrackInfo.relativeBearingDegrees,
                         distanceMeters: offTrackInfo.distanceMeters,
@@ -433,6 +444,7 @@ struct RideView: View {
             .animation(.easeInOut(duration: 0.2), value: session.isGuidanceStopped)
             .animation(.ridePanel, value: isLateralBannerVisible)
             .animation(.ridePanel, value: isOffTrackChipVisible)
+            .animation(.ridePanel, value: session.resumeGuidance?.isAutomatic ?? false)
             .padding(settings.controlsSide == .right ? .trailing : .leading, 20)
             .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
             if settings.controlsSide == .left { Spacer() }
@@ -626,6 +638,11 @@ struct RideView: View {
         }
         .onChange(of: settings.keepScreenAwakeInRide) { _ in
             session.applyIdleTimerSetting()
+        }
+        // Spec "link-recompute-on-divergence" (it18, Bloc 3) : "notification silencieuse
+        // Recalcul brève, pas de bannière permanente" — même mécanisme toast que Pause/Stop.
+        .onChange(of: session.autoRecomputeToastToken) { _ in
+            toastMessage = "Recalcul"
         }
     }
 

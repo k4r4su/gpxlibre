@@ -30,5 +30,12 @@ struct ResumeGuidance {
     var isRouted = false
     var routeDistanceMeters: Double?
     var phase: ResumePhase
+    /// Distingue l'origine du guidage (spec "link-recompute-on-divergence"/"rejoin-trace-
+    /// guidance-banner", it18, Blocs 3/5) : `false` (défaut) = tap manuel sur la trace,
+    /// bannière du haut avec confirmation (ResumeGuidanceCardView) ; `true` = divergence
+    /// soutenue détectée automatiquement (RideSessionManager.updateAutoRecompute) — démarre
+    /// directement en phase `.active` (pas de confirmation demandée), affichage via la
+    /// bannière latérale dédiée (RejoinGuidanceBannerView) plutôt que la bannière du haut.
+    var isAutomatic = false
     let startedAt = Date()
 }
