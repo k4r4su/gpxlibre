@@ -81,6 +81,24 @@ final class OffTrackHysteresisTests: XCTestCase {
         XCTAssertTrue(session.isOffTrackPaused, "27 m est dans la bande 25-30 : doit rester hors-trace (anti-rebond)")
     }
 
+    /// Spec "offtrack-compact-chip" (it18, Bloc 1) : `offTrackPausedSinceDate` doit être posé à
+    /// l'entrée en hors-trace (pilote l'affichage différé de la distance dans le chip) et remis
+    /// à `nil` dès le retour sous le seuil de sortie.
+    func testOffTrackPausedSinceDateTracksEntryAndExit() {
+        let suite = "OffTrackHysteresisTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let session = makeSession(defaultsSuiteName: suite)
+        let track = makeTrack()
+        session.start(track: track)
+        XCTAssertNil(session.offTrackPausedSinceDate)
+
+        session.handle(location: location(offsetEast(track.points[10].coordinate, meters: 35)))
+        XCTAssertNotNil(session.offTrackPausedSinceDate, "l'entrée en hors-trace doit horodater le début de la pause")
+
+        session.handle(location: location(offsetEast(track.points[11].coordinate, meters: 20)))
+        XCTAssertNil(session.offTrackPausedSinceDate, "le retour sous le seuil de sortie doit effacer l'horodatage")
+    }
+
     func testReengagesBelowExitThreshold() {
         let suite = "OffTrackHysteresisTests.\(UUID().uuidString)"
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }

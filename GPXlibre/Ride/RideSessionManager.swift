@@ -42,6 +42,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var isOffTrackPaused = false
     @Published private(set) var offTrackResumeCoordinate: CLLocationCoordinate2D?
     @Published private(set) var offTrackResumeDistanceMeters: Double?
+    /// Depuis quand `isOffTrackPaused` est vrai EN CONTINU (spec "offtrack-compact-chip", it18,
+    /// Bloc 1) — pilote uniquement l'affichage de la distance dans le chip compact (voir
+    /// OffTrackChipView), jamais la logique hors-trace elle-même (hystérésis inchangée).
+    @Published private(set) var offTrackPausedSinceDate: Date?
     /// Change de valeur à chaque déclenchement d'alerte : FlashOverlayView observe ce token.
     @Published var flashSequenceToken: UUID?
 
@@ -390,6 +394,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isOffTrackPaused = false
         offTrackResumeCoordinate = nil
         offTrackResumeDistanceMeters = nil
+        offTrackPausedSinceDate = nil
         resumeTask?.cancel()
         resumeGuidance = nil
         isRequestingResume = false
@@ -663,8 +668,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             isOffTrackPaused = false
             offTrackResumeCoordinate = nil
             offTrackResumeDistanceMeters = nil
+            offTrackPausedSinceDate = nil
         } else if projection.distanceToTrackMeters > RideConstants.horsTraceEnterMeters {
             isOffTrackPaused = true
+            offTrackPausedSinceDate = location.timestamp
             updateOffTrackResumeTarget(from: location, projection: projection)
         }
         // Plus de progression par INDEX ici depuis it14 (spec "roadbook-angle-buckets-replay") :

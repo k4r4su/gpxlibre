@@ -87,20 +87,21 @@ struct RideView: View {
         }
     }
 
-    /// Le guidage Nav / l'alerte "hors trace" occupent la zone `directionPanelLayer`
-    /// (NavGuidancePanelView / RoadbookPanelView, EN HAUT — fix "overlay-layout-grid") — quand
-    /// c'est le cas, la caméra doit réserver cette hauteur côté haut (fix "position-anchor"),
-    /// sinon le calcul d'ancrage de la position serait faux. Reflète EXACTEMENT la condition
-    /// d'affichage de `directionPanelLayer`. Le cas "virage à venir" (Mode Trace, on-track) est
-    /// désormais porté par la bannière LATÉRALE (spec "lateral-cap-banner-countdown", it12,
-    /// voir lateralCapBannerLayer) — isolée de ce calcul par construction, donc absente d'ici.
+    /// Le guidage Nav occupe la zone `directionPanelLayer` (NavGuidancePanelView, EN HAUT —
+    /// fix "overlay-layout-grid") — quand c'est le cas, la caméra doit réserver cette hauteur
+    /// côté haut (fix "position-anchor"), sinon le calcul d'ancrage de la position serait faux.
+    /// Reflète EXACTEMENT la condition d'affichage de `directionPanelLayer`. Le cas "hors trace"
+    /// (Mode Trace) est désormais porté par le chip latéral compact (spec "offtrack-compact-
+    /// chip", it18, Bloc 1, voir bottomControlsColumn/OffTrackChipView) — comme la bannière
+    /// latérale "virage à venir" avant lui, isolé de ce calcul par construction : n'occupe plus
+    /// jamais la zone haute pleine-largeur (bug terrain 15/09 : "prend 40 % de l'écran").
     private func hasDirectionPanel(track: GPXTrack?) -> Bool {
         // Spec "stop-guidance-semantics" (it14, Bloc 3) : "roadbook et bannières de guidage se
         // retirent" pendant un guidage arrêté — la détection hors-trace continue de tourner en
         // arrière-plan (session.isOffTrackPaused), seul l'AFFICHAGE se tait.
         guard !session.isGuidanceStopped else { return false }
         switch modeStore.mode {
-        case .trace: return session.isOffTrackPaused
+        case .trace: return false
         case .nav: return session.navRoute != nil
         }
     }
@@ -124,7 +125,15 @@ struct RideView: View {
         if case .failed(let message) = mapLoadStatus { return .mapLoadError(message) }
         switch modeStore.mode {
         case .trace:
-            if session.isBlockedBannerVisible { return .blockedPath }
+            // Fix "offtrack-compact-chip" (it18, Bloc 1, terrain 15/09) : le panneau "Portion
+            // bloquée ? Contourner" en pleine largeur ne se déclenche plus automatiquement — il
+            // s'empilait avec le bandeau hors-trace et prenait ~40 % de l'écran à eux deux. Le
+            // chip hors-trace compact (bottomControlsColumn) indique déjà qu'une reprise est en
+            // cours ; ce n'est pas bloquant tant que ce chip reste visible. `isBlockedBannerVisible`
+            // continue de tourner en arrière-plan (déclenche toujours la même confirmation via le
+            // bouton "Bloqué", toujours visible) — seul cet AFFICHAGE automatique est retiré.
+            // Backlog (non implémenté ce tour-ci, voir TODO.md) : action contextuelle par
+            // appui-long sur le chip hors-trace, "Marquer portion bloquée & Contourner".
             if let detour = session.detourRoute { return .detour(detour) }
             if let resume = session.resumeGuidance { return .resumeGuidance(resume) }
             if let guidance = session.goToGuidance { return .goTo(guidance) }
@@ -266,13 +275,13 @@ struct RideView: View {
 
     /// Panneau de direction (fix "overlay-layout-grid", Bug 3) : EN HAUT, pleine largeur —
     /// jamais en bas, où il se confondait avec la tab bar et masquait la position (Bug 2).
-    /// Trace : uniquement l'alerte "hors trace" désormais (le cas "virage à venir" est porté
-    /// par la bannière latérale, voir lateralCapBannerLayer et hasDirectionPanel ci-dessus).
+    /// Mode Nav uniquement désormais : le cas Trace "virage à venir" ET "hors trace" sont tous
+    /// deux portés par la colonne latérale (spec "lateral-cap-banner-countdown" it12,
+    /// "offtrack-compact-chip" it18 — voir bottomControlsColumn), plus jamais cette zone
+    /// pleine-largeur (`RoadbookPanelView` n'a donc plus d'appelant ici, fichier intact, voir
+    /// TODO.md).
     @ViewBuilder
     private var directionPanelLayer: some View {
-        if modeStore.mode == .trace, !session.isGuidanceStopped, session.isOffTrackPaused, let offTrackInfo = offTrackPanelInfo {
-            RoadbookPanelView(offTrackInfo: offTrackInfo)
-        }
         if modeStore.mode == .nav, session.navRoute != nil {
             NavGuidancePanelView(
                 maneuver: session.currentManeuver,
@@ -379,7 +388,17 @@ struct RideView: View {
                     .longPressTooltip("Reprendre le guidage")
                     .transition(.scale.combined(with: .opacity))
                 }
-                if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
+                // Fix "offtrack-compact-chip" (it18, Bloc 1) : même slot que la bannière latérale
+                // roadbook ci-dessous — les deux états sont mutuellement exclusifs (hors-trace vs
+                // virage à venir sur trace), donc jamais empilés ni de reflow des boutons sous eux.
+                if isOffTrackChipVisible, let offTrackInfo = offTrackPanelInfo {
+                    OffTrackChipView(
+                        relativeBearingDegrees: offTrackInfo.relativeBearingDegrees,
+                        distanceMeters: offTrackInfo.distanceMeters,
+                        pausedSinceDate: session.offTrackPausedSinceDate
+                    )
+                    .transition(.ridePanel)
+                } else if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
                     LateralCapBannerView(
                         direction: inflection.direction,
                         tier: inflection.tier,
@@ -413,6 +432,7 @@ struct RideView: View {
             .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
             .animation(.easeInOut(duration: 0.2), value: session.isGuidanceStopped)
             .animation(.ridePanel, value: isLateralBannerVisible)
+            .animation(.ridePanel, value: isOffTrackChipVisible)
             .padding(settings.controlsSide == .right ? .trailing : .leading, 20)
             .padding(.bottom, RideOverlayLayout.cameraInsetMarginBottomPoints)
             if settings.controlsSide == .left { Spacer() }
@@ -465,6 +485,14 @@ struct RideView: View {
             && !session.isOffTrackPaused
             && session.currentInflection != nil
             && (session.distanceToCurrentInflectionMeters ?? .infinity) <= RideConstants.bannerAlertStartMeters
+    }
+
+    /// Chip hors-trace compact (spec "offtrack-compact-chip", it18, Bloc 1) — remplace
+    /// `RoadbookPanelView` (bandeau plein-largeur EN HAUT). Mêmes conditions que l'ancien
+    /// `directionPanelLayer` côté Trace (seuils ENTER/EXIT inchangés, voir RideConstants), juste
+    /// déplacé dans la colonne latérale.
+    private var isOffTrackChipVisible: Bool {
+        modeStore.mode == .trace && !session.isGuidanceStopped && session.isOffTrackPaused
     }
 
     /// Point d'entrée : mesure la VRAIE safe area (encoche/Dynamic Island en haut ; tab bar +

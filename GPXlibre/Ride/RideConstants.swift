@@ -69,12 +69,18 @@ enum RideConstants {
 
     // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
 
-    /// DEFAULT_RIDE_ZOOM : mesuré comme "4 taps zoom-arrière" (manualZoomStepFactor appliqué 4
+    /// DEFAULT_RIDE_ZOOM : mesuré comme "5 taps zoom-arrière" (manualZoomStepFactor appliqué 5
     /// fois, DEHORS) depuis l'ancien point de départ fixe (zoomBucketsNormal, palier le plus
     /// serré, 280 m — voir RideSessionManager.init, avant it14) — valeur RÉELLE persistée telle
     /// quelle plutôt que recalculée à chaque lancement, réglable ensuite (slider + aperçu,
-    /// Réglages > Navigation > Zoom par défaut).
-    static let manualZoomBackTapsForDefaultRideZoom = 4
+    /// Réglages > Navigation > Zoom par défaut). Relevé de 4 à 5 taps (spec "default-zoom-
+    /// persist-rework", it18, Bloc 4, terrain : "ouvre trop zoomé, ne voit pas le prochain
+    /// virage") — un cran de dézoom supplémentaire (~750 m → ~1075 m de portée caméra à
+    /// l'ouverture) ; le réglage Réglages > Navigation > Zoom par défaut reste le point
+    /// d'ajustement fin ensuite, cette constante ne pilote que la valeur de départ des
+    /// nouvelles installs (un utilisateur ayant déjà sa propre valeur persistée n'est pas
+    /// affecté, voir RideSettingsStore.init).
+    static let manualZoomBackTapsForDefaultRideZoom = 5
     static let defaultRideZoomCameraMetersDefault: Double = {
         let startMeters = zoomBucketsNormal.first?.cameraDistanceMeters ?? 280
         return startMeters / pow(manualZoomStepFactor, Double(manualZoomBackTapsForDefaultRideZoom))
@@ -151,6 +157,11 @@ enum RideConstants {
     /// ne change tant que la distance y reste, donc plus besoin de bookkeeping temporel séparé.
     static let horsTraceEnterMeters: Double = 30
     static let horsTraceExitMeters: Double = 25
+
+    /// Chip hors-trace compact (spec "offtrack-compact-chip", it18, Bloc 1) : titre seul tant
+    /// que ce délai n'est pas dépassé, distance de reprise affichée en plus au-delà — voir
+    /// OffTrackChipView.
+    static let offTrackChipDistanceDelaySeconds: Double = 30
 
     /// Temps continu hors trace avant proposition de contournement.
     static let offTrackStagnantDurationSeconds: Double = 30

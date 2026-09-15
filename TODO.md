@@ -1,5 +1,63 @@
 # TODO
 
+## Itération 18 (compacité bannières / traces enregistrées visibles / zoom reset / cap-en-haut vrai)
+
+- **Backlog explicite du prompt (Bloc 1, "offtrack-compact-chip")** : action contextuelle par
+  appui-long sur le chip hors-trace (`OffTrackChipView`), popup "Marquer portion bloquée &
+  Contourner" — le prompt demandait de ne l'ajouter QUE si le chip reste visuellement propre
+  sans elle ; le chip (icône + titre + distance optionnelle) est déjà dense pour 92 pt de large,
+  donc non implémenté ce tour-ci pour ne pas le surcharger. Le bouton "Bloqué" (toujours visible,
+  colonne de contrôles) reste le chemin manuel existant, inchangé. À ajouter si le propriétaire
+  confirme le besoin après test terrain du chip actuel.
+- **`RoadbookPanelView` (Ride/) orpheline** depuis ce bloc — plus aucun appelant
+  (`directionPanelLayer` ne branche plus que le cas Nav) : fichier intact, même patron que
+  `TrackDetailView`/`TrackThumbnailView` (voir it13/it17 plus bas), pas supprimé.
+- **BLOC 2 (ride-record-tracks-visible), décision de scope tranchée avec le propriétaire avant
+  codage** : le prompt proposait de rendre la trace fraîchement enregistrée automatiquement
+  ACTIVE pour le Ride après "Terminer la sortie" (seul moyen, dans l'architecture actuelle à
+  UNE SEULE trace rendue à la fois — règle absolue du CLAUDE.md racine, "Ne JAMAIS réintroduire
+  un rendu multi-trace" — de la faire apparaître sur la carte Ride en direct). Réponse du
+  propriétaire : non, la trace suivie ne doit pas être remplacée automatiquement. Résolution
+  retenue à la place, qui ne touche pas à cette règle absolue : `EndRideView` affiche désormais
+  un aperçu carte immédiat (`TrackFicheMapView`, cadrage auto sur l'emprise) juste après
+  l'enregistrement, avec la couleur ambre distinctive (`RideConstants.recordedTrackColorPreset`)
+  appliquée par défaut à la trace enregistrée — donc "apparaît sur la carte immédiatement après
+  validation" est satisfait sans toucher à la trace active. Pour la voir ensuite sur la carte
+  Ride en conditions réelles de suivi, il faut toujours la rendre active à la main depuis la
+  Biblio (case à cocher, déjà existante et déjà live sans reload) — un vrai rendu multi-trace
+  simultané (active + "affichée" superposées) reste hors périmètre de cette itération, à
+  discuter explicitement si le besoin recontacte le propriétaire.
+- **BLOC 3/5 (link-recompute-on-divergence / rejoin-trace-guidance-banner), décision
+  d'architecture assumée** : le recalcul automatique (divergence > 100 m pendant > 2 s) réutilise
+  tel quel le mécanisme "Reprendre la trace ici" existant (`ResumeGuidance`/`requestResume`,
+  OSRM, tracé pointillé bleu déjà en place depuis it10) plutôt que d'inventer un second moteur de
+  routing parallèle — un nouveau champ `ResumeGuidance.isAutomatic` distingue les deux origines
+  (tap manuel → bannière du haut + confirmation ; divergence automatique → auto-confirmé, toast
+  bref "Recalcul", bannière latérale indigo `RejoinGuidanceBannerView`). Simplification assumée :
+  la bannière latérale affiche la distance ROUTÉE jusqu'à la jonction (pas "la prochaine
+  manœuvre" détaillée du tracé de liaison lui-même, qui demanderait de décoder les étapes OSRM
+  du détour — hors budget de cette itération, la trace principale garde ses propres virages/
+  chevrons intacts et inchangés pendant ce temps).
+- **BLOC 6 (trace-sheet-auto-frame)** : `TrackFicheMapView` cadrait déjà sur l'emprise de la
+  trace depuis it17 (`fitCamera`, spec "trace-fiche-map-ab-markers") — la cause probable du bug
+  terrain (carte centrée monde) est une course : `fitCamera` peut s'exécuter dès
+  `didFinishLoading` (style JSON embarqué, quasi instantané), potentiellement avant que SwiftUI
+  ait donné à la `MLNMapView` (créée `frame: .zero`) sa vraie taille de layout — auquel cas
+  `setVisibleCoordinateBounds` calcule un zoom aberrant sur une vue de taille nulle. Fix : un
+  second passage de cadrage, idempotent, rejoué une fois dès `mapViewDidFinishRenderingMap`
+  quand les bounds sont enfin non nulles. Non confirmé visuellement (pas d'automatisation
+  tactile dans cet environnement, limite documentée depuis it9) — à valider par le propriétaire
+  en ouvrant une fiche trace.
+- **BLOC 7 (rotating-symbols-cap-up)** : uniquement pertinent quand le fond VECTORIEL est actif
+  (hébergé en ligne, ou paquet local) — le raster (thème par défaut hors connexion) n'a aucun
+  label vectoriel, cette itération ne le concerne pas. Vérifié dans les headers vendored
+  MapLibre : les 25 calques symbol du style Liberty embarqué omettent tous `text`/`icon-
+  rotation-alignment` (comptent sur la résolution implicite `auto` du spec, qui DEVRAIT déjà
+  donner `viewport` pour les labels à placement point) — rendu désormais EXPLICITE au chargement
+  du style plutôt que de compter sur cette résolution implicite, changement sûr même si `auto`
+  fonctionnait déjà correctement. Non confirmé visuellement en conditions de virage réel (pas de
+  device physique dans cet environnement) — à valider par le propriétaire.
+
 ## Itération 17 (zones hors-ligne, explication tuiles, chevrons dézoom, replay v2, fiche trace A/B)
 
 Cinq blocs livrés : `feat:"offline-zones-outline"`, `docs:"tiles-zoom-explainer"`,
