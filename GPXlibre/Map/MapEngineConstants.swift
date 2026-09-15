@@ -121,6 +121,10 @@ enum MapEngineConstants {
         sources[vectorSourceIdentifier] = vectorSource
         style["sources"] = sources
 
+        if symbolsCapUpMode, let layers = style["layers"] as? [[String: Any]] {
+            style["layers"] = layers.map(patchedSymbolLayerForCapUp)
+        }
+
         guard let patchedData = try? JSONSerialization.data(withJSONObject: style),
               let json = String(data: patchedData, encoding: .utf8)
         else {
@@ -128,6 +132,39 @@ enum MapEngineConstants {
             return buildInitialStyleJSON()
         }
         return json
+    }
+
+    /// SYMBOLS_CAP_UP_MODE (spec "rotating-symbols-cap-up", it18, Bloc 7) — bug terrain : en
+    /// suivi cap-en-haut, la caméra tourne pour suivre le cap, et les labels/icônes du fond
+    /// vectoriel (villes, POI…) tournaient AVEC elle plutôt que de rester lisibles à l'écran.
+    /// Vérifié dans les headers vendored (`MLNSymbolStyleLayer.h`) : `text`/`icon-rotation-
+    /// alignment` valent `auto` par défaut quand omis dans le style, qui EST censé résoudre en
+    /// `viewport` pour un symbole à placement `point` (labels de lieu/POI) et en `map` pour un
+    /// placement `line` (noms de route/rivière, qui DOIVENT suivre la ligne — comportement
+    /// standard, jamais touché ici, "n'agrège pas les labels routiers"). Plutôt que de compter
+    /// sur cette résolution implicite (le style embarqué omet la propriété partout), on la
+    /// rend EXPLICITE pour les seuls calques à placement point — même résultat visuel si
+    /// l'implémentation était déjà correcte, mais robuste à un bug de résolution `auto` sur la
+    /// version épinglée du SDK. `true` par défaut, appliqué au chargement du style (pas de
+    /// mutation live nécessaire : correct quel que soit le mode d'orientation, y compris
+    /// nord-en-haut où bearing=0 rend les deux alignements équivalents).
+    static let symbolsCapUpMode = true
+
+    /// `internal` plutôt que `private` uniquement pour la testabilité (même patron que
+    /// `DetourRoutingService.route`) — jamais appelée hors `buildVectorStyleJSON` en production.
+    static func patchedSymbolLayerForCapUp(_ layer: [String: Any]) -> [String: Any] {
+        guard layer["type"] as? String == "symbol", var layout = layer["layout"] as? [String: Any] else { return layer }
+        // Seuls les calques SANS placement explicite (défaut spec "point") ou explicitement
+        // "point" sont concernés — "line"/"line-center" (noms de route/rivière, flèches de sens
+        // unique) et toute valeur d'expression zoom-dépendante (ex. "highway-shield-*", déjà
+        // patchés en dur "viewport" dans le style source) restent inchangés.
+        let placement = layout["symbol-placement"] as? String ?? "point"
+        guard placement == "point" else { return layer }
+        var patched = layer
+        if layout["text-field"] != nil { layout["text-rotation-alignment"] = "viewport" }
+        if layout["icon-image"] != nil { layout["icon-rotation-alignment"] = "viewport" }
+        patched["layout"] = layout
+        return patched
     }
 
     /// Point d'entrée unique de construction de style, quel que soit le fond choisi — voir
