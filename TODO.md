@@ -1,5 +1,37 @@
 # TODO
 
+## Étude UX "boutons icône+texte" (it19, propriétaire : "proposition, pas une refonte")
+
+Recensement exhaustif effectué (sous-agent dédié) de tous les boutons texte-seul de l'app.
+Constat central : beaucoup vivent dans un `.confirmationDialog`/`.alert` système (Contourner
+route/piste, Itinéraire.../Mixte, Arrêter/Continuer, Fermer/Annuler de toolbar, Supprimer/
+Renommer) — iOS ne permet PAS d'icône dans ces rangées système ; les changer irait contre le
+HIG plutôt que d'aider, donc explicitement HORS candidats malgré leur fréquence.
+
+**Corrigé tout de suite (incohérences évidentes, zéro risque, pas besoin d'attendre un feu
+vert)** :
+- `FavoriteAddressesView`/`NavDestinationSearchView` : lignes de résultat de recherche
+  d'adresse passées en `Label(icon: "mappin.and.ellipse")` — la ligne "Position actuelle"/les
+  favoris Domicile-Travail juste au-dessus avaient déjà une icône, pas les résultats.
+- `LibraryView` (état vide) + `OnboardingView` (3 écrans) : boutons "Charger la trace
+  d'exemple"/"Importer un fichier GPX" alignés sur les icônes déjà utilisées pour les MÊMES
+  actions ailleurs dans l'app (menu "+" Biblio) — "C'est parti" reçoit une icône cohérente
+  (arrow.right.circle.fill).
+
+**Proposé, en attente d'un feu vert du propriétaire avant d'y toucher** (boutons custom hors
+dialog système, changement plus visible/plus de surface à valider) :
+- Bannières Ride custom : "Contourner" (BlockedPathBannerView), "Reprendre ici"/"Annuler"
+  (ResumeGuidanceCardView), "Annuler" (DetourStatusView)
+- CTA état vide Ride : "Aller à la Bibliothèque"
+- `TrackSettingsView` : "Revenir à l'apparence globale" / "Revenir au début d'origine"
+  (sémantique reset, icône `arrow.uturn.backward` proposée)
+- `NavigationSettingsView` : "Sauvegarder"/"Valider" (réglages stagés) — icône `checkmark`
+- `SettingsView` : "Revoir le didacticiel" — seule ligne de sa liste sans icône
+- `Offline/RegionDownloadView`, `VectorPackagesView` : "Télécharger..." — icône déjà utilisée
+  ailleurs pour la même action (`arrow.down.circle`, toolbar Biblio)
+- `PrecacheConfirmationView` : choix Wi-Fi/mobile (vue custom, pas un system alert — fréquente
+  en pratique, affichée avant chaque Ride sur une trace non entièrement en cache)
+
 ## Itération 19 (P0 fiche trace / styles carte / pente / étude boutons)
 
 - **P0 "trace-ab-line-invisible", investigation menée avant tout correctif (comme demandé)** :

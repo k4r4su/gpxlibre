@@ -114,8 +114,12 @@ struct LibraryView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
-            Button("Charger la trace d'exemple") {
+            Button {
                 library.loadSample()
+            } label: {
+                // Fix "icon-text-consistency" (it19, étude UX) : même action, même icône que le
+                // menu "+" de cette même Bibliothèque (ligne 55) — restait en texte seul ici.
+                Label("Charger la trace d'exemple", systemImage: "wand.and.stars")
             }
             .buttonStyle(.borderedProminent)
         }

@@ -34,9 +34,16 @@ struct NavDestinationSearchView: View {
 
                 ForEach(results) { result in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(result.displayName)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
+                        // Fix "icon-text-consistency" (it19, étude UX) : les favoris
+                        // Domicile/Travail juste au-dessus ont déjà une icône — même incohérence
+                        // que FavoriteAddressesView, corrigée à l'identique (mappin.and.ellipse).
+                        Label {
+                            Text(result.displayName)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(2)
+                        } icon: {
+                            Image(systemName: "mappin.and.ellipse")
+                        }
                         // Chip de profil (Bloc 4) : Route / Offroad / Mixte, sur chaque résultat.
                         HStack(spacing: 8) {
                             ForEach(GoToProfile.allCases) { profile in

@@ -19,8 +19,14 @@ struct OnboardingView: View {
                 title: "Importe ta première trace",
                 message: "Depuis Mail, Fichiers ou Safari — ou choisis un fichier ici."
             ) {
-                Button("Importer un fichier GPX") { isImporting = true }
-                    .buttonStyle(.borderedProminent)
+                // Fix "icon-text-consistency" (it19, étude UX) : mêmes icônes que les actions
+                // identiques ailleurs dans l'app (menu "+"/état vide de la Bibliothèque).
+                Button {
+                    isImporting = true
+                } label: {
+                    Label("Importer un fichier GPX", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
             }
             .tag(0)
 
@@ -28,9 +34,11 @@ struct OnboardingView: View {
                 title: "Une trace d'exemple est incluse",
                 message: "Teste l'app tout de suite, sans rien importer."
             ) {
-                Button("Charger la trace d'exemple") {
+                Button {
                     library.loadSample()
                     finish()
+                } label: {
+                    Label("Charger la trace d'exemple", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -40,8 +48,12 @@ struct OnboardingView: View {
                 title: "L'alerte checkpoint flashe 200 m avant les virages",
                 message: "Regarde autour de toi quand même : c'est toi qui pilotes."
             ) {
-                Button("C'est parti") { finish() }
-                    .buttonStyle(.borderedProminent)
+                Button {
+                    finish()
+                } label: {
+                    Label("C'est parti", systemImage: "arrow.right.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
             }
             .tag(2)
         }

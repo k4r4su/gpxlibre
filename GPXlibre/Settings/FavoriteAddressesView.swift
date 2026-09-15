@@ -113,10 +113,18 @@ private struct FavoriteAddressPickerView: View {
                         Button {
                             apply(coordinate: result.coordinate, label: result.displayName)
                         } label: {
-                            Text(result.displayName)
-                                .multilineTextAlignment(.leading)
-                                .lineLimit(2)
-                                .foregroundStyle(.primary)
+                            // Fix "icon-text-consistency" (it19, étude UX) : la ligne "Position
+                            // actuelle" juste au-dessus a déjà une icône (location.fill) — les
+                            // résultats de recherche restaient en texte seul, incohérent dans la
+                            // même liste.
+                            Label {
+                                Text(result.displayName)
+                                    .multilineTextAlignment(.leading)
+                                    .lineLimit(2)
+                                    .foregroundStyle(.primary)
+                            } icon: {
+                                Image(systemName: "mappin.and.ellipse")
+                            }
                         }
                     }
                 }
