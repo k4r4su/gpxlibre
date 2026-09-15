@@ -95,15 +95,12 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Carte")
-                } footer: {
-                    // Accroc hors-ligne existant, documenté plutôt que caché (spec "plusieurs
-                    // styles de fond de carte", it18-bis, "point d'attention hors-ligne") :
-                    // Sombre n'a pas de variante du fond vectoriel, donc force le raster OSM en
-                    // ligne même si un paquet hors-ligne est actif — voir TODO.md.
-                    if settings.mapThemePreset == .sombre {
-                        Text("Sombre n'a pas de variante hors-ligne : si un paquet de cartes téléchargé est actif, il est ignoré tant que ce thème est sélectionné.")
-                    }
                 }
+                // Spec "map-color-flavors" (it19) : le thème Sombre (seul à avoir un accroc
+                // hors-ligne, documenté en it18-bis) a été retiré — les 3 palettes restantes
+                // fonctionnent identiquement hébergé/hors-ligne (paquet local), Relief a toujours
+                // eu le même comportement raster-only qu'avant (rien de nouveau à signaler) :
+                // plus besoin de footer d'avertissement ici.
 
                 Section("Mode Nav") {
                     Picker("Seuil dépassement vitesse", selection: $settings.speedLimitAlertThresholdKmh) {

@@ -52,9 +52,11 @@ struct MapThemePickerView: View {
 
 private extension MapThemePreset {
     /// Représentation dessinée, jamais une vraie tuile — juste assez pour reconnaître le style
-    /// au premier coup d'œil (palette + icône), cohérent avec le rendu réel de chaque thème :
-    /// Standard (raster OSM clair/beige classique), Clair (fond neutre), Sombre (fond nuit,
-    /// même filtre que le rendu réel), Relief (tons terrain, montagnes — OpenTopoMap).
+    /// au premier coup d'œil (palette + icône). Spec "map-color-flavors" (it19) : Standard/
+    /// Contraste élevé/Terreux sont maintenant de vraies palettes distinctes (voir
+    /// `MapColorFlavor`) — les vignettes reprennent approximativement leur teinte/saturation
+    /// réelles plutôt que des couleurs arbitraires. Relief inchangé (tons terrain, montagnes —
+    /// OpenTopoMap).
     @ViewBuilder
     var swatch: some View {
         ZStack {
@@ -67,26 +69,29 @@ private extension MapThemePreset {
 
     var swatchColors: [Color] {
         switch self {
-        case .osmStandard: return [Color(red: 0.96, green: 0.94, blue: 0.88), Color(red: 0.80, green: 0.88, blue: 0.78)]
-        case .clair: return [.white, Color(white: 0.92)]
-        case .sombre: return [Color(red: 0.07, green: 0.08, blue: 0.12), Color(red: 0.16, green: 0.18, blue: 0.24)]
+        case .standard: return [Color(red: 0.96, green: 0.94, blue: 0.88), Color(red: 0.80, green: 0.88, blue: 0.78)]
+        // Contraste élevé : mêmes teintes de base, saturation/contraste poussés (reflète
+        // MapColorFlavor.hauteContraste : saturation ×1.35, contraste ×1.25).
+        case .hauteContraste: return [Color(red: 1.0, green: 0.90, blue: 0.70), Color(red: 0.45, green: 0.85, blue: 0.35)]
+        // Terreux : décalage de teinte +10° vers le chaud, saturation réduite, un peu plus clair.
+        case .terreux: return [Color(red: 0.88, green: 0.78, blue: 0.58), Color(red: 0.62, green: 0.68, blue: 0.42)]
         case .relief: return [Color(red: 0.58, green: 0.48, blue: 0.34), Color(red: 0.36, green: 0.56, blue: 0.38)]
         }
     }
 
     var swatchIcon: String {
         switch self {
-        case .osmStandard: return "map.fill"
-        case .clair: return "sun.max.fill"
-        case .sombre: return "moon.stars.fill"
+        case .standard: return "map.fill"
+        case .hauteContraste: return "sun.max.fill"
+        case .terreux: return "leaf.fill"
         case .relief: return "mountain.2.fill"
         }
     }
 
     var swatchIconColor: Color {
         switch self {
-        case .osmStandard, .clair: return .black.opacity(0.55)
-        case .sombre, .relief: return .white
+        case .standard, .hauteContraste, .terreux: return .black.opacity(0.55)
+        case .relief: return .white
         }
     }
 }

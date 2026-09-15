@@ -35,15 +35,12 @@ struct RideView: View {
     @State private var toastMessage: String?
     @Environment(\.colorScheme) private var colorScheme
 
-    /// "OSM standard" (item #10, défaut) = automatique, suit le mode sombre système (lui-même
-    /// basé sur l'horaire/la luminosité ambiante en "Automatique" iOS) ; Clair/Sombre forcent.
+    /// Spec "map-color-flavors" (it19) : le thème "Sombre" a été retiré (n'existait que côté
+    /// raster) — les 3 flavors vectoriels suivent désormais tous automatiquement le mode sombre
+    /// système (comme l'ancien "OSM standard"), Relief reste inchangé (pas de variante nuit,
+    /// image raster pré-rendue).
     private var isNightModeActive: Bool {
-        switch settings.mapThemePreset {
-        case .osmStandard: return colorScheme == .dark
-        case .clair: return false
-        case .sombre: return true
-        case .relief: return false
-        }
+        settings.mapThemePreset != .relief && colorScheme == .dark
     }
 
     /// Fond de carte effectif (spec "vector-pmtiles", it11) — résolu par `MapSourceResolver`

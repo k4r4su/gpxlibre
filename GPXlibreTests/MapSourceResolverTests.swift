@@ -1,8 +1,8 @@
 import XCTest
 @testable import GPXlibre
 
-/// Vérification directe des 3 branches de résolution (spec "vector-pmtiles", it11) — pas
-/// d'accès disque réel, `fileExists` est injecté.
+/// Vérification directe des branches de résolution (spec "vector-pmtiles", it11 ; flavors de
+/// couleur, it19) — pas d'accès disque réel, `fileExists` est injecté.
 final class MapSourceResolverTests: XCTestCase {
     private let fakeLocalURL = URL(fileURLWithPath: "/tmp/fake-region.pmtiles")
 
@@ -10,28 +10,28 @@ final class MapSourceResolverTests: XCTestCase {
         let selectionOnline = MapSourceResolver.resolve(
             activeVectorPackageFileURL: fakeLocalURL,
             isNetworkReachable: true,
-            themePreset: .osmStandard,
+            themePreset: .standard,
             fileExists: { _ in true }
         )
-        XCTAssertEqual(selectionOnline, .vectorLocal(fileURL: fakeLocalURL))
+        XCTAssertEqual(selectionOnline, .vectorLocal(fileURL: fakeLocalURL, flavor: .standard))
 
         let selectionOffline = MapSourceResolver.resolve(
             activeVectorPackageFileURL: fakeLocalURL,
             isNetworkReachable: false,
-            themePreset: .osmStandard,
+            themePreset: .standard,
             fileExists: { _ in true }
         )
-        XCTAssertEqual(selectionOffline, .vectorLocal(fileURL: fakeLocalURL))
+        XCTAssertEqual(selectionOffline, .vectorLocal(fileURL: fakeLocalURL, flavor: .standard))
     }
 
     func testNoLocalPackageButNetworkReachableUsesHostedVector() {
         let selection = MapSourceResolver.resolve(
             activeVectorPackageFileURL: nil,
             isNetworkReachable: true,
-            themePreset: .osmStandard,
+            themePreset: .standard,
             fileExists: { _ in false }
         )
-        XCTAssertEqual(selection, .vectorHosted)
+        XCTAssertEqual(selection, .vectorHosted(flavor: .standard))
     }
 
     func testNoLocalPackageAndNoNetworkFallsBackToRasterUnchanged() {
@@ -46,7 +46,7 @@ final class MapSourceResolverTests: XCTestCase {
 
     /// Fix "map-theme-binding" (it13) : avant ce fix, cette combinaison (réseau joignable)
     /// retombait systématiquement sur `.vectorHosted`, quel que soit le thème demandé — Relief
-    /// et Sombre n'avaient donc AUCUN effet visible dans le cas normal (réseau disponible).
+    /// n'avait donc AUCUN effet visible dans le cas normal (réseau disponible).
     func testReliefThemeForcesRasterEvenWithNetworkReachable() {
         let selection = MapSourceResolver.resolve(
             activeVectorPackageFileURL: nil,
@@ -57,17 +57,24 @@ final class MapSourceResolverTests: XCTestCase {
         XCTAssertEqual(selection, .raster(.openTopoMap))
     }
 
-    /// Même fix : Sombre doit aussi forcer le raster (seul chemin où le filtre de nuit
-    /// s'applique réellement, voir RideMapLibreView.updateNightMode) — y compris quand un
-    /// paquet vectoriel local est actif (celui-ci n'a, lui non plus, qu'une variante claire).
-    func testSombreThemeForcesRasterEvenWithLocalVectorPackageActive() {
-        let selection = MapSourceResolver.resolve(
-            activeVectorPackageFileURL: fakeLocalURL,
+    /// Spec "map-color-flavors" (it19) : un thème vectoriel (Standard/Contraste élevé/Terreux)
+    /// transporte sa palette jusque dans la sélection résolue, hébergé ET local.
+    func testColorFlavorThemesCarryTheirFlavorThroughVectorHostedAndLocal() {
+        let hosted = MapSourceResolver.resolve(
+            activeVectorPackageFileURL: nil,
             isNetworkReachable: true,
-            themePreset: .sombre,
+            themePreset: .hauteContraste,
+            fileExists: { _ in false }
+        )
+        XCTAssertEqual(hosted, .vectorHosted(flavor: .hauteContraste))
+
+        let local = MapSourceResolver.resolve(
+            activeVectorPackageFileURL: fakeLocalURL,
+            isNetworkReachable: false,
+            themePreset: .terreux,
             fileExists: { _ in true }
         )
-        XCTAssertEqual(selection, .raster(.osmStandard))
+        XCTAssertEqual(local, .vectorLocal(fileURL: fakeLocalURL, flavor: .terreux))
     }
 
     /// Paquet sélectionné mais fichier disparu du disque (suppression manuelle, etc.) — ne
@@ -77,17 +84,17 @@ final class MapSourceResolverTests: XCTestCase {
         let selectionOnline = MapSourceResolver.resolve(
             activeVectorPackageFileURL: fakeLocalURL,
             isNetworkReachable: true,
-            themePreset: .osmStandard,
+            themePreset: .standard,
             fileExists: { _ in false }
         )
-        XCTAssertEqual(selectionOnline, .vectorHosted)
+        XCTAssertEqual(selectionOnline, .vectorHosted(flavor: .standard))
 
         let selectionOffline = MapSourceResolver.resolve(
             activeVectorPackageFileURL: fakeLocalURL,
             isNetworkReachable: false,
-            themePreset: .osmStandard,
+            themePreset: .standard,
             fileExists: { _ in false }
         )
-        XCTAssertEqual(selectionOffline, .raster(.active(for: .osmStandard)))
+        XCTAssertEqual(selectionOffline, .raster(.active(for: .standard)))
     }
 }

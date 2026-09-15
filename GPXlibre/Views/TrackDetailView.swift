@@ -10,13 +10,8 @@ struct TrackDetailView: View {
     @State private var showPrecacheSheet = false
 
     private var traceAppearance: TraceAppearance {
-        let isNightMode: Bool
-        switch settings.mapThemePreset {
-        case .osmStandard: isNightMode = colorScheme == .dark
-        case .clair: isNightMode = false
-        case .sombre: isNightMode = true
-        case .relief: isNightMode = false
-        }
+        // Spec "map-color-flavors" (it19) : voir RideView.isNightModeActive, même logique.
+        let isNightMode = settings.mapThemePreset != .relief && colorScheme == .dark
         return TraceAppearance(
             widthPreset: settings.traceWidthPreset,
             colorPreset: settings.traceColorPreset,

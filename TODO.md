@@ -32,6 +32,42 @@ dialog système, changement plus visible/plus de surface à valider) :
 - `PrecacheConfirmationView` : choix Wi-Fi/mobile (vue custom, pas un system alert — fréquente
   en pratique, affichée avant chaque Ride sur une trace non entièrement en cache)
 
+## Palettes de carte "maison" (spec "map-color-flavors", it19, décision tranchée avec le
+## propriétaire)
+
+Remplace la demande initiale "Flavors Protomaps" — investigation menée AVANT de coder (voir
+message de session) : le système officiel `@protomaps/basemaps` ne s'applique qu'au schéma de
+tuiles PROPRE à Protomaps (10 couches Tilezen), incompatible avec le pipeline OpenMapTiles déjà
+en place (OpenFreeMap hébergé + paquets `.pmtiles` auto-hébergés Planetiler, it11). Migrer aurait
+exigé de reconstruire tout le pipeline hors-ligne avec les outils Protomaps — proposé au
+propriétaire, refusé au profit d'un système de palettes maison sur le style Liberty existant,
+même esprit que les Flavors (un objet de palette réutilisable sur un seul "squelette").
+
+- `MapColorFlavor` (Map/) : 3 palettes prédéfinies choisies pour être "très utilisées" (demande
+  explicite) — Standard (identité, palette d'origine inchangée), Contraste élevé (saturation
+  ×1.35 + étirement de contraste ×1.25 autour de 50 % de luminosité — pensé pour la lisibilité
+  au soleil/avec des gants, cohérent avec la philosophie moto de l'app), Terreux (teinte +10°,
+  saturation ×0.85, légèrement plus clair — esprit carte de randonnée sans reconstruire un
+  schéma de tuiles séparé).
+- `ColorFlavorPatcher` (Map/) : transforme RÉCURSIVEMENT la clé `paint` de chaque calque
+  (jamais `layout`, contrainte non négociable du prompt sur la rotation cap-en-haut) — gère les
+  couleurs simples ET imbriquées dans des expressions (`interpolate`/`step`), 4 formats
+  (`#rgb`/`#rrggbb`/`rgb()`/`rgba()`/`hsl()`/`hsla()`), toujours ré-émises en `hsla(...)`.
+  Paramètres de transformation choisis à l'aveugle (pas de device physique pour un retour
+  visuel réel) — documentés comme constantes ajustables dans `MapColorFlavor`, à affiner après
+  test terrain réel plutôt que devinés une seconde fois ici.
+- `MapThemePreset` : "Sombre" RETIRÉ (n'existait que côté raster, accroc hors-ligne documenté en
+  it18-bis — plus nécessaire, les 3 flavors fonctionnent identiquement hébergé/local, aucune
+  limitation hors-ligne contrairement à Sombre). "Relief" inchangé (renommage reporté, comme
+  demandé). Migration silencieuse pour un utilisateur ayant l'ancienne valeur persistée
+  (osmStandard/clair/sombre) : retombe sur "Standard" au prochain lancement, comme un premier
+  lancement — même patron que la migration `legacySelectedTrackKey` de LibraryStore.
+- Rotation des labels cap-en-haut : AUCUNE modification du mécanisme (`patchedSymbolLayerForCapUp`
+  toujours appliqué APRÈS `ColorFlavorPatcher`, sur les clés `layout` uniquement, totalement
+  indépendant) — contrainte non négociable respectée par construction, pas par vigilance.
+- Non vérifié visuellement (pas de device physique) — les paramètres numériques des 3 flavors
+  sont un point de départ raisonnable, pas un résultat validé à l'œil.
+
 ## Itération 19 (P0 fiche trace / styles carte / pente / étude boutons)
 
 - **P0 "trace-ab-line-invisible", investigation menée avant tout correctif (comme demandé)** :

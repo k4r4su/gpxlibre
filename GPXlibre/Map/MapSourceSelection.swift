@@ -9,12 +9,15 @@ import Foundation
 enum MapSourceSelection: Equatable {
     case raster(TileSource)
     /// Étape 1 — CDN vectoriel ouvert sans clé (OpenFreeMap), pour valider le style/l'UX.
-    case vectorHosted
+    /// `flavor` (spec "map-color-flavors", it19) : palette de couleur appliquée au style —
+    /// fonctionne identiquement en hébergé ET en local, aucune limitation hors-ligne
+    /// (contrairement à l'ancien thème Sombre, raster uniquement).
+    case vectorHosted(flavor: MapColorFlavor)
     /// Étape 2 — fichier `.pmtiles` régional local (`Documents/VectorPackages/`), lu
     /// nativement par MapLibre via le schéma `pmtiles://file://...` (support intégré depuis
     /// MapLibre Native 6.10, confirmé dans les headers vendored de la version épinglée
     /// 6.31.0 — aucune dépendance supplémentaire). Fonctionne intégralement hors-ligne.
-    case vectorLocal(fileURL: URL)
+    case vectorLocal(fileURL: URL, flavor: MapColorFlavor)
 
     var isVector: Bool {
         switch self {

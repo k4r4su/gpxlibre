@@ -101,7 +101,11 @@ enum MapEngineConstants {
     /// de la version épinglée 6.31.0) : `pmtiles://` + l'URL `file://` du `.pmtiles` régional.
     /// En cas d'échec (ressource manquante/invalide — ne devrait jamais arriver, embarquée au
     /// build), retombe sur le raster standard plutôt que sur un écran noir muet.
-    static func buildVectorStyleJSON(source: VectorStyleSource) -> String {
+    ///
+    /// `flavor` (spec "map-color-flavors", it19) : palette de couleur appliquée à CHAQUE calque
+    /// avant patch de rotation — ordre volontaire, les deux patches opèrent sur des clés
+    /// disjointes (`paint` vs `layout`) donc totalement indépendants l'un de l'autre.
+    static func buildVectorStyleJSON(source: VectorStyleSource, flavor: MapColorFlavor) -> String {
         guard let resourceURL = Bundle.main.url(forResource: vectorStyleResourceName, withExtension: "json"),
               let data = try? Data(contentsOf: resourceURL),
               var style = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -121,8 +125,12 @@ enum MapEngineConstants {
         sources[vectorSourceIdentifier] = vectorSource
         style["sources"] = sources
 
-        if symbolsCapUpMode, let layers = style["layers"] as? [[String: Any]] {
-            style["layers"] = layers.map(patchedSymbolLayerForCapUp)
+        if var layers = style["layers"] as? [[String: Any]] {
+            layers = ColorFlavorPatcher.apply(flavor, toLayers: layers)
+            if symbolsCapUpMode {
+                layers = layers.map(patchedSymbolLayerForCapUp)
+            }
+            style["layers"] = layers
         }
 
         guard let patchedData = try? JSONSerialization.data(withJSONObject: style),
@@ -184,10 +192,10 @@ enum MapEngineConstants {
         switch mapSource {
         case .raster(let tileSource):
             return buildInitialStyleJSON(source: tileSource)
-        case .vectorHosted:
-            return buildVectorStyleJSON(source: .hosted)
-        case .vectorLocal(let fileURL):
-            return buildVectorStyleJSON(source: .local(fileURL: fileURL))
+        case .vectorHosted(let flavor):
+            return buildVectorStyleJSON(source: .hosted, flavor: flavor)
+        case .vectorLocal(let fileURL, let flavor):
+            return buildVectorStyleJSON(source: .local(fileURL: fileURL), flavor: flavor)
         }
     }
 

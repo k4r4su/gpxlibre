@@ -221,7 +221,10 @@ final class RideSettingsStore: ObservableObject {
         if let rawTheme = defaults.string(forKey: Keys.mapThemePreset), let preset = MapThemePreset(rawValue: rawTheme) {
             mapThemePreset = preset
         } else {
-            mapThemePreset = .osmStandard
+            // Spec "map-color-flavors" (it19) : migration silencieuse — un utilisateur qui avait
+            // "osmStandard"/"clair"/"sombre" (valeurs retirées) retombe ici, comme un premier
+            // lancement (même patron que LibraryStore.legacySelectedTrackKey).
+            mapThemePreset = .standard
         }
         trafficEnabled = defaults.object(forKey: Keys.trafficEnabled) == nil
             ? true : defaults.bool(forKey: Keys.trafficEnabled)
