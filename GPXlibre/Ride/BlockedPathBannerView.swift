@@ -14,10 +14,12 @@ struct BlockedPathBannerView: View {
                 .font(.subheadline.bold())
                 .foregroundStyle(.white)
             Spacer()
-            Button("Contourner", action: onContourner)
-                .font(.subheadline.bold())
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+            Button(action: onContourner) {
+                Label("Contourner", systemImage: "arrow.triangle.swap")
+            }
+            .font(.subheadline.bold())
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
             Button {
                 onIgnorer()
             } label: {
@@ -76,10 +78,12 @@ struct DetourStatusView: View {
                     .foregroundStyle(.white.opacity(0.75))
             }
             Spacer()
-            Button("Annuler", action: onCancel)
-                .font(.caption.bold())
-                .buttonStyle(.bordered)
-                .tint(.white)
+            Button(action: onCancel) {
+                Label("Annuler", systemImage: "xmark.circle")
+            }
+            .font(.caption.bold())
+            .buttonStyle(.bordered)
+            .tint(.white)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

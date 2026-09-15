@@ -809,8 +809,10 @@ struct RideView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
-            Button("Aller à la Bibliothèque") {
+            Button {
                 navigationState.selectedTab = .library
+            } label: {
+                Label("Aller à la Bibliothèque", systemImage: "map.fill")
             }
             .buttonStyle(.borderedProminent)
         }

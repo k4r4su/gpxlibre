@@ -25,8 +25,12 @@ struct VectorPackagesView: View {
                 if isDownloading {
                     ProgressView("Téléchargement…")
                 } else {
-                    Button("Télécharger depuis cette URL") { startDownload() }
-                        .disabled(URL(string: downloadURLString) == nil)
+                    Button {
+                        startDownload()
+                    } label: {
+                        Label("Télécharger depuis cette URL", systemImage: "arrow.down.circle.fill")
+                    }
+                    .disabled(URL(string: downloadURLString) == nil)
                 }
 
                 if let downloadErrorMessage {

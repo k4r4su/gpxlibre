@@ -42,16 +42,20 @@ struct ResumeGuidanceCardView: View {
             HStack {
                 Spacer()
                 if guidance.phase == .previewing {
-                    Button("Reprendre ici", action: onConfirm)
-                        .font(.caption.bold())
-                        .buttonStyle(.borderedProminent)
-                        .tint(.white)
-                        .foregroundStyle(.blue)
-                }
-                Button(guidance.phase == .active ? "Annuler la reprise" : "Annuler", action: onCancel)
+                    Button(action: onConfirm) {
+                        Label("Reprendre ici", systemImage: "arrow.triangle.merge")
+                    }
                     .font(.caption.bold())
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                     .tint(.white)
+                    .foregroundStyle(.blue)
+                }
+                Button(action: onCancel) {
+                    Label(guidance.phase == .active ? "Annuler la reprise" : "Annuler", systemImage: "xmark.circle")
+                }
+                .font(.caption.bold())
+                .buttonStyle(.bordered)
+                .tint(.white)
             }
         }
         .padding(.horizontal, 16)

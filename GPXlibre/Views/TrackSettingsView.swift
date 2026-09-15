@@ -76,10 +76,11 @@ struct TrackSettingsView: View {
                 // nouvelle (le sens A→B/B→A est désormais la SEULE source pour "où ça commence").
                 if localSettings.hasCustomStart {
                     Section {
-                        Button("Revenir au début d'origine (départ personnalisé hérité)") {
+                        Button(role: .destructive) {
                             localSettings.customStartPointIndex = nil
+                        } label: {
+                            Label("Revenir au début d'origine (départ personnalisé hérité)", systemImage: "arrow.uturn.backward")
                         }
-                        .foregroundStyle(.red)
                     }
                 }
 
@@ -107,9 +108,11 @@ struct TrackSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     if localSettings.colorOverride != nil || localSettings.widthOverride != nil {
-                        Button("Revenir à l'apparence globale") {
+                        Button {
                             localSettings.colorOverride = nil
                             localSettings.widthOverride = nil
+                        } label: {
+                            Label("Revenir à l'apparence globale", systemImage: "arrow.uturn.backward")
                         }
                         .font(.caption)
                     }

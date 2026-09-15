@@ -47,13 +47,19 @@ struct PrecacheConfirmationView: View {
                             .padding(.horizontal, 32)
 
                         VStack(spacing: 12) {
-                            Button(wifiOnly ? "OK en Wi-Fi only" : "Inclure la connexion mobile") {
+                            Button {
                                 startDownload()
+                            } label: {
+                                Label(wifiOnly ? "OK en Wi-Fi only" : "Inclure la connexion mobile", systemImage: wifiOnly ? "wifi" : "antenna.radiowaves.left.and.right")
                             }
                             .buttonStyle(.borderedProminent)
 
-                            Button("Plus tard") { onFinished() }
-                                .buttonStyle(.bordered)
+                            Button {
+                                onFinished()
+                            } label: {
+                                Label("Plus tard", systemImage: "clock")
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
                 } else {

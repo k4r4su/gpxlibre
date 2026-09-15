@@ -78,8 +78,12 @@ struct RegionDownloadView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Button("Télécharger cette zone") { startDownload() }
-                        .disabled(visibleBounds == nil)
+                    Button {
+                        startDownload()
+                    } label: {
+                        Label("Télécharger cette zone", systemImage: "arrow.down.circle.fill")
+                    }
+                    .disabled(visibleBounds == nil)
                 }
             }
 

@@ -139,9 +139,11 @@ private struct DefaultRideZoomSettingsView: View {
                 Text(spanText)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
-                Button(hasSaved ? "Sauvegardé" : "Sauvegarder") {
+                Button {
                     settings.defaultRideZoomCameraMeters = localValue
                     hasSaved = true
+                } label: {
+                    Label(hasSaved ? "Sauvegardé" : "Sauvegarder", systemImage: hasSaved ? "checkmark.circle.fill" : "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(localValue == settings.defaultRideZoomCameraMeters)
@@ -200,12 +202,14 @@ private struct AutoZoomSettingsView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Button("Valider") {
+                Button {
                     settings.autoZoomEnabled = localEnabled
                     settings.zoomPreset = localPreset
                     settings.autoZoomMinMeters = min(localMin, localMax)
                     settings.autoZoomMaxMeters = max(localMin, localMax)
                     hasChanges = false
+                } label: {
+                    Label("Valider", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!hasChanges)

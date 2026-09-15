@@ -218,8 +218,10 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button("Revoir le didacticiel") {
+                    Button {
                         showOnboarding = true
+                    } label: {
+                        Label("Revoir le didacticiel", systemImage: "graduationcap.fill")
                     }
                 }
             }

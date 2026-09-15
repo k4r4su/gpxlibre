@@ -32,6 +32,21 @@ dialog système, changement plus visible/plus de surface à valider) :
 - `PrecacheConfirmationView` : choix Wi-Fi/mobile (vue custom, pas un system alert — fréquente
   en pratique, affichée avant chaque Ride sur une trace non entièrement en cache)
 
+## Icônes complémentaires (retour terrain via /powerup : "j'en aurais ajouté à d'autres
+## endroits... amener un peu de fun")
+
+Suite de l'étude UX icône+texte (it19) — le propriétaire a validé l'esprit et demandé
+d'appliquer le reste de la liste déjà proposée (voir section dédiée plus bas), tous des
+boutons CUSTOM hors dialog système (donc de vrais candidats, contrairement au reste déjà
+exclu pour raison HIG) : bannières Ride (Contourner/Reprendre ici/Annuler ×2), CTA état vide
+Ride, TrackSettingsView (2 boutons reset), réglages stagés Navigation (Sauvegarder/Valider),
+"Revoir le didacticiel", téléchargements Offline (région/paquet vectoriel/précache Wi-Fi-
+mobile). Icônes choisies pour RÉUTILISER une iconographie déjà présente ailleurs dans l'app
+quand c'est le même concept (ex. "arrow.triangle.swap" déjà utilisé par DetourStatusView pour
+le mode routé ; "arrow.down.circle" déjà utilisé par le lien toolbar "Cartes hors-ligne" ;
+"arrow.uturn.backward" pour les deux actions "revenir à/reset" de TrackSettingsView) plutôt
+que d'inventer une symbolique différente à chaque fois.
+
 ## Retour terrain it19 (via /powerup) — 2 bugs réels trouvés et corrigés
 
 Le propriétaire a testé les livrables d'it19 sur simulateur/device et donné un retour concret
