@@ -1,5 +1,43 @@
 # TODO
 
+## Itération 19 (P0 fiche trace / styles carte / pente / étude boutons)
+
+- **P0 "trace-ab-line-invisible", investigation menée avant tout correctif (comme demandé)** :
+  relu entièrement `TrackFicheMapView.swift` et son unique appelant (`TrackSettingsView`) à
+  froid, sans supposer que le fix `6a2a676` (session précédente) suffisait. Aucune régression
+  it17→it18 trouvée dans le chemin de données trace → vue (le call site n'a pas changé) ; il
+  n'existe qu'UNE SEULE fiche avec carte (`TrackSettingsView`, via swipe "Paramétrer" ou
+  `TrackFullSheetView` → "Paramètres") — `TrackFullSheetView` lui-même n'a pas de carte du tout
+  (fiche texte pure), donc pas de second endroit où chercher. Le fix déjà en place (garde de
+  `sync()` sur l'existence réelle de la source, pas la seule non-nullité de `mapView.style`)
+  reste correct à la relecture — s'il persistait un symptôme PIRE (pastilles ET ligne absentes)
+  au moment où ce ticket a été rédigé, c'est très probablement parce qu'il décrit l'état
+  D'AVANT ce fix (déjà poussé), pas une nouvelle régression : pas de device physique disponible
+  ici pour confirmer un aller-retour réel. À reconfirmer par le propriétaire après avoir tiré
+  la dernière version.
+- **Marge de cadrage 2 km (nouveau, ce tour-ci)** : remplace l'ancien `edgePadding` en POINTS
+  ÉCRAN (32 pt, variait avec le zoom/la taille d'écran) par une vraie marge GÉOGRAPHIQUE
+  (`TrackFicheMapView.cameraGeographicMarginMeters = 2000`, appliquée à la bbox AVANT
+  `setVisibleCoordinateBounds`, formule équirectangulaire locale déjà utilisée ailleurs dans le
+  projet — `TrackProjector`). `cameraEdgePadding` réduit à 8 pt, devient un confort minimal, pas
+  le mécanisme de marge principal.
+- **Persistance "trace sélectionnée reste affichée au changement d'onglet"** : déjà garanti par
+  l'invariant it10 "Caméra stable aux bascules" pour la carte Ride (`switchMode`, jamais
+  `start()`, sur changement d'onglet — voir CLAUDE.md racine, règle absolue #2) — rien à
+  changer, ce comportement existe et est déjà couvert par la philosophie de l'app. Pour la
+  fiche trace elle-même (`TrackFicheMapView`), le dédup de `sync()` (id/isReversed inchangés →
+  ne re-mute jamais `.shape`) garantit déjà qu'un re-render du `Form` parent (ex : toucher un
+  autre réglage dans le même écran) ne fait jamais disparaître la ligne déjà posée.
+- **Test d'intégration réel tenté puis retiré, honnêteté** : un vrai `MLNMapView` (style
+  embarqué, hors écran, comme le veut XCTest) ne termine JAMAIS son chargement de style dans cet
+  environnement (`didFinishLoading` ne se déclenche pas en 5 s, testé et confirmé, pas juste
+  supposé) — aucun autre test de cette suite n'instancie de vrai `MLNMapView` pour la même
+  raison probable, cohérence avec ce précédent. Gardé à la place : `TrackFicheCameraFitTests`
+  (logique pure de bbox + marge, testable sans MapLibre réel). Les points 1/2 du "test attendu"
+  du prompt (source de ligne complète, marqueurs A/B aux bonnes coordonnées) restent donc NON
+  vérifiés automatiquement — seule la checklist manuelle du propriétaire peut les confirmer
+  dans cet environnement.
+
 ## Itération 18-bis (bug A→B, styles de carte, précision rotation labels)
 
 Suite directe de l'itération 18 — trois sujets discutés avec le propriétaire après retour sur

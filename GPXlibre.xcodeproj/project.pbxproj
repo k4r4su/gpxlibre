@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		02E07B3DEEE5DD13C029CDE3 /* OfflineExplainerText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E068E9FC78377B3BBA88756 /* OfflineExplainerText.swift */; };
+		0489B3D6A674C64A8E6C38CB /* TrackFicheCameraFitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126323316D9286597E37894D /* TrackFicheCameraFitTests.swift */; };
 		0604AAD384B3535EB6FFB9A8 /* DebugReplayDriverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96598B4741054EC42C27232 /* DebugReplayDriverTests.swift */; };
 		07215900E4D166483B5F7D81 /* Checkpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B74ED338BF91B332800AAB /* Checkpoint.swift */; };
 		08BD8A6CDC99BC26D0708394 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */; };
@@ -165,6 +166,7 @@
 		07085FFDE42708E45905658C /* FlashOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashOverlayView.swift; sourceTree = "<group>"; };
 		0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStopButton.swift; sourceTree = "<group>"; };
 		10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageCodingTests.swift; sourceTree = "<group>"; };
+		126323316D9286597E37894D /* TrackFicheCameraFitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFicheCameraFitTests.swift; sourceTree = "<group>"; };
 		13681D4EE2A28A5AE4611D53 /* LibraryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStoreTests.swift; sourceTree = "<group>"; };
 		193A05F4F7F2CBEEEF686F9E /* GuidanceToggleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceToggleTests.swift; sourceTree = "<group>"; };
 		193DFA45053CADB585588E68 /* DebugReplayDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugReplayDriver.swift; sourceTree = "<group>"; };
@@ -528,6 +530,7 @@
 				BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */,
 				D44E9BAE191BB827CC6CAA5D /* SymbolCapUpAlignmentTests.swift */,
 				F8F549FFD3F072B961F48302 /* TileCoordinateTests.swift */,
+				126323316D9286597E37894D /* TrackFicheCameraFitTests.swift */,
 				2DA9DEF33C434FDB168E1C34 /* TrackThumbnailGeometryTests.swift */,
 			);
 			path = GPXlibreTests;
@@ -728,6 +731,7 @@
 				E2488E86DC385FED1FF43AE6 /* SharedBlockageLiveServerTests.swift in Sources */,
 				E850C913FE0B485F4652FA0A /* SymbolCapUpAlignmentTests.swift in Sources */,
 				27EF69072C9BAD4EAC0B5CFE /* TileCoordinateTests.swift in Sources */,
+				0489B3D6A674C64A8E6C38CB /* TrackFicheCameraFitTests.swift in Sources */,
 				B303418D7E63E08F629E3B9A /* TrackThumbnailGeometryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

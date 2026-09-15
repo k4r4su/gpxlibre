@@ -35,7 +35,15 @@ struct TrackFicheMapView: UIViewRepresentable {
     /// Candidats générés à un espacement fin puis sous-échantillonnés à `chevronTargetCount` —
     /// garantit assez de candidats même sur une trace courte.
     private static let chevronCandidateSpacingMeters: Double = 50
-    private static let cameraEdgePadding = UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)
+    private static let cameraEdgePadding = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+    /// CAMERA_GEOGRAPHIC_MARGIN_M (spec "trace-ab-line-invisible" / cadrage fiche trace, it19) :
+    /// marge GÉOGRAPHIQUE (mètres réels autour de la trace), pas un padding écran — demande
+    /// explicite du prompt ("marge d'environ 2 km de chaque côté par rapport aux limites de la
+    /// trace"), remplace l'ancien `edgePadding` (32 pt écran, variait avec le zoom/la taille
+    /// d'écran plutôt que de représenter une vraie distance). `cameraEdgePadding` ci-dessus
+    /// devient un espace de confort minimal (évite que la trace touche pile le bord du cadre),
+    /// pas le mécanisme de marge principal.
+    static let cameraGeographicMarginMeters: Double = 2000
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
@@ -165,7 +173,18 @@ struct TrackFicheMapView: UIViewRepresentable {
         }
 
         private func applyCameraFit(coordinates: [CLLocationCoordinate2D], on mapView: MLNMapView) {
-            guard let first = coordinates.first else { return }
+            guard let rawBounds = Self.boundingBox(of: coordinates) else { return }
+            let bounds = Self.expandedBounds(rawBounds, byMeters: TrackFicheMapView.cameraGeographicMarginMeters)
+            let mlnBounds = MLNCoordinateBounds(
+                sw: CLLocationCoordinate2D(latitude: bounds.minLat, longitude: bounds.minLon),
+                ne: CLLocationCoordinate2D(latitude: bounds.maxLat, longitude: bounds.maxLon)
+            )
+            mapView.setVisibleCoordinateBounds(mlnBounds, edgePadding: TrackFicheMapView.cameraEdgePadding, animated: false, completionHandler: nil)
+        }
+
+        /// Bbox brute (pas de marge) — extrait pour être testable indépendamment de MapLibre.
+        static func boundingBox(of coordinates: [CLLocationCoordinate2D]) -> (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)? {
+            guard let first = coordinates.first else { return nil }
             var minLat = first.latitude, maxLat = first.latitude
             var minLon = first.longitude, maxLon = first.longitude
             for coordinate in coordinates {
@@ -174,11 +193,30 @@ struct TrackFicheMapView: UIViewRepresentable {
                 minLon = min(minLon, coordinate.longitude)
                 maxLon = max(maxLon, coordinate.longitude)
             }
-            let bounds = MLNCoordinateBounds(
-                sw: CLLocationCoordinate2D(latitude: minLat, longitude: minLon),
-                ne: CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon)
+            return (minLat, maxLat, minLon, maxLon)
+        }
+
+        /// Étend une bbox de `meters` dans les QUATRE directions cardinales (approximation
+        /// équirectangulaire locale, même formule que `TrackProjector.distanceFromPointToSegment` :
+        /// 111 320 m/° de latitude, corrigé par `cos(latitude)` pour la longitude — précise
+        /// largement assez pour un cadrage caméra, jamais utilisée pour du routing/de la mesure
+        /// fine). `internal static` pour la testabilité (même patron que
+        /// `MapEngineConstants.patchedSymbolLayerForCapUp`).
+        static func expandedBounds(
+            _ bounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double),
+            byMeters meters: Double
+        ) -> (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) {
+            let metersPerDegreeLat = 111_320.0
+            let midLatitude = (bounds.minLat + bounds.maxLat) / 2
+            let metersPerDegreeLon = max(111_320.0 * cos(midLatitude * .pi / 180), 1)
+            let latMargin = meters / metersPerDegreeLat
+            let lonMargin = meters / metersPerDegreeLon
+            return (
+                minLat: bounds.minLat - latMargin,
+                maxLat: bounds.maxLat + latMargin,
+                minLon: bounds.minLon - lonMargin,
+                maxLon: bounds.maxLon + lonMargin
             )
-            mapView.setVisibleCoordinateBounds(bounds, edgePadding: TrackFicheMapView.cameraEdgePadding, animated: false, completionHandler: nil)
         }
 
         /// Fix "trace-sheet-auto-frame" : rejoue le cadrage une seule fois dès que la vue a une
