@@ -77,20 +77,31 @@ struct SettingsView: View {
                     Text("Mesure l'angle de la trace autour de chaque point (fenêtre avant/après) et le classe en 4 paliers — léger, prononcé, fort, demi-tour.")
                 }
 
-                Section("Carte") {
+                Section {
                     Picker("Orientation", selection: $settings.mapOrientationNorthUp) {
                         Text("Cap en haut").tag(false)
                         Text("Nord en haut").tag(true)
                     }
-                    Picker("Thème", selection: $settings.mapThemePreset) {
-                        ForEach(MapThemePreset.allCases) { preset in
-                            Text(preset.label).tag(preset)
-                        }
+                    // Spec "map-style-visual-picker" (it18-bis) : vignettes plutôt qu'une liste
+                    // de texte — standard du marché pour un choix de fond de carte.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Thème").font(.subheadline)
+                        MapThemePickerView(selection: $settings.mapThemePreset)
                     }
                     Picker("Unité de vitesse", selection: $settings.speedUnit) {
                         ForEach(SpeedUnit.allCases) { unit in
                             Text(unit.label).tag(unit)
                         }
+                    }
+                } header: {
+                    Text("Carte")
+                } footer: {
+                    // Accroc hors-ligne existant, documenté plutôt que caché (spec "plusieurs
+                    // styles de fond de carte", it18-bis, "point d'attention hors-ligne") :
+                    // Sombre n'a pas de variante du fond vectoriel, donc force le raster OSM en
+                    // ligne même si un paquet hors-ligne est actif — voir TODO.md.
+                    if settings.mapThemePreset == .sombre {
+                        Text("Sombre n'a pas de variante hors-ligne : si un paquet de cartes téléchargé est actif, il est ignoré tant que ce thème est sélectionné.")
                     }
                 }
 

@@ -1,5 +1,45 @@
 # TODO
 
+## Itération 18-bis (bug A→B, styles de carte, précision rotation labels)
+
+Suite directe de l'itération 18 — trois sujets discutés avec le propriétaire après retour sur
+le premier passage : `fix:"trace-ab-line-invisible"`, `fix:"symbols-rotation-alignment-parity"`,
+`feat:"map-style-visual-picker"` livrés. Mode sombre volontairement laissé de côté (décision du
+propriétaire, hors périmètre de cette itération).
+
+- **Sélecteur visuel de style de carte (`MapThemePickerView`)** : vignettes dessinées (icône +
+  dégradé représentatif), pas des cartes MapLibre live — 4 instances de carte simultanées dans
+  une liste de réglages aurait été un coût de rendu disproportionné pour un simple choix de
+  palette. Remplace le `Picker` texte de Réglages > Carte > Thème, mêmes 4 valeurs
+  (`MapThemePreset`), aucun nouveau style ajouté ce tour-ci (voir ci-dessous).
+- **Satellite : backlog documenté, PAS implémenté** (même traitement que la clé TomTom du Bloc
+  Trafic, it13) — aucune source satellite gratuite et réutilisable hors-ligne trouvée :
+  Esri/Google/Bing World Imagery imposent des CGU incompatibles avec un cache PMTiles
+  auto-hébergé façon it11 (redistribution/mise en cache de tuiles satellite hors des quotas
+  gratuits interdite ou payante). Ajouter Satellite sans réseau, ou en violant ces CGU, serait
+  contraire à la philosophie hors-ligne-d'abord de l'app. Piste si le besoin devient réel : une
+  clé Maxar/Mapbox Satellite payante avec cache local respectant leurs CGU, ou une source
+  ouverte type Sentinel-2 cloudless (EOX, résolution/fraîcheur bien inférieures à du satellite
+  commercial, mais réellement libre de droits) — aucune des deux tentée ici, décision produit à
+  prendre en amont (coût/qualité), pas une implémentation technique bloquée.
+- **"Rando" (nouveau style vectoriel outdoor)** : proposé au propriétaire (réutilise les MÊMES
+  tuiles OpenMapTiles déjà hébergées/téléchargées, donc zéro risque hors-ligne — juste un
+  nouvel habillage JSON, chemins/pistes plus visibles, teintes terrain), mais PAS implémenté —
+  en attente d'un feu vert explicite avant d'investir dans la conception d'un style complet
+  (travail non trivial, ~110 couches à repenser comme pour le style Liberty existant, mieux fait
+  avec des retours visuels réels qu'aucun device physique ne permet ici).
+- **Accroc hors-ligne existant, documenté (pas un bug de cette itération)** : le thème Sombre
+  force le raster OSM (+ filtre nuit) même si un paquet vectoriel local est actif —
+  `MapSourceResolver` teste `themePreset == .relief || .sombre` AVANT même de regarder le
+  paquet local (voir sa doc). Un utilisateur hors-ligne avec un paquet PMTiles préparé perd donc
+  son fond de carte hors-ligne en passant en Sombre (retombe sur du raster EN LIGNE, ou rien du
+  tout en vrai mode avion sans tuiles raster déjà en cache). Cause : le style vectoriel Liberty
+  embarqué n'a qu'une variante claire (déjà noté en it11). Averti maintenant dans Réglages
+  (footer de section, visible seulement quand Sombre est sélectionné) plutôt que silencieux —
+  pas de vrai fix ce tour-ci, demanderait de repeindre le style vectoriel en sombre (gros
+  chantier à part, voir it11/Map CLAUDE.md, VersaTiles fournirait déjà clair+sombre si besoin
+  réel confirmé).
+
 ## Itération 18 (compacité bannières / traces enregistrées visibles / zoom reset / cap-en-haut vrai)
 
 - **Hygiène de staging git, documentée par honnêteté (aucun risque fonctionnel)** : le Bloc 4
