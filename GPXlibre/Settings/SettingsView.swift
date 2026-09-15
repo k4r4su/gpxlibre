@@ -96,6 +96,23 @@ struct SettingsView: View {
                 } header: {
                     Text("Carte")
                 }
+
+                // Spec "slope-warning-native" (it19) : nouvelle option d'apparence — symboles
+                // ponctuels aux endroits de forte pente, jamais un dégradé continu sur la trace.
+                Section {
+                    Toggle("Avertissements de pente", isOn: $settings.slopeWarningsEnabled)
+                    if settings.slopeWarningsEnabled {
+                        Picker("Seuil de déclenchement", selection: $settings.slopeWarningThresholdPercent) {
+                            ForEach(RideConstants.slopeWarningThresholdPercentOptions, id: \.self) { value in
+                                Text("\(Int(value)) %").tag(value)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Pente")
+                } footer: {
+                    Text("Un triangle apparaît sur la carte quand la pente dépasse le seuil choisi, en montée comme en descente.")
+                }
                 // Spec "map-color-flavors" (it19) : le thème Sombre (seul à avoir un accroc
                 // hors-ligne, documenté en it18-bis) a été retiré — les 3 palettes restantes
                 // fonctionnent identiquement hébergé/hors-ligne (paquet local), Relief a toujours

@@ -137,6 +137,28 @@ enum RideConstants {
     /// Multiplicateur du seuil hors-trace en contexte "piste" (resserré) — pour itération future.
     static let trackOffTrackToleranceMultiplier: Double = 0.6
 
+    // MARK: - Avertissement de pente (spec "slope-warning-native", it19)
+    //
+    // Détection native (élévation déjà disponible par point, `GPXPoint.elevation`) — décision
+    // tranchée avec le propriétaire plutôt que d'ajouter GPXKit (package tiers réel, existe et
+    // conviendrait techniquement, mais violerait la règle du projet "MapLibre est la SEULE
+    // dépendance tierce autorisée", voir project.yml). Symboles PONCTUELS aux endroits de forte
+    // pente (jamais un dégradé continu sur toute la trace, demande explicite).
+
+    /// SLOPE_WARNING_THRESHOLD_PERCENT : pente (%) au-delà de laquelle un symbole est posé.
+    /// 10 % choisi comme défaut raisonnable pour un usage moto (proche des seuils réels des
+    /// panneaux routiers français de signalisation de pente, 8/10/12 %) — réglable.
+    static let slopeWarningThresholdPercentDefault: Double = 10
+    static let slopeWarningThresholdPercentOptions: [Double] = [8, 10, 12, 15]
+
+    /// Distance minimale (m) d'une fenêtre de mesure avant de calculer une pente — évite les
+    /// pentes aberrantes sur un segment de quelques mètres (bruit GPS/altimétrique).
+    static let slopeWarningMinSegmentMeters: Double = 100
+
+    /// Espacement minimal (m) entre deux symboles consécutifs — évite un mur de triangles sur
+    /// une longue montée/descente régulière, un seul avertissement suffit par section.
+    static let slopeWarningMinMarkerSpacingMeters: Double = 300
+
     // MARK: - Traces enregistrées (spec "ride-record-tracks-visible", it18, Bloc 2)
 
     /// RECORDED_TRACK_DISPLAY_COLOR : couleur distinctive appliquée par défaut (override

@@ -40,6 +40,7 @@
 		3CD0F2C319A84BB124A07908 /* DownloadedRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAAF5B211A0CE0C6BD89A98 /* DownloadedRegion.swift */; };
 		3D4F6B73F2188153466D078A /* GuidanceToggleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193A05F4F7F2CBEEEF686F9E /* GuidanceToggleTests.swift */; };
 		415FC1B09F9E491DDC5C4149 /* GoToGuidance.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3EF8177D32ECCB3969F6C6 /* GoToGuidance.swift */; };
+		4229348F8B9D9F87C0E9A331 /* SlopeAnalyzerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC26C334255ECC649BB6CF79 /* SlopeAnalyzerTests.swift */; };
 		43FB7FBD97FEE28403D8763D /* RideStopButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */; };
 		44497D3E24198310F1EF88D0 /* NavVoiceAnnouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECB500A61DACF8C120056604 /* NavVoiceAnnouncer.swift */; };
 		49920FEA43D184809FBEDFC4 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F6B4CC1371445701229DA1 /* SettingsView.swift */; };
@@ -146,6 +147,7 @@
 		F3C751BEB8AAA29D5039118A /* CameraPreviewMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2438975AC3F05CBE0463A4ED /* CameraPreviewMapView.swift */; };
 		F84C59B40DA90C8B571ED115 /* TileCacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880511AA5A6E5C4609F0B188 /* TileCacheStore.swift */; };
 		F858A71A5E1300F7595817A5 /* RoadbookPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCB6C062DFE88B093D13F4D /* RoadbookPanelView.swift */; };
+		FA617CC7D961D2B25D5ED768 /* SlopeAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021C7FF6070BE9A600FAA2D7 /* SlopeAnalyzer.swift */; };
 		FAA066824132C41AD020F6A8 /* RideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5204AEC04322271B21AADF /* RideView.swift */; };
 		FD3611964B492E902B2F92DC /* TrackProjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9096A18F5E400501B3D925 /* TrackProjector.swift */; };
 		FFAD9E1E0CBCBB4BEA8FA192 /* RideOverlayLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8A9723D9DCD1AAE2B0A2A9 /* RideOverlayLayout.swift */; };
@@ -165,6 +167,7 @@
 		0116CEBAE504808F55025A09 /* SharedBlockageConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageConstants.swift; sourceTree = "<group>"; };
 		01B0DE3FE656FC8A6063BDEE /* WaypointConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointConstants.swift; sourceTree = "<group>"; };
 		01B82842449B56CC93E5EE4B /* ResumeGuidance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeGuidance.swift; sourceTree = "<group>"; };
+		021C7FF6070BE9A600FAA2D7 /* SlopeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlopeAnalyzer.swift; sourceTree = "<group>"; };
 		03C9982DF08E6E5670EC5DFB /* SharedBlockageAlertPillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageAlertPillView.swift; sourceTree = "<group>"; };
 		07085FFDE42708E45905658C /* FlashOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashOverlayView.swift; sourceTree = "<group>"; };
 		0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStopButton.swift; sourceTree = "<group>"; };
@@ -260,6 +263,7 @@
 		A8C0D10C0B8B572A8B761630 /* ResumeGuidanceCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumeGuidanceCardView.swift; sourceTree = "<group>"; };
 		AAD459CD19AEC11BC6AC5299 /* TrafficService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficService.swift; sourceTree = "<group>"; };
 		ABE49A2EAA1C60F323AB4C15 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		AC26C334255ECC649BB6CF79 /* SlopeAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlopeAnalyzerTests.swift; sourceTree = "<group>"; };
 		AD3EF8177D32ECCB3969F6C6 /* GoToGuidance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToGuidance.swift; sourceTree = "<group>"; };
 		AD767837D61AC5186C0E4B31 /* RideSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideSessionManager.swift; sourceTree = "<group>"; };
 		AEFA906FE64DC78FE03FF429 /* LongPressTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongPressTooltip.swift; sourceTree = "<group>"; };
@@ -535,6 +539,7 @@
 				7B7845E29E404A5D52E24239 /* RoadbookInflectionTests.swift */,
 				10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */,
 				BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */,
+				AC26C334255ECC649BB6CF79 /* SlopeAnalyzerTests.swift */,
 				D44E9BAE191BB827CC6CAA5D /* SymbolCapUpAlignmentTests.swift */,
 				F8F549FFD3F072B961F48302 /* TileCoordinateTests.swift */,
 				126323316D9286597E37894D /* TrackFicheCameraFitTests.swift */,
@@ -613,6 +618,7 @@
 		EC4E81D63C822C1409FC704B /* Rendering */ = {
 			isa = PBXGroup;
 			children = (
+				021C7FF6070BE9A600FAA2D7 /* SlopeAnalyzer.swift */,
 				431B6567A08F3799EB6A5B86 /* TraceAppearance.swift */,
 				630050A3FC93B2C680316CBB /* TrackThumbnailGeometry.swift */,
 				B5D796406305809004769C00 /* TrackThumbnailView.swift */,
@@ -739,6 +745,7 @@
 				EDB478D489FAEEB7825928CA /* RoadbookInflectionTests.swift in Sources */,
 				99A66F44AC26ECB625498587 /* SharedBlockageCodingTests.swift in Sources */,
 				E2488E86DC385FED1FF43AE6 /* SharedBlockageLiveServerTests.swift in Sources */,
+				4229348F8B9D9F87C0E9A331 /* SlopeAnalyzerTests.swift in Sources */,
 				E850C913FE0B485F4652FA0A /* SymbolCapUpAlignmentTests.swift in Sources */,
 				27EF69072C9BAD4EAC0B5CFE /* TileCoordinateTests.swift in Sources */,
 				0489B3D6A674C64A8E6C38CB /* TrackFicheCameraFitTests.swift in Sources */,
@@ -840,6 +847,7 @@
 				A5C8848C2C31EE8C476F7D0C /* SharedBlockageStore.swift in Sources */,
 				EDE0D93C09D00C3E31762745 /* SharedBlockageSyncCoordinator.swift in Sources */,
 				E543A688558412A92AA61E2E /* SharedBlockageSyncService.swift in Sources */,
+				FA617CC7D961D2B25D5ED768 /* SlopeAnalyzer.swift in Sources */,
 				E9A12DBCFAD4A61A250105ED /* SpeedLimitBadgeView.swift in Sources */,
 				C417572521DBCF33B43D3797 /* SpeedLimitService.swift in Sources */,
 				10D7F0BBEF0BF955D189BA13 /* SpeedUnit.swift in Sources */,

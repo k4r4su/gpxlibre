@@ -741,6 +741,9 @@ struct RideView: View {
             // qu'en paramètre d'init — voir RideMapLibreView.swift pour le pourquoi (conformité
             // au protocole MapProvider, signature d'init fixe).
             .environment(\.isDebugReplayMarkerActive, session.isDebugReplayActive)
+            // Spec "slope-warning-native" (it19) : même raison (conformité MapProvider).
+            .environment(\.slopeWarningsEnabled, settings.slopeWarningsEnabled)
+            .environment(\.slopeWarningThresholdPercent, settings.slopeWarningThresholdPercent)
         case .mapKit:
             RideMapView(
                 track: track,

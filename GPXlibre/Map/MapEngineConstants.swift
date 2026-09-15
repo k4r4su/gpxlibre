@@ -68,6 +68,13 @@ enum MapEngineConstants {
     static let chevronLayerIdentifier = "direction-chevron-layer"
     static let chevronIconName = "direction-chevron-icon"
 
+    // MARK: - Avertissement de pente (spec "slope-warning-native", it19)
+
+    static let slopeWarningSourceIdentifier = "slope-warning-source"
+    static let slopeWarningLayerIdentifier = "slope-warning-layer"
+    static let slopeWarningClimbIconName = "slope-warning-climb-icon"
+    static let slopeWarningDescentIconName = "slope-warning-descent-icon"
+
     // MARK: - Fond vectoriel PMTiles (spec "vector-pmtiles", it11)
 
     /// Style embarqué en bundle (GPXlibre/Resources/) — dérivé du style "Liberty" d'OpenFreeMap

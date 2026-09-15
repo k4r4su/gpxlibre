@@ -38,6 +38,8 @@ final class RideSettingsStore: ObservableObject {
         static let autoZoomEnabled = "settings.autoZoomEnabled"
         static let autoZoomMinMeters = "settings.autoZoomMinMeters"
         static let autoZoomMaxMeters = "settings.autoZoomMaxMeters"
+        static let slopeWarningsEnabled = "settings.slopeWarningsEnabled"
+        static let slopeWarningThresholdPercent = "settings.slopeWarningThresholdPercent"
     }
 
     private let defaults: UserDefaults
@@ -171,6 +173,17 @@ final class RideSettingsStore: ObservableObject {
         didSet { defaults.set(autoZoomMaxMeters, forKey: Keys.autoZoomMaxMeters) }
     }
 
+    // MARK: - Avertissement de pente (spec "slope-warning-native", it19)
+
+    /// Nouvelle option d'apparence — activée par défaut (cohérent avec les autres avertissements
+    /// de sécurité de l'app, roadbook/partage de blocages, déjà ON par défaut).
+    @Published var slopeWarningsEnabled: Bool {
+        didSet { defaults.set(slopeWarningsEnabled, forKey: Keys.slopeWarningsEnabled) }
+    }
+    @Published var slopeWarningThresholdPercent: Double {
+        didSet { defaults.set(slopeWarningThresholdPercent, forKey: Keys.slopeWarningThresholdPercent) }
+    }
+
     /// Repasse les 4 seuils à leurs défauts standards (30/45/90/135) — appelé quand l'utilisateur
     /// quitte le mode "personnalisé" (voir SettingsView), jamais automatiquement ailleurs.
     func resetRoadbookThresholdsToDefaults() {
@@ -290,5 +303,11 @@ final class RideSettingsStore: ObservableObject {
         let storedMax = defaults.object(forKey: Keys.autoZoomMaxMeters) as? Double
         autoZoomMaxMeters = storedMax.map { min(max($0, boundsRange.lowerBound), boundsRange.upperBound) }
             ?? RideConstants.autoZoomMaxMetersDefault
+
+        slopeWarningsEnabled = defaults.object(forKey: Keys.slopeWarningsEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.slopeWarningsEnabled)
+        let storedSlopeThreshold = defaults.double(forKey: Keys.slopeWarningThresholdPercent)
+        slopeWarningThresholdPercent = RideConstants.slopeWarningThresholdPercentOptions.contains(storedSlopeThreshold)
+            ? storedSlopeThreshold : RideConstants.slopeWarningThresholdPercentDefault
     }
 }

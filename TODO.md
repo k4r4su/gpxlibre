@@ -68,6 +68,38 @@ même esprit que les Flavors (un objet de palette réutilisable sur un seul "squ
 - Non vérifié visuellement (pas de device physique) — les paramètres numériques des 3 flavors
   sont un point de départ raisonnable, pas un résultat validé à l'œil.
 
+## Avertissement de pente natif (spec "slope-warning-native", it19, décision tranchée avec le
+## propriétaire)
+
+Remplace la demande initiale "utiliser GPXKit" — `GPXKit` (mmllr/GPXKit) existe bien et
+conviendrait techniquement (détection de dénivelé/grade intégrée), mais c'est un VRAI package
+tiers, contraire à la règle explicite du projet ("MapLibre est la SEULE dépendance tierce
+autorisée", `project.yml`). Proposé au propriétaire, confirmé : détection native.
+
+- `SlopeAnalyzer` (Rendering/) : calcul pur (delta d'élévation / distance horizontale sur des
+  fenêtres non chevauchantes d'au moins 100 m, `RideConstants.slopeWarningMinSegmentMeters` —
+  évite le bruit GPS/altimétrique sur de trop courts segments), symboles PONCTUELS uniquement
+  (jamais un dégradé continu, demande explicite) espacés d'au moins 300 m
+  (`slopeWarningMinMarkerSpacingMeters`) pour ne jamais empiler des triangles sur une longue
+  pente régulière. Seuil par défaut 10 % (`slopeWarningThresholdPercentDefault`, proche des
+  paliers réels des panneaux routiers français 8/10/12 %), réglable (8/10/12/15 %,
+  Réglages > Pente).
+- Rendu (RideMapLibreView) : symbole triangle jaune/noir façon panneau routier de danger, DEUX
+  variantes dessinées (rampe montante/descendante selon le signe de la pente), `icon-rotation-
+  alignment: viewport` — reste lisible à l'écran quel que soit le cap, comme un vrai panneau
+  planté au bord de la route ne tourne jamais avec la caméra du motard. Passé par
+  `.environment(...)` plutôt qu'en paramètre d'init (même contrainte MapProvider que le
+  marqueur replay debug, it17).
+- Nouveau réglage `RideSettingsStore.slopeWarningsEnabled` (ON par défaut, cohérent avec les
+  autres avertissements de sécurité déjà ON par défaut) + `slopeWarningThresholdPercent`.
+- MapKit (RideMapView, comparaison uniquement) non concerné — décision de scope assumée, comme
+  pour tout le reste des features avancées (chevrons, fond vectoriel), pas d'obligation de
+  parité.
+- Non vérifié visuellement (pas de device physique, pas de trace réelle avec élévation
+  disponible dans cet environnement) — logique testée unitairement (8 tests), le rendu visuel
+  réel (triangle bien positionné, lisible, montée/descente distinguables) reste à confirmer par
+  le propriétaire en conditions réelles.
+
 ## Itération 19 (P0 fiche trace / styles carte / pente / étude boutons)
 
 - **P0 "trace-ab-line-invisible", investigation menée avant tout correctif (comme demandé)** :

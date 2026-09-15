@@ -19,6 +19,28 @@ extension EnvironmentValues {
     }
 }
 
+/// Spec "slope-warning-native" (it19) — mêmes raisons que `isDebugReplayMarkerActive` ci-dessus :
+/// `RideMapLibreView` conforme à `MapProvider`, dont l'init a une signature fixe (voir
+/// MapProvider.swift) — y ajouter un paramètre casse la conformité, donc passé par
+/// `.environment(...)` plutôt qu'en paramètre d'init.
+private struct SlopeWarningsEnabledKey: EnvironmentKey {
+    static let defaultValue = false
+}
+private struct SlopeWarningThresholdPercentKey: EnvironmentKey {
+    static let defaultValue = RideConstants.slopeWarningThresholdPercentDefault
+}
+
+extension EnvironmentValues {
+    var slopeWarningsEnabled: Bool {
+        get { self[SlopeWarningsEnabledKey.self] }
+        set { self[SlopeWarningsEnabledKey.self] = newValue }
+    }
+    var slopeWarningThresholdPercent: Double {
+        get { self[SlopeWarningThresholdPercentKey.self] }
+        set { self[SlopeWarningThresholdPercentKey.self] = newValue }
+    }
+}
+
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
 /// raster OSM, trace + détour + route Nav en sources vectorielles stylées localement,
 /// checkpoints/waypoints en annotations. Même contrat que RideMapView (MapKit), conservé
@@ -133,6 +155,12 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         updateGoToShape(on: mapView, context: context)
         updateResumeShape(on: mapView, context: context)
         context.coordinator.updateChevronShape(track: track, configuredSpacingMeters: chevronSpacingMeters, on: mapView)
+        context.coordinator.updateSlopeWarnings(
+            track: track,
+            enabled: context.environment.slopeWarningsEnabled,
+            thresholdPercent: context.environment.slopeWarningThresholdPercent,
+            on: mapView
+        )
         context.coordinator.syncSharedBlockageAnnotations(sharedBlockages, on: mapView)
         context.coordinator.updateDebugReplayMarker(
             coordinate: context.environment.isDebugReplayMarkerActive ? currentLocation?.coordinate : nil,
@@ -286,6 +314,12 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         /// l'ordre — exactement ce qu'il faut ici.
         private var currentChevronTrack: GPXTrack?
         private var currentChevronSpacing: Double?
+        /// Mémoïsation (spec "slope-warning-native", it19) — même patron que les chevrons :
+        /// ne recalcule que si la trace, l'activation ou le seuil ont réellement changé, jamais
+        /// à chaque fix GPS.
+        private var currentSlopeWarningTrack: GPXTrack?
+        private var currentSlopeWarningEnabled: Bool?
+        private var currentSlopeWarningThreshold: Double?
         private var isNightMode = false
         /// Référence faible au style courant (fix "chevrons-live-refresh") : permet de
         /// régénérer l'icône chevron (couleur) depuis `updateTraceAppearance`, qui n'avait
@@ -459,6 +493,48 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             updateChevronShape(track: track, configuredSpacingMeters: configuredSpacing, on: mapView)
         }
 
+        /// Avertissements de pente (spec "slope-warning-native", it19) : symboles PONCTUELS
+        /// (jamais un dégradé continu) recalculés uniquement si la trace, l'activation ou le
+        /// seuil ont changé — mémoïsation identique au patron des chevrons. Ne dépend jamais du
+        /// zoom (contrairement aux chevrons) : la densité de pentes fortes réelles n'a aucune
+        /// raison de varier avec l'affichage.
+        func updateSlopeWarnings(track: GPXTrack?, enabled: Bool, thresholdPercent: Double, on mapView: MLNMapView) {
+            guard let style = mapView.style,
+                  let source = style.source(withIdentifier: MapEngineConstants.slopeWarningSourceIdentifier) as? MLNShapeSource
+            else { return }
+
+            guard enabled, let track, track.points.count > 1 else {
+                if currentSlopeWarningTrack != nil || currentSlopeWarningEnabled == true {
+                    source.shape = nil
+                    currentSlopeWarningTrack = nil
+                    currentSlopeWarningEnabled = enabled
+                    currentSlopeWarningThreshold = thresholdPercent
+                }
+                return
+            }
+
+            guard track != currentSlopeWarningTrack || enabled != currentSlopeWarningEnabled || thresholdPercent != currentSlopeWarningThreshold else { return }
+            currentSlopeWarningTrack = track
+            currentSlopeWarningEnabled = enabled
+            currentSlopeWarningThreshold = thresholdPercent
+
+            let warnings = SlopeAnalyzer.steepGradeWarnings(
+                for: track.points,
+                thresholdPercent: thresholdPercent,
+                minSegmentMeters: RideConstants.slopeWarningMinSegmentMeters,
+                minMarkerSpacingMeters: RideConstants.slopeWarningMinMarkerSpacingMeters
+            )
+            let features = warnings.map { warning -> MLNPointFeature in
+                let feature = MLNPointFeature()
+                feature.coordinate = warning.coordinate
+                feature.attributes = [
+                    "iconName": warning.isClimbing ? MapEngineConstants.slopeWarningClimbIconName : MapEngineConstants.slopeWarningDescentIconName,
+                ]
+                return feature
+            }
+            source.shape = MLNShapeCollectionFeature(shapes: features)
+        }
+
         /// Petit chevron plein pointant vers le HAUT au repos (0°) — `icon-rotate` tourne en
         /// degrés horaires depuis le nord comme un cap boussole, donc l'icône doit être
         /// dessinée pointant nord pour que `bearing` (aussi un cap boussole) corresponde
@@ -478,6 +554,43 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 UIColor.black.withAlphaComponent(0.55).setStroke()
                 path.lineWidth = 1.5
                 path.stroke()
+            }
+        }
+
+        /// Symbole "panneau routier de signalisation de pente" (spec "slope-warning-native",
+        /// it19, "dans l'esprit d'un panneau routier") : triangle jaune/noir façon panneau de
+        /// danger français, avec une rampe diagonale — montante (bas-gauche → haut-droite) pour
+        /// une montée, descendante (haut-gauche → bas-droite) pour une descente. `iconRotation
+        /// Alignment: viewport` (voir setupLayers) : reste lisible à l'écran quel que soit le
+        /// cap, comme un vrai panneau routier planté au bord de la route ne tourne jamais avec
+        /// la caméra.
+        static func slopeWarningImage(isClimbing: Bool) -> UIImage {
+            let size = CGSize(width: 32, height: 32)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { _ in
+                let triangle = UIBezierPath()
+                triangle.move(to: CGPoint(x: size.width / 2, y: size.height * 0.06))
+                triangle.addLine(to: CGPoint(x: size.width * 0.95, y: size.height * 0.92))
+                triangle.addLine(to: CGPoint(x: size.width * 0.05, y: size.height * 0.92))
+                triangle.close()
+                UIColor.systemYellow.setFill()
+                triangle.fill()
+                UIColor.black.setStroke()
+                triangle.lineWidth = 2.5
+                triangle.stroke()
+
+                let ramp = UIBezierPath()
+                if isClimbing {
+                    ramp.move(to: CGPoint(x: size.width * 0.26, y: size.height * 0.78))
+                    ramp.addLine(to: CGPoint(x: size.width * 0.74, y: size.height * 0.40))
+                } else {
+                    ramp.move(to: CGPoint(x: size.width * 0.26, y: size.height * 0.40))
+                    ramp.addLine(to: CGPoint(x: size.width * 0.74, y: size.height * 0.78))
+                }
+                ramp.lineWidth = 3
+                ramp.lineCapStyle = .round
+                UIColor.black.setStroke()
+                ramp.stroke()
             }
         }
 
@@ -688,6 +801,20 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             // tout niveau de zoom.
             style.addLayer(chevronLayer)
             chevronLayerRef = chevronLayer
+
+            // Avertissements de pente (spec "slope-warning-native", it19) : deux icônes
+            // (montée/descente, `iconName` par feature — même patron `forKeyPath` que le
+            // `bearing` des chevrons), symboles ponctuels jamais un dégradé continu.
+            style.setImage(Self.slopeWarningImage(isClimbing: true), forName: MapEngineConstants.slopeWarningClimbIconName)
+            style.setImage(Self.slopeWarningImage(isClimbing: false), forName: MapEngineConstants.slopeWarningDescentIconName)
+            let slopeWarningSource = MLNShapeSource(identifier: MapEngineConstants.slopeWarningSourceIdentifier, shape: nil, options: nil)
+            style.addSource(slopeWarningSource)
+            let slopeWarningLayer = MLNSymbolStyleLayer(identifier: MapEngineConstants.slopeWarningLayerIdentifier, source: slopeWarningSource)
+            slopeWarningLayer.iconImageName = NSExpression(forKeyPath: "iconName")
+            slopeWarningLayer.iconRotationAlignment = NSExpression(forConstantValue: "viewport")
+            slopeWarningLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            slopeWarningLayer.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+            style.addLayer(slopeWarningLayer)
 
             // Détour, route Nav et "Aller à" ajoutés après la trace : ils doivent rester
             // visibles au-dessus.
