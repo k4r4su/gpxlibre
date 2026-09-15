@@ -72,8 +72,12 @@ GPXlibre/
   Map/            RideMapLibreView (moteur actif, voir ci-dessous), MapProvider (protocole
                    commun), MapEngineConstants (identifiants sources/couches + couleurs +
                    construction des styles raster ET vectoriel), MapSourceSelection (raster/
-                   vectorHosted/vectorLocal), MapSourceResolver (pur, priorité de la source
-                   de carte effective — voir section dédiée, it11)
+                   vectorHosted(flavor:)/vectorLocal(fileURL:flavor:) depuis it19),
+                   MapSourceResolver (pur, priorité de la source de carte effective — voir
+                   section dédiée, it11), MapColorFlavor/ColorFlavorPatcher (it19 : palettes de
+                   couleur "maison" appliquées au style vectoriel Liberty, voir section dédiée
+                   Map/CLAUDE.md — remplace la demande "Flavors Protomaps", incompatible avec
+                   le schéma OpenMapTiles déjà en place, voir TODO.md)
                    ⚠️ SUSPICION NON RÉSOLUE (it13) : les chevrons de direction
                    (`direction-chevron-layer`, `MLNSymbolStyleLayer`+`MLNShapeSource`)
                    pourraient ne JAMAIS s'afficher visuellement sur la vraie carte Ride —
@@ -111,8 +115,10 @@ GPXlibre/
                    (Domicile/Travail, it13), NavigationSettingsView (it14 : Réglages >
                    Navigation, regroupe Position point bleu/Zoom par défaut/Zoom automatique
                    — les 3 réglages qui ont besoin d'un aperçu carte en direct,
-                   CameraPreviewMapView), ControlsSide, DebugReplaySection (#if DEBUG, dans
-                   Réglages > Avancé).
+                   CameraPreviewMapView), MapThemePreset (it19 : standard/hauteContraste/
+                   terreux/relief — "sombre" retiré, voir Map/CLAUDE.md), MapThemePickerView
+                   (it18-bis : vignettes plutôt qu'un Picker texte), ControlsSide,
+                   DebugReplaySection (#if DEBUG, dans Réglages > Avancé).
   Views/          LibraryView (Biblio — tap sur une ligne ouvre TrackFullSheetView depuis
                    it13, spec "biblio-track-fullsheet" : fiche nom/stats + Supprimer/
                    Renommer/Paramètres ; PLUS TrackDetailView, qui n'a donc plus de point
@@ -128,6 +134,10 @@ GPXlibre/
                    TrackDetailView UNIQUEMENT depuis it17, ne plus l'appeler depuis
                    TrackSettingsView), RootView (TabView)
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
+                   SlopeAnalyzer (it19 : détection NATIVE de pente forte le long d'une trace —
+                   décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,
+                   voir TODO.md et Ride/CLAUDE.md — symboles ponctuels, jamais un dégradé
+                   continu) ;
                    TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure,
                    ORPHELINE depuis it17 (plus de point d'entrée UI, remplacée par
                    TrackFicheMapView dans TrackSettingsView) mais fichier intact, même patron

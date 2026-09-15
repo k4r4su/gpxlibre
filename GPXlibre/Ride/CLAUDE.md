@@ -99,6 +99,28 @@ calcul figé au moment du déclenchement. Le tracé pointillé bleu sur la carte
 naturel sur trace) sont EXACTEMENT les mêmes pour les deux origines — seule la présentation
 diffère.
 
+## Avertissement de pente natif (spec "slope-warning-native", it19)
+
+Remplace la demande initiale "utiliser GPXKit" — `GPXKit` (mmllr/GPXKit) existe bien et
+conviendrait techniquement, mais c'est un VRAI package tiers, contraire à la règle explicite du
+projet ("MapLibre est la SEULE dépendance tierce autorisée", `project.yml`). Décision tranchée
+avec le propriétaire : détection NATIVE, `GPXPoint.elevation` est déjà disponible (déjà utilisée
+pour `GPXTrack.elevationGainMeters`).
+
+`SlopeAnalyzer.steepGradeWarnings` (Rendering/, logique pure) découpe la trace en fenêtres non
+chevauchantes d'au moins `RideConstants.slopeWarningMinSegmentMeters` (100 m — évite les pentes
+aberrantes sur un segment de quelques mètres, bruit GPS/altimétrique), pose un symbole PONCTUEL
+(jamais un dégradé continu, demande explicite) si la pente moyenne de la fenêtre dépasse
+`slopeWarningThresholdPercent` (défaut 10 %, réglable 8/10/12/15 %), espacés d'au moins
+`slopeWarningMinMarkerSpacingMeters` (300 m) pour ne jamais empiler des triangles sur une longue
+pente régulière. Rendu côté `RideMapLibreView` : triangle jaune/noir façon panneau routier
+(`slopeWarningImage(isClimbing:)`, deux variantes dessinées selon le signe de la pente),
+`icon-rotation-alignment: viewport` (reste lisible à l'écran, ne suit pas la rotation cap-en-
+haut — contrairement aux chevrons qui, eux, DOIVENT suivre la trace). Activation/seuil passés
+par `.environment(...)` (voir `slopeWarningsEnabled`/`slopeWarningThresholdPercent` sur
+`EnvironmentValues`), même contrainte `MapProvider` (init à signature fixe) que le marqueur
+replay debug ci-dessous.
+
 ## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
 
 Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne

@@ -56,6 +56,31 @@ Décision de scope assumée : le dimming nuit (filtre luminosité/saturation) ne
 qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour l'instant (voir
 `docs/tuile-sources.md` pour une piste future, VersaTiles fournit déjà clair+sombre).
 
+## Palettes de couleur "maison" (spec "map-color-flavors", it19)
+
+Remplace la demande initiale "Flavors Protomaps" — vérifié AVANT de coder (doc officielle
+`@protomaps/basemaps`) : leur système de Flavors ne s'applique QUE sur le schéma de tuiles
+propre à Protomaps (10 couches Tilezen), pas portable vers OpenMapTiles (le schéma utilisé ici,
+OpenFreeMap hébergé + paquets `.pmtiles` auto-hébergés Planetiler, it11). Migrer aurait exigé de
+reconstruire tout le pipeline hors-ligne avec les outils Protomaps — proposé au propriétaire,
+refusé au profit d'un système maison équivalent sur le style Liberty déjà en place :
+
+- `MapColorFlavor` (`standard`/`hauteContraste`/`terreux`) porte les paramètres de
+  transformation (décalage de teinte, multiplicateur de saturation, facteur de contraste,
+  décalage de luminosité) — choisis SANS retour visuel réel (pas de device physique), à
+  considérer comme un point de départ, pas un résultat validé à l'œil (voir TODO.md).
+- `ColorFlavorPatcher.apply(_:toLayers:)` parcourt RÉCURSIVEMENT la clé `paint` de chaque
+  calque (jamais `layout`) — gère les couleurs simples ET imbriquées dans des expressions
+  (`interpolate`/`step`), 4 formats (`#rgb`/`#rrggbb`/`rgb()`/`rgba()`/`hsl()`/`hsla()`),
+  toujours ré-émises en `hsla(...)`. Appliqué dans `MapEngineConstants.buildVectorStyleJSON`
+  AVANT `patchedSymbolLayerForCapUp` (it18, Bloc 7) — les deux opèrent sur des clés disjointes
+  (`paint` vs `layout`), donc totalement indépendants, aucun risque d'interférence avec la
+  rotation des labels cap-en-haut.
+- `MapThemePreset` porte la palette jusqu'à `MapSourceSelection.vectorHosted(flavor:)`/
+  `.vectorLocal(fileURL:flavor:)`, résolu par `MapSourceResolver` — fonctionne identiquement
+  hébergé et hors-ligne (contrairement à l'ancien thème "Sombre", retiré en it19, raster
+  uniquement).
+
 ## Symboles cap-en-haut lisibles (spec "rotating-symbols-cap-up", it18, Bloc 7)
 
 Uniquement pertinent côté fond VECTORIEL (le raster n'a aucun label). `MapEngineConstants.
