@@ -35,9 +35,15 @@ GPXlibre/
                    RideSessionManager (state machine GPS/roadbook/détour/resume, @MainActor),
                    RideOverlayLayout (grille figée des zones d'overlay, SEULE source de
                    vérité layout), RoadbookAnalyzer/TrackProjector/Checkpoint/RoadbookTier
-                   (géométrie pure), DetourRoutingService (OSRM), ResumeGuidance* (feat it10),
+                   (géométrie pure), DetourRoutingService (OSRM), ResumeGuidance* (feat it10 ;
+                   `isAutomatic` depuis it18 — voir Ride/CLAUDE.md), OffTrackChipView/
+                   RejoinGuidanceBannerView (it18, colonne latérale, voir Ride/CLAUDE.md),
                    RidePanelStyle (styles partagés), RideConstants (constantes Ride hors
                    roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
+                   RoadbookPanelView (bandeau "hors trace" plein-largeur) ORPHELINE depuis it18
+                   (spec "offtrack-compact-chip" — remplacée par OffTrackChipView, colonne
+                   latérale) : fichier intact, même patron que TrackDetailView/
+                   TrackThumbnailView ci-dessous.
                    Roadbook REBUILT FROM SCRATCH (spec "roadbook-angle-buckets-replay", it14,
                    Bloc 4 — "aujourd'hui aucun déclenchement réel en roulage") :
                    RoadbookAnalyzer.buildRoadbookEvents REMPLACE les deux anciens détecteurs

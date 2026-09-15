@@ -56,6 +56,22 @@ Décision de scope assumée : le dimming nuit (filtre luminosité/saturation) ne
 qu'au raster OSM standard — le fond vectoriel n'a qu'une variante claire pour l'instant (voir
 `docs/tuile-sources.md` pour une piste future, VersaTiles fournit déjà clair+sombre).
 
+## Symboles cap-en-haut lisibles (spec "rotating-symbols-cap-up", it18, Bloc 7)
+
+Uniquement pertinent côté fond VECTORIEL (le raster n'a aucun label). `MapEngineConstants.
+buildVectorStyleJSON` patche désormais chaque calque `symbol` à placement POINT (labels de
+lieu/POI — absence de `symbol-placement` ou valeur littérale `"point"`) pour forcer
+`text`/`icon-rotation-alignment` à `"viewport"` explicitement (`symbolsCapUpMode`, flag) —
+robuste à un éventuel bug de résolution de la valeur implicite `"auto"` du spec sur la version
+épinglée du SDK (vérifié dans les headers vendored `MLNSymbolStyleLayer.h` : `auto` DEVRAIT déjà
+résoudre en `viewport` pour un placement point). Les calques à placement LINE (noms de route/
+rivière, flèches de sens unique `road_one_way_arrow*`) ne sont JAMAIS touchés — ils doivent
+continuer à suivre la géométrie de la ligne, comportement standard du marché. Logique pure
+testable via `MapEngineConstants.patchedSymbolLayerForCapUp(_:)` (internal, voir
+`SymbolCapUpAlignmentTests`) — ne pas confondre avec `chevronLayer.iconRotationAlignment = "map"`
+(chevrons de direction, calque ajouté par code après le chargement du style, intentionnellement
+non concerné par ce patch : il DOIT suivre la trace, pas rester upright à l'écran).
+
 ## Chevrons : densité adaptative au zoom (fix "chevrons-zoom-adaptive", it17, Bloc 3)
 
 Bug corrigé : les chevrons disparaissaient totalement en dessous d'un zoom donné —

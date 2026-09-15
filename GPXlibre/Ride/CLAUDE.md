@@ -67,6 +67,38 @@ consécutifs n'existe plus, remplacé par cette comparaison directe de distance 
 rien d'autre ne change. Se valide via le mode replay debug (voir section roadbook ci-dessus),
 pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
 
+## Guidage de reprise manuel vs automatique (spec "link-recompute-on-divergence" /
+## "rejoin-trace-guidance-banner", it18, Blocs 3/5)
+
+`ResumeGuidance.isAutomatic` distingue DEUX origines du même mécanisme "Reprendre la trace ici"
+(feat it10, `RideSessionManager.requestResume`/`ResumeGuidance`), jamais deux moteurs séparés :
+
+- **Manuel** (`isAutomatic = false`, défaut) : tap sur la trace (`RideView.handleTrackTap`).
+  Démarre en phase `.previewing` (vol d'oiseau visible, itinéraire en cours), confirmation
+  explicite requise (`confirmResume()`) — bannière DU HAUT (`ResumeGuidanceCardView`), inchangée
+  depuis it10.
+- **Automatique** (`isAutomatic = true`) : `RideSessionManager.updateAutoRecompute`, appelé à
+  CHAQUE fix en Mode Trace, déclenche `requestResume(..., isAutomatic: true)` dès que la
+  divergence à la trace dépasse `RideConstants.recomputeDivergenceThresholdMeters` (100 m) en
+  continu pendant `recomputeDivergenceDurationSeconds` (2 s) — cible : la prochaine jonction
+  atteignable plus loin sur la trace (même mécanique que `updateOffTrackResumeTarget`/
+  `requestDirectDetour`, `detourAheadMinMeters`). Démarre DIRECTEMENT en phase `.active`
+  (auto-confirmé, jamais de preview à valider) — jamais déclenché si un guidage de reprise
+  (manuel ou automatique) existe déjà (`resumeGuidance == nil` gardé en tête de fonction).
+  Présentation DISTINCTE : pas de bannière du haut (`RideView.activeBanner` filtre
+  `!resume.isAutomatic`), juste un toast bref "Recalcul"
+  (`autoRecomputeToastToken`/`.onChange` côté RideView) + une bannière LATÉRALE dédiée
+  (`RejoinGuidanceBannerView`, indigo-lite, même colonne que `LateralCapBannerView`/
+  `OffTrackChipView`, prioritaire sur les deux tant qu'active — feature-flag
+  `RideConstants.rejoindreGuidanceBannerEnabled`).
+
+`RideSessionManager.resumeGuidanceLiveDistanceMeters` (distance au pin, recalculée à CHAQUE fix
+tant que `resumeGuidance != nil`) alimente cette bannière — jamais stale, contrairement à un
+calcul figé au moment du déclenchement. Le tracé pointillé bleu sur la carte
+(`RideMapLibreView.updateResumeShape`) et la fin du guidage (jonction atteinte < 30 m, ou retour
+naturel sur trace) sont EXACTEMENT les mêmes pour les deux origines — seule la présentation
+diffère.
+
 ## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
 
 Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne

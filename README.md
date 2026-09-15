@@ -10,8 +10,10 @@ GPXlibre est une application iOS pour suivre une trace GPX en moto, à vélo ou 
 - Carte en mode cap-en-haut (comme un GPS moto) ou nord-en-haut, au choix
 - Zoom qui s'adapte automatiquement à la vitesse — plus serré à l'arrêt, plus large en roulant
 - Roadbook : une bannière annonce les virages à l'avance, avec une icône selon leur intensité (léger, prononcé, fort, demi-tour)
-- Détection hors-trace : si tu t'écartes, l'app te le signale sans jamais rien effacer de ta trace
+- Détection hors-trace : un indicateur compact et discret te le signale sans jamais masquer la carte ni effacer ta trace
+- Si tu t'écartes franchement, l'app recalcule seule un itinéraire de liaison pour te ramener sur la trace, avec une bannière dédiée qui indique la distance restante
 - « Reprendre ici » : tu peux reprendre le guidage depuis n'importe quel point de la trace, même après un détour
+- Textes et symboles de la carte restent lisibles en mode cap-en-haut, quel que soit ton cap
 
 **Cartes hors-ligne**
 - Téléchargement automatique du corridor autour d'une trace avant de partir
@@ -26,7 +28,7 @@ GPXlibre est une application iOS pour suivre une trace GPX en moto, à vélo ou 
 
 **Enregistrer sa sortie**
 - L'app enregistre le trajet réellement parcouru en tâche de fond, indépendamment de la trace suivie
-- Export GPX en fin de sortie, sauvegardé automatiquement dans la bibliothèque
+- Export GPX en fin de sortie, sauvegardé automatiquement dans la bibliothèque avec une couleur ambre distinctive et un aperçu carte immédiat
 - Points d'intérêt signalables en un tap pendant le trajet
 
 **Bibliothèque**
