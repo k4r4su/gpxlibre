@@ -257,6 +257,13 @@ enum RideConstants {
 
     static let detourRoutingTimeoutSeconds: Double = 12
 
+    /// Retour terrain (it19) : timeout DÉDIÉ, distinct de `detourRoutingTimeoutSeconds`
+    /// (OSRM, inchangé) — un aller-retour vers une instance auto-hébergée derrière un
+    /// reverse-proxy (Traefik, Basic Auth) en 4G peut légitimement dépasser les 12 s prévus
+    /// pour l'API de démo OSRM, surtout sur la toute première requête (négociation TLS +
+    /// HTTP/2 + vérification d'auth, sans connexion déjà "chaude").
+    static let valhallaRequestTimeoutSeconds: Double = 20
+
     // MARK: - "Reprendre la trace ici" (feat "resume-at-point", Bloc 3, it10)
 
     /// Tolérance de tap sur la trace (points écran, ~30-40 pt demandés) — convertie en mètres

@@ -20,7 +20,13 @@ enum ValhallaRoutingError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint: return "URL du serveur Valhalla invalide."
-        case .network(let error): return "Valhalla injoignable : \(error.localizedDescription)"
+        case .network(let error):
+            // Retour terrain (it19) : "problème de timeout" signalé sans plus de détail —
+            // localizedDescription seul ("Please try again") ne dit pas s'il s'agit d'un vrai
+            // délai dépassé (-1001), d'un hôte injoignable (-1004), d'un TLS refusé (-1200),
+            // etc. Domaine + code exposés pour un diagnostic immédiat sans Charles/Proxyman.
+            let nsError = error as NSError
+            return "Valhalla injoignable : \(error.localizedDescription) (\(nsError.domain) \(nsError.code))"
         case .server(let message): return "Erreur Valhalla : \(message)"
         case .noRoute: return "Aucun itinéraire retourné par Valhalla."
         }
@@ -67,7 +73,7 @@ enum ValhallaRoutingService {
             "units": "kilometers",
         ]
 
-        var request = URLRequest(url: url, timeoutInterval: RideConstants.detourRoutingTimeoutSeconds)
+        var request = URLRequest(url: url, timeoutInterval: RideConstants.valhallaRequestTimeoutSeconds)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -89,7 +95,7 @@ enum ValhallaRoutingService {
         guard let url = endpointURL(configuration.endpointURLString, path: "status") else {
             throw ValhallaRoutingError.invalidEndpoint
         }
-        var request = URLRequest(url: url, timeoutInterval: RideConstants.detourRoutingTimeoutSeconds)
+        var request = URLRequest(url: url, timeoutInterval: RideConstants.valhallaRequestTimeoutSeconds)
         applyBasicAuth(to: &request, configuration: configuration)
 
         let data = try await performRequest(request)

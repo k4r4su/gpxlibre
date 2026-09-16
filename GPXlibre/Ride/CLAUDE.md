@@ -152,6 +152,21 @@ reste au comportement OSRM historique, aucune donnée/état ne dépend de Valhal
 l'app. `ValhallaRoutingService.decodePolyline6` décode au facteur de précision 6 (1e6) — PAS 5
 (Google Maps/OSRM standard), format propre à Valhalla (`trip.legs[].shape`).
 
+Retour terrain (it19, serveur `valhalla.zim.ovh` derrière Traefik/Basic Auth) : "Tester la
+connexion" timeout en 4G alors que curl HTTPS direct réussit (TLS 1.3, cert Let's Encrypt
+valide — ATS écarté comme cause, le TLS dépasse largement ses exigences par défaut). Deux
+choses vérifiées/corrigées sans pouvoir reproduire le device réel dans cet environnement (pas de
+device physique, voir CLAUDE.md racine) :
+- `RideConstants.valhallaRequestTimeoutSeconds` (20 s) — DISTINCT de
+  `detourRoutingTimeoutSeconds` (12 s, OSRM, inchangé) : un aller-retour vers un reverse-proxy
+  auto-hébergé en 4G peut légitimement dépasser le délai prévu pour l'API de démo OSRM.
+- `ValhallaRoutingError.network` expose désormais `domain`/`code` de la `NSError` sous-jacente
+  (ex. `NSURLErrorDomain -1001`) dans le message affiché — remplace le besoin d'un outil externe
+  (Charles/Proxyman) pour un premier diagnostic. Le header `Authorization: Basic` était déjà
+  construit PROACTIVEMENT (`applyBasicAuth`, jamais via `URLAuthenticationChallenge`) — pas la
+  cause. Si le timeout persiste après ces deux fixs, le code d'erreur affiché est le point de
+  départ du prochain diagnostic.
+
 ## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
 
 Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne
