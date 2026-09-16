@@ -212,6 +212,13 @@ struct SettingsView: View {
                     Text("Laisser vide désactive toute tentative réseau vers cette fonctionnalité.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+
+                    NavigationLink {
+                        ValhallaSettingsView()
+                    } label: {
+                        Label("Routage Valhalla (bêta)", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    }
+
                     #if DEBUG
                     DebugReplaySection()
                     #endif

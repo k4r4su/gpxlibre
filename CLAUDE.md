@@ -40,6 +40,8 @@ GPXlibre/
                    RejoinGuidanceBannerView (it18, colonne latérale, voir Ride/CLAUDE.md),
                    RidePanelStyle (styles partagés), RideConstants (constantes Ride hors
                    roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
+                   ValhallaRoutingService/ValhallaKeychainStore (it19, spec "valhalla-client-
+                   toggle" : backend de routage alternatif optionnel — voir Ride/CLAUDE.md),
                    RoadbookPanelView (bandeau "hors trace" plein-largeur) ORPHELINE depuis it18
                    (spec "offtrack-compact-chip" — remplacée par OffTrackChipView, colonne
                    latérale) : fichier intact, même patron que TrackDetailView/
@@ -111,7 +113,9 @@ GPXlibre/
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
   Recording/      Enregistrement GPS pendant le Ride + export GPX
   Settings/       RideSettingsStore (réglages globaux persistés — SAUF exception explicite,
-                   voir "Réglages stagés" plus bas), SettingsView, FavoriteAddressesView
+                   voir "Réglages stagés" plus bas), SettingsView, ValhallaSettingsView (it19 :
+                   Réglages > Avancé > "Routage Valhalla", voir Ride/CLAUDE.md pour le détail),
+                   FavoriteAddressesView
                    (Domicile/Travail, it13), NavigationSettingsView (it14 : Réglages >
                    Navigation, regroupe Position point bleu/Zoom par défaut/Zoom automatique
                    — les 3 réglages qui ont besoin d'un aperçu carte en direct,

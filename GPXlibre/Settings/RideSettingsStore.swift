@@ -40,6 +40,8 @@ final class RideSettingsStore: ObservableObject {
         static let autoZoomMaxMeters = "settings.autoZoomMaxMeters"
         static let slopeWarningsEnabled = "settings.slopeWarningsEnabled"
         static let slopeWarningThresholdPercent = "settings.slopeWarningThresholdPercent"
+        static let valhallaEnabled = "settings.valhallaEnabled"
+        static let valhallaEndpointURLString = "settings.valhallaEndpointURLString"
     }
 
     private let defaults: UserDefaults
@@ -184,6 +186,19 @@ final class RideSettingsStore: ObservableObject {
         didSet { defaults.set(slopeWarningThresholdPercent, forKey: Keys.slopeWarningThresholdPercent) }
     }
 
+    /// Spec "valhalla-client-toggle" (it19) : désactivé par défaut (demande explicite) — tant
+    /// que faux, `DetourRoutingService` n'appelle jamais Valhalla (voir
+    /// `RideSessionManager.currentValhallaConfiguration`, `nil` si désactivé).
+    @Published var valhallaEnabled: Bool {
+        didSet { defaults.set(valhallaEnabled, forKey: Keys.valhallaEnabled) }
+    }
+    /// Non sensible (contrairement aux identifiants Basic Auth, voir ValhallaKeychainStore) —
+    /// vide par défaut, aucune instance publique connue/codée en dur (même patron que
+    /// `sharedBlockageServerURLString`).
+    @Published var valhallaEndpointURLString: String {
+        didSet { defaults.set(valhallaEndpointURLString, forKey: Keys.valhallaEndpointURLString) }
+    }
+
     /// Repasse les 4 seuils à leurs défauts standards (30/45/90/135) — appelé quand l'utilisateur
     /// quitte le mode "personnalisé" (voir SettingsView), jamais automatiquement ailleurs.
     func resetRoadbookThresholdsToDefaults() {
@@ -309,5 +324,8 @@ final class RideSettingsStore: ObservableObject {
         let storedSlopeThreshold = defaults.double(forKey: Keys.slopeWarningThresholdPercent)
         slopeWarningThresholdPercent = RideConstants.slopeWarningThresholdPercentOptions.contains(storedSlopeThreshold)
             ? storedSlopeThreshold : RideConstants.slopeWarningThresholdPercentDefault
+
+        valhallaEnabled = defaults.bool(forKey: Keys.valhallaEnabled)
+        valhallaEndpointURLString = defaults.string(forKey: Keys.valhallaEndpointURLString) ?? ""
     }
 }

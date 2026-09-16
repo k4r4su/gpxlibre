@@ -58,12 +58,13 @@ enum DetourRoutingService {
     static func requestRoute(
         from origin: CLLocationCoordinate2D,
         candidates: [CLLocationCoordinate2D],
-        profile: DetourProfile
+        profile: DetourProfile,
+        valhalla: ValhallaConfiguration? = nil
     ) async throws -> DetourRoute {
         var lastError: Error?
         for candidate in candidates {
             do {
-                let coordinates = try await route(from: origin, to: candidate, profile: profile)
+                let coordinates = try await route(from: origin, to: candidate, profile: profile, valhalla: valhalla)
                 return DetourRoute(coordinates: coordinates, mode: .routed(profile), targetCoordinate: candidate, startedAt: Date())
             } catch {
                 lastError = error
@@ -76,11 +77,22 @@ enum DetourRoutingService {
     /// Point-à-point simple (PAS de recherche multi-candidats comme `requestRoute` ci-dessus) —
     /// réutilisé par RideSessionManager.startGoTo pour le profil hors-route d'Aller à (spec
     /// "offroad-routing-preference", it13), donc internal plutôt que private désormais.
+    ///
+    /// `valhalla` (spec "valhalla-client-toggle", it19) : `nil` tant que le toggle Réglages est
+    /// désactivé (défaut) — comportement OSRM inchangé à l'identique. Non-nil : tente Valhalla
+    /// EN PREMIER, puis retombe automatiquement sur OSRM en cas d'échec (réseau, auth, serveur
+    /// down) — désactiver le toggle plus tard revient donc instantanément et sans reste à ce
+    /// même comportement OSRM, jamais de guidage cassé par un serveur Valhalla indisponible.
     static func route(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
-        profile: DetourProfile
+        profile: DetourProfile,
+        valhalla: ValhallaConfiguration? = nil
     ) async throws -> [CLLocationCoordinate2D] {
+        if let valhalla, let coordinates = try? await ValhallaRoutingService.route(from: from, to: to, profile: profile, configuration: valhalla) {
+            return coordinates
+        }
+
         let urlString = "\(RideConstants.osrmPublicBaseURL)/route/v1/\(profile.osrmProfile)/"
             + "\(from.longitude),\(from.latitude);\(to.longitude),\(to.latitude)"
             + "?overview=full&geometries=geojson"

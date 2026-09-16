@@ -877,8 +877,25 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isBlockedBannerVisible = false
     }
 
-    /// Lance un contournement en ligne (OSRM public) vers un point de la trace situé
-    /// 500 m–2 km plus loin. La trace originale reste affichée et intacte.
+    /// Spec "valhalla-client-toggle" (it19) : `nil` tant que le toggle Réglages est désactivé
+    /// (défaut) — `DetourRoutingService` retombe alors exactement sur son comportement OSRM
+    /// historique. Calculé à la demande (jamais mis en cache) : reflète toujours l'état ACTUEL
+    /// du toggle/des identifiants, y compris si l'utilisateur les change en cours de Ride.
+    /// Lecture Keychain directe (pas de store injecté, même patron que `blockageLog` ci-dessus :
+    /// petit accès de persistance privé, non testé via ce chemin — voir ValhallaKeychainStore/
+    /// ValhallaRoutingServiceTests pour la couverture directe).
+    private var currentValhallaConfiguration: ValhallaConfiguration? {
+        guard settings.valhallaEnabled, !settings.valhallaEndpointURLString.isEmpty else { return nil }
+        return ValhallaConfiguration(
+            endpointURLString: settings.valhallaEndpointURLString,
+            username: ValhallaKeychainStore.username(),
+            password: ValhallaKeychainStore.password()
+        )
+    }
+
+    /// Lance un contournement en ligne (OSRM public, ou Valhalla si activé — voir
+    /// `currentValhallaConfiguration`) vers un point de la trace situé 500 m–2 km plus loin.
+    /// La trace originale reste affichée et intacte.
     func requestDetour(profile: DetourProfile) {
         guard let track, let location = currentLocation, !trackCumulativeDistances.isEmpty else { return }
         detourTask?.cancel()
@@ -909,7 +926,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         detourTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await DetourRoutingService.requestRoute(from: location.coordinate, candidates: candidates, profile: profile)
+                let result = try await DetourRoutingService.requestRoute(from: location.coordinate, candidates: candidates, profile: profile, valhalla: currentValhallaConfiguration)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.detourRoute = result
@@ -1006,7 +1023,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         resumeTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await DetourRoutingService.requestRoute(from: origin, candidates: [pinCoordinate], profile: .route)
+                let result = try await DetourRoutingService.requestRoute(from: origin, candidates: [pinCoordinate], profile: .route, valhalla: currentValhallaConfiguration)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     guard var guidance = self.resumeGuidance, guidance.pinCoordinate.latitude == pinCoordinate.latitude, guidance.pinCoordinate.longitude == pinCoordinate.longitude else { return }
@@ -1109,7 +1126,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             guard let self else { return }
             do {
                 let coordinates = try await Self.resolvedGoToCoordinates(
-                    from: origin, to: destination, label: label, profile: profile, networkMonitor: self.networkMonitor
+                    from: origin, to: destination, label: label, profile: profile, networkMonitor: self.networkMonitor,
+                    valhalla: self.currentValhallaConfiguration
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
@@ -1136,11 +1154,12 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         to destination: CLLocationCoordinate2D,
         label: String,
         profile: GoToProfile,
-        networkMonitor: NetworkMonitor
+        networkMonitor: NetworkMonitor,
+        valhalla: ValhallaConfiguration?
     ) async throws -> [CLLocationCoordinate2D] {
         switch profile {
         case .offroad:
-            return try await DetourRoutingService.route(from: origin, to: destination, profile: .offroad)
+            return try await DetourRoutingService.route(from: origin, to: destination, profile: .offroad, valhalla: valhalla)
         case .route:
             let route = try await NavRoutingService.route(from: origin, to: destination, destinationLabel: label, networkMonitor: networkMonitor)
             return route.coordinates
@@ -1154,7 +1173,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 // loin de ce point — "route rapide d'approche → pistes dès que possible".
                 let residual = RoadbookAnalyzer.distanceMeters(snappedEnd, destination)
                 if residual > RideConstants.detourRejoinClearRadiusMeters {
-                    let offroadTail = try await DetourRoutingService.route(from: snappedEnd, to: destination, profile: .offroad)
+                    let offroadTail = try await DetourRoutingService.route(from: snappedEnd, to: destination, profile: .offroad, valhalla: valhalla)
                     coordinates.append(contentsOf: offroadTail.dropFirst())
                 }
             }

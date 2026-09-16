@@ -127,6 +127,31 @@ par `.environment(...)` (voir `slopeWarningsEnabled`/`slopeWarningThresholdPerce
 `EnvironmentValues`), même contrainte `MapProvider` (init à signature fixe) que le marqueur
 replay debug ci-dessous.
 
+## Routage Valhalla optionnel (spec "valhalla-client-toggle", it19)
+
+Backend de routage ALTERNATIF à OSRM, désactivé par défaut (`RideSettingsStore.valhallaEnabled`) —
+endpoint (non sensible, UserDefaults) + identifiants Basic Auth (Keychain,
+`ValhallaKeychainStore`, username ET password en champs libres, aucune valeur codée en dur)
+configurables dans Réglages > Avancé > "Routage Valhalla" (`ValhallaSettingsView`, bouton
+"Tester la connexion" → `/status`).
+
+Portée délibérément limitée à `DetourRoutingService.route(...)` (repli automatique vers OSRM en
+cas d'échec Valhalla — réseau/auth/serveur down — jamais de guidage cassé), donc :
+- **Concerné** : contournement "Chemin bloqué" (`requestDetour`/`requestDirectDetour`), reprise
+  hors-trace (`updateAutoRecompute`/`requestResume`), profil `.offroad` d'"Aller à" (Mode Nav).
+- **PAS concerné** : profils `.route`/`.mixed` d'"Aller à" (`NavRoutingService`) — ceux-ci ont
+  besoin des manœuvres turn-by-turn détaillées (`NavManeuver`), dont le vocabulaire Valhalla
+  diffère trop d'OSRM pour être mappé fidèlement dans le périmètre de cette itération (voir
+  TODO.md pour une éventuelle itération future dédiée).
+
+`RideSessionManager.currentValhallaConfiguration` (calculée à la demande, jamais mise en
+cache — lit `RideSettingsStore` + `ValhallaKeychainStore` à chaque fois) vaut `nil` tant que le
+toggle est désactivé ou l'endpoint vide : dans ce cas, `DetourRoutingService` se comporte À
+L'IDENTIQUE d'avant cette feature — désactiver le toggle revient donc instantanément et sans
+reste au comportement OSRM historique, aucune donnée/état ne dépend de Valhalla ailleurs dans
+l'app. `ValhallaRoutingService.decodePolyline6` décode au facteur de précision 6 (1e6) — PAS 5
+(Google Maps/OSRM standard), format propre à Valhalla (`trip.legs[].shape`).
+
 ## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
 
 Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne
