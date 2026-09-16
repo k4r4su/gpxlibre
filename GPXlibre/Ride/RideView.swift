@@ -19,6 +19,11 @@ struct RideView: View {
     @State private var showEndRideSheet = false
     @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
+    /// Spec "ride-empty-state-shows-map" (it19) : dismissible mais volontairement PAS persisté
+    /// (UserDefaults/etc.) — redevient `false` (bandeau visible) à chaque retour sur l'onglet
+    /// Ride depuis un autre onglet (voir `.onChange(of: navigationState.selectedTab)` plus bas),
+    /// demande explicite du propriétaire plutôt qu'un "masqué pour de bon".
+    @State private var isNoTrackBannerDismissed = false
     @State private var is2DNorthUp = false
     /// Spec "replay-marker-heading-x2" (it17, Bloc 4) : force cap-en-haut pendant un replay
     /// debug si le toggle du menu est activé — NE modifie JAMAIS `is2DNorthUp` lui-même (le
@@ -70,13 +75,21 @@ struct RideView: View {
         Group {
             switch modeStore.mode {
             case .trace:
+                // Fix "ride-empty-state-shows-map" (it19, retour terrain : "si pas de trace
+                // sélectionnée ça n'affiche rien à part 'aucune trace sélectionnée', on
+                // pourrait pas afficher la carte quand même ?") — `rideContent(track: nil)`
+                // fonctionne déjà (c'est exactement ce que le Mode Nav, masqué de l'UI depuis
+                // it12, utilise) : plus besoin d'un `emptyState` séparé qui masquait toute la
+                // carte. Le bandeau "Aucune trace sélectionnée" (dismissible, voir
+                // `noActiveTrackBannerLayer`) remplace ce même message, posé PAR-DESSUS la
+                // carte au lieu de la remplacer.
                 if let track = library.activeTrack {
                     // Sens A→B/B→A + départ personnalisé (spec "per-track-settings") — appliqués
                     // UNE fois ici, jamais écrits dans le fichier GPX source ; tout le reste
                     // (roadbook, projection, stats, rendu) continue de lire `points` normalement.
                     rideContent(track: track.reordered(using: trackRideSettings.settings(for: track.id)))
                 } else {
-                    emptyState
+                    rideContent(track: nil)
                 }
             case .nav:
                 rideContent(track: nil)
@@ -565,6 +578,10 @@ struct RideView: View {
             bottomControlsColumn
             speedoBadgeLayer
 
+            if track == nil {
+                noActiveTrackBannerLayer
+            }
+
             FlashOverlayView(trigger: session.flashSequenceToken, flashCount: settings.flashCount)
         }
         .confirmationDialog("Chemin bloqué", isPresented: $showDetourConfirmation, titleVisibility: .visible) {
@@ -628,6 +645,10 @@ struct RideView: View {
                 // switchMode (pas start) : un simple retour d'onglet ne doit jamais réinitialiser
                 // le zoom (spec "camera-mode-stability", Bloc 5 — "pas de fit-bounds non désiré").
                 session.switchMode(track: modeStore.mode == .trace ? track : nil)
+                // Spec "ride-empty-state-shows-map" (it19) : le bandeau "Aucune trace
+                // sélectionnée" doit réapparaître à CHAQUE retour sur Ride, jamais rester
+                // masqué pour de bon après un dismiss — demande explicite du propriétaire.
+                isNoTrackBannerDismissed = false
             } else {
                 session.stop()
             }
@@ -813,27 +834,49 @@ struct RideView: View {
         session.requestResume(pinCoordinate: pin, pinCumulativeDistanceMeters: projection.cumulativeDistanceMeters)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            // Nav masqué (spec "hide-nav-tab", it12) — voir topStackLayer.
-            Image(systemName: "location.slash")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("Aucune trace sélectionnée")
-                .font(.title2.bold())
-            Text("Choisis une trace dans la Bibliothèque, puis \"Utiliser pour le Ride\".")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Button {
-                navigationState.selectedTab = .library
-            } label: {
-                Label("Aller à la Bibliothèque", systemImage: "map.fill")
+    /// Spec "ride-empty-state-shows-map" (it19, retour terrain : "afficher la carte quand même
+    /// mais juste pas la trace, avec un bandeau en haut") — remplace l'ancien `emptyState` plein
+    /// écran. Bandeau tout en haut, dismissible (bouton "x"), mais réapparaît à CHAQUE retour
+    /// sur l'onglet Ride (voir `.onChange(of: navigationState.selectedTab)`) : jamais masqué
+    /// "pour de bon". Tap sur le corps du bandeau = raccourci vers la Bibliothèque (reprend le
+    /// CTA "Aller à la Bibliothèque" de l'ancien `emptyState`, sans nouveau `Button` imbriqué —
+    /// même patron que le fix "biblio-checkmark-not-activating" : un seul vrai `Button` (le "x"
+    /// de fermeture) + `.onTapGesture` sur le reste, jamais deux `Button` empilés.
+    private var noActiveTrackBannerLayer: some View {
+        VStack {
+            if !isNoTrackBannerDismissed {
+                HStack(spacing: 10) {
+                    Image(systemName: "location.slash")
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text("Aucune trace sélectionnée")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button {
+                        isNoTrackBannerDismissed = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .accessibilityLabel("Masquer ce message")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.black.opacity(0.55))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    navigationState.selectedTab = .library
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Toucher pour aller à la Bibliothèque")
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .buttonStyle(.borderedProminent)
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        .animation(.easeInOut(duration: 0.2), value: isNoTrackBannerDismissed)
     }
 }
