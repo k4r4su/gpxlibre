@@ -245,25 +245,14 @@ struct RideView: View {
             // défaut (RideModeStore.mode), case vide à dessein là où vivait le Picker. Code
             // Nav (RideMode.nav, RideModeSegmentedControl, tout le branchement .nav ci-dessous)
             // intact : sera relancé dans une itération future, après la trace door-to-door.
-            HStack {
-                Spacer()
-                Spacer()
-            }
-            .overlay(alignment: .trailing) {
-                Button {
-                    showDestinationSearch = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(.black.opacity(0.35))
-                        .clipShape(Circle())
-                }
-                .longPressTooltip("Aller à une adresse ou un lieu")
-            }
-            .padding(.top, 8)
-            .padding(.horizontal, 12)
+            //
+            // Fix "search-as-tab" (it19, retour terrain : "la loupe passe par-dessus le
+            // bandeau/les contrôles Ride") — le bouton loupe flottant qui vivait ici (toujours
+            // visible, donc en collision systématique avec tout overlay superposé : bandeau
+            // "Aucune trace sélectionnée", bannières...) est retiré : la recherche de
+            // destination est désormais un onglet à part entière (voir DestinationSearchTabView/
+            // RootView, entre Ride et Biblio), plus de bouton flottant à faire cohabiter avec
+            // le reste de la carte.
 
             HStack {
                 OSMAttributionView(mapSource: activeMapSource)

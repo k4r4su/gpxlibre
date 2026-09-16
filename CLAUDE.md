@@ -102,7 +102,19 @@ GPXlibre/
                    RideModeSegmentedControl n'est plus appelé depuis it12 (spec
                    "hide-nav-tab", Trace seul visible/actif) — fichier intact, tout le code
                    Nav reste en place tel quel, ne PAS le supprimer : sera relancé dans une
-                   itération future, après la trace door-to-door.
+                   itération future, après la trace door-to-door. DestinationSearchTabView
+                   (it19, spec "search-as-tab", retour terrain : "la loupe passe par-dessus le
+                   bandeau/les contrôles Ride") — héberge `NavDestinationSearchView` (déjà
+                   existant, ex-sheet) comme ONGLET à part entière du TabView racine (voir
+                   RootView.swift, ordre Ride/Aller à/Biblio/Réglages demandé explicitement),
+                   plus de bouton loupe flottant sur la carte Ride (qui collisionnait avec tout
+                   overlay superposé). Sélectionner un résultat lance le guidage
+                   (`session.startGoTo`/`startNav`, logique inchangée) PUIS bascule
+                   automatiquement `AppNavigationState.selectedTab = .ride` pour le montrer —
+                   les `dismiss()` internes de `NavDestinationSearchView` (pensés pour la sheet
+                   d'origine) deviennent des no-op inoffensifs hors contexte de présentation
+                   modale, comportement standard de `\.dismiss`, rien à corriger côté vue
+                   réutilisée. `AppTab.search` inséré entre `.ride` et `.library`.
   Offline/        Téléchargement de tuiles raster par région, cache, précalcul de taille ;
                    VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
                    régionaux (import/téléchargement, un seul actif à la fois). Voir section
