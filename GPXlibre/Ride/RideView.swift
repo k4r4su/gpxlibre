@@ -330,14 +330,24 @@ struct RideView: View {
                             // Spec "2d-only" (it11) : plus de notion de 3D à afficher (la
                             // carte a toujours été plate depuis ce fix) — l'icône reflète
                             // l'orientation réelle du toggle, cap-en-haut vs nord-en-haut.
-                            Image(systemName: is2DNorthUp ? "location.north.circle.fill" : "location.north.line.fill")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                                .frame(width: 40, height: 40)
-                                .background(.black.opacity(0.6))
-                                .clipShape(Circle())
+                            // Légende ajoutée (spec "icon-text-consistency", it19, angle
+                            // complémentaire "boutons icône seule" — proposition validée par le
+                            // propriétaire) : même patron icône + légende courte que les autres
+                            // boutons de la colonne gantée (Pause/Reprendre, Me recentrer) —
+                            // nomme l'ACTION du tap (la destination), pas l'état courant.
+                            VStack(spacing: 2) {
+                                Image(systemName: is2DNorthUp ? "location.north.circle.fill" : "location.north.line.fill")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text(is2DNorthUp ? "Cap" : "Nord")
+                                    .font(.system(size: 9, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: RideConstants.glovedTapTargetSize, height: RideConstants.glovedTapTargetSize)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
                         .accessibilityLabel(is2DNorthUp ? "Revenir à la vue cap-en-haut" : "Vue nord-en-haut")
+                        .longPressTooltip(is2DNorthUp ? "Bascule en cap-en-haut : la carte tourne avec ta direction" : "Bascule en nord-en-haut : la carte reste fixe")
 
                         if let limit = session.currentSpeedLimitKmh {
                             SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)
