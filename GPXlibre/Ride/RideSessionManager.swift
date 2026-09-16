@@ -708,17 +708,20 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         // synchronisation d'index à maintenir ici.
     }
 
-    /// Point de reprise (spec Bloc 2) : le premier point de trace atteignable plus loin —
-    /// même mécanique que `requestDirectDetour()` (detourAheadMinMeters), pas un nouvel algo.
+    /// Point de reprise (spec "rejoin-nearest-by-air", it19, remplace l'ancien "premier point
+    /// atteignable plus loin" — voir TrackProjector.nearestPointByAirDistance pour le détail du
+    /// bug terrain corrigé) : le point de la trace le plus proche à vol d'oiseau, quel que soit
+    /// son ordre chronologique. Affichage informatif uniquement ici (chip hors-trace) — le
+    /// routage réel se fait via `updateAutoRecompute`/`requestResume`, mécanisme inchangé.
     private func updateOffTrackResumeTarget(from location: CLLocation, projection: TrackProjector.Projection) {
         guard let track else { return }
-        guard let target = TrackProjector.coordinate(
+        guard let nearest = TrackProjector.nearestPointByAirDistance(
+            to: location.coordinate,
             in: track.points,
-            cumulativeDistances: trackCumulativeDistances,
-            atCumulativeDistance: projection.cumulativeDistanceMeters + RideConstants.detourAheadMinMeters
+            cumulativeDistances: trackCumulativeDistances
         ) else { return }
-        offTrackResumeCoordinate = target
-        offTrackResumeDistanceMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, target)
+        offTrackResumeCoordinate = nearest.coordinate
+        offTrackResumeDistanceMeters = RoadbookAnalyzer.distanceMeters(location.coordinate, nearest.coordinate)
     }
 
     private func roadbookEventCumulativeDistanceMeters(_ event: Checkpoint) -> Double {
@@ -787,9 +790,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// divergence soutenue > RECOMPUTE_DIVERGENCE_M pendant > RECOMPUTE_DURATION_S déclenche le
     /// MÊME guidage que "Reprendre la trace ici" (Bloc 3, it10), auto-confirmé — voir
     /// `ResumeGuidance.isAutomatic`. Jamais déclenché si un guidage de reprise (manuel ou
-    /// automatique) existe déjà, ni pendant un guidage arrêté. Cible : la prochaine jonction
-    /// atteignable plus loin sur la trace, même mécanique que `updateOffTrackResumeTarget`/
-    /// `requestDirectDetour` (detourAheadMinMeters), pas un nouvel algorithme de recherche.
+    /// automatique) existe déjà, ni pendant un guidage arrêté. Cible (spec "rejoin-nearest-by-
+    /// air", it19) : le point de la trace le plus proche à VOL D'OISEAU parmi TOUS ses points,
+    /// pas seulement le point suivant dans l'ordre chronologique — bug terrain corrigé où une
+    /// trace en boucle repassant près de la position actuelle faisait router vers un point à
+    /// 15 km par la route au lieu d'un autre, plus loin dans l'ordre de la trace, à 2 km à vol
+    /// d'oiseau. Le routage lui-même reste inchangé : `requestResume` route vers la cible
+    /// choisie via le réseau routier existant (DetourRoutingService), jamais à vol d'oiseau.
     private func updateAutoRecompute(from location: CLLocation, projection: TrackProjector.Projection?) {
         guard resumeGuidance == nil, !isGuidanceStopped, let track, !trackCumulativeDistances.isEmpty, let projection else {
             autoRecomputeSinceDate = nil
@@ -806,9 +813,12 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         guard location.timestamp.timeIntervalSince(since) >= RideConstants.recomputeDivergenceDurationSeconds else { return }
         autoRecomputeSinceDate = nil
 
-        let targetCumulative = projection.cumulativeDistanceMeters + RideConstants.detourAheadMinMeters
-        guard let target = TrackProjector.coordinate(in: track.points, cumulativeDistances: trackCumulativeDistances, atCumulativeDistance: targetCumulative) else { return }
-        requestResume(pinCoordinate: target, pinCumulativeDistanceMeters: targetCumulative, isAutomatic: true)
+        guard let nearest = TrackProjector.nearestPointByAirDistance(
+            to: location.coordinate,
+            in: track.points,
+            cumulativeDistances: trackCumulativeDistances
+        ) else { return }
+        requestResume(pinCoordinate: nearest.coordinate, pinCumulativeDistanceMeters: nearest.cumulativeDistanceMeters, isAutomatic: true)
         autoRecomputeToastToken = UUID()
     }
 

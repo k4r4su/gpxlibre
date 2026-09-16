@@ -73,6 +73,34 @@ enum TrackProjector {
         return candidates
     }
 
+    /// Point de reprise de la trace le plus proche à VOL D'OISEAU de `coordinate` — parcourt
+    /// TOUS les points de la trace, sans se limiter au "point suivant" dans l'ordre
+    /// chronologique (spec "rejoin-nearest-by-air", it19, bug terrain : sortie de trace où le
+    /// point suivant logique était à 15 km par la route alors qu'un autre point de la trace,
+    /// plus loin dans son ordre — typiquement une boucle qui repasse près de la position
+    /// actuelle — n'était qu'à 2 km à vol d'oiseau). Le routage vers le point choisi reste
+    /// EXACTEMENT le mécanisme existant (réseau routier via DetourRoutingService, voir
+    /// `RideSessionManager.requestResume`) — cette fonction ne fait QUE choisir la cible, elle
+    /// ne route jamais elle-même.
+    static func nearestPointByAirDistance(
+        to coordinate: CLLocationCoordinate2D,
+        in points: [GPXPoint],
+        cumulativeDistances: [Double]
+    ) -> (coordinate: CLLocationCoordinate2D, cumulativeDistanceMeters: Double)? {
+        guard !points.isEmpty, points.count == cumulativeDistances.count else { return nil }
+
+        var bestIndex = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (index, point) in points.enumerated() {
+            let distance = RoadbookAnalyzer.distanceMeters(coordinate, point.coordinate)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+        return (points[bestIndex].coordinate, cumulativeDistances[bestIndex])
+    }
+
     static func coordinate(
         in points: [GPXPoint],
         cumulativeDistances: [Double],

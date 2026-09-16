@@ -80,9 +80,15 @@ pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
 - **Automatique** (`isAutomatic = true`) : `RideSessionManager.updateAutoRecompute`, appelé à
   CHAQUE fix en Mode Trace, déclenche `requestResume(..., isAutomatic: true)` dès que la
   divergence à la trace dépasse `RideConstants.recomputeDivergenceThresholdMeters` (100 m) en
-  continu pendant `recomputeDivergenceDurationSeconds` (2 s) — cible : la prochaine jonction
-  atteignable plus loin sur la trace (même mécanique que `updateOffTrackResumeTarget`/
-  `requestDirectDetour`, `detourAheadMinMeters`). Démarre DIRECTEMENT en phase `.active`
+  continu pendant `recomputeDivergenceDurationSeconds` (2 s) — cible (spec "rejoin-nearest-by-
+  air", it19, remplace l'ancien "point suivant + `detourAheadMinMeters`") :
+  `TrackProjector.nearestPointByAirDistance`, le point de la trace le plus proche à VOL D'OISEAU
+  parmi TOUS ses points, pas seulement le suivant dans l'ordre chronologique — bug terrain
+  corrigé où une trace en boucle faisait cibler un point à 15 km par la route alors qu'un autre
+  point, plus loin dans l'ordre de la trace, n'était qu'à 2 km à vol d'oiseau.
+  `updateOffTrackResumeTarget` (affichage informatif du chip hors-trace, voir plus bas) utilise
+  la MÊME fonction, pour rester cohérent avec la cible réellement routée. Démarre DIRECTEMENT en
+  phase `.active`
   (auto-confirmé, jamais de preview à valider) — jamais déclenché si un guidage de reprise
   (manuel ou automatique) existe déjà (`resumeGuidance == nil` gardé en tête de fonction).
   Présentation DISTINCTE : pas de bannière du haut (`RideView.activeBanner` filtre

@@ -140,4 +140,41 @@ final class AutoRecomputeTests: XCTestCase {
 
         XCTAssertNotEqual(session.resumeGuidanceLiveDistanceMeters, firstDistance)
     }
+
+    /// Spec "rejoin-nearest-by-air" (it19, bug terrain) : trace en boucle où le retour repasse
+    /// près du départ. Vérifie que le recalcul automatique délègue bien à
+    /// `TrackProjector.nearestPointByAirDistance` (voir TrackProjectorNearestPointTests pour la
+    /// couverture géométrique du bug exact — point suivant chronologique loin, autre point de
+    /// la trace proche à vol d'oiseau) plutôt qu'à l'ancien calcul "point suivant + 500 m".
+    func testAutoRecomputeTargetsNearestPointByAirAcrossTheWholeTrack() {
+        let suite = "AutoRecomputeTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let session = makeSession(defaultsSuiteName: suite)
+        let track = makeTrack()
+        session.start(track: track)
+        let t0 = Date()
+
+        let riderPosition = offsetEast(track.points[10].coordinate, meters: 150)
+        session.handle(location: location(riderPosition, at: t0))
+        session.handle(location: location(riderPosition, at: t0.addingTimeInterval(2.5)))
+
+        XCTAssertNotNil(session.resumeGuidance)
+        guard let pin = session.resumeGuidance?.pinCoordinate else {
+            return XCTFail("le recalcul automatique doit avoir posé un pin")
+        }
+
+        let cumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+        guard let expected = TrackProjector.nearestPointByAirDistance(
+            to: riderPosition, in: track.points, cumulativeDistances: cumulativeDistances
+        ) else {
+            return XCTFail("nearestPointByAirDistance doit trouver un candidat sur une trace non vide")
+        }
+
+        XCTAssertEqual(pin.latitude, expected.coordinate.latitude, accuracy: 0.00001)
+        XCTAssertEqual(pin.longitude, expected.coordinate.longitude, accuracy: 0.00001)
+        guard let pinCumulativeDistanceMeters = session.resumeGuidance?.pinCumulativeDistanceMeters else {
+            return XCTFail("le pin doit porter sa distance cumulée sur la trace")
+        }
+        XCTAssertEqual(pinCumulativeDistanceMeters, expected.cumulativeDistanceMeters, accuracy: 0.01)
+    }
 }
