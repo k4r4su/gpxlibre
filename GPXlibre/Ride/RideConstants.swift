@@ -171,7 +171,24 @@ enum RideConstants {
 
     // MARK: - Localisation Ride
 
-    static let rideDistanceFilterMeters: Double = 5
+    /// Fix "speed-freeze-low-speed" (it19, bug terrain P0) : `manager.distanceFilter` posé à
+    /// 5 m (it1) empêchait CoreLocation de délivrer TOUT nouveau fix tant que la position
+    /// n'avait pas bougé de 5 m depuis le dernier fix rapporté — en dessous d'~21 km/h (temps
+    /// pour parcourir 5 m > 1 s) les fixs s'espacent, et à l'arrêt complet (déplacement < 5 m
+    /// indéfiniment) ils s'arrêtent purement et simplement : `rawSpeedKmh`/`smoothedSpeedKmh`
+    /// restent figés à leur dernière valeur, contradictoire avec le spec "vraie vitesse à 1 Hz
+    /// sans lissage" (it12) qui suppose des fixs continus. Remplacé par
+    /// `kCLLocationDistanceFilterNone` dans `init()` — fixs continus à la cadence GPS native
+    /// quelle que soit la vitesse, y compris à l'arrêt (la vitesse décroît alors normalement
+    /// jusqu'à 0 au lieu de rester bloquée).
+    ///
+    /// Contrepartie assumée : à l'arrêt strict, le bruit GPS (quelques mètres de gigue autour
+    /// d'une position fixe) peut désormais générer des fixs consécutifs légèrement décalés —
+    /// sans garde, `totalDistanceTraveledMeters` (et donc `averageSpeedKmh`) dériverait
+    /// lentement à l'arrêt. Voir `distanceAccumulationMinSpeedKmh` ci-dessous, garde-fou dédié
+    /// à CETTE seule accumulation (n'affecte jamais `rawSpeedKmh`/`smoothedSpeedKmh`, qui
+    /// doivent rester la vitesse réelle sans filtrage, spec it12 inchangée).
+    static let distanceAccumulationMinSpeedKmh: Double = 1
 
     // MARK: - Chemin bloqué / détour temporaire (la trace originale n'est JAMAIS modifiée)
 

@@ -152,6 +152,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     private let manager = CLLocationManager()
+    /// Expose uniquement `distanceFilter` (pas `manager` en entier) pour la testabilité —
+    /// régression "speed-freeze-low-speed" (it19) : un distanceFilter > 0 affamait les fixs
+    /// GPS sous ~21 km/h et à l'arrêt complet, voir RideConstants.distanceAccumulationMinSpeedKmh.
+    var configuredDistanceFilterMeters: CLLocationDistance { manager.distanceFilter }
     private let settings: RideSettingsStore
     private let networkMonitor: NetworkMonitor
     private let modeStore: RideModeStore
@@ -181,7 +185,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var detourTask: Task<Void, Never>?
 
     private var rideStartDate: Date?
-    private var totalDistanceTraveledMeters: Double = 0
+    /// `private(set)` plutôt que `private` uniquement pour la testabilité (régression "speed-
+    /// freeze-low-speed", it19 : voir RideConstants.distanceAccumulationMinSpeedKmh) — vérifie
+    /// que la gigue GPS à l'arrêt n'incrémente pas cette valeur, sans exposer d'écriture externe.
+    private(set) var totalDistanceTraveledMeters: Double = 0
     private var lastLocationForDistance: CLLocation?
 
     var lastManualGestureDate: Date?
@@ -240,7 +247,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.distanceFilter = RideConstants.rideDistanceFilterMeters
+        // Fix "speed-freeze-low-speed" (it19) : voir RideConstants.distanceAccumulationMinSpeedKmh
+        // pour le détail — un distanceFilter > 0 affamait les fixs sous ~21 km/h et à l'arrêt.
+        manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .automotiveNavigation
     }
 
@@ -504,7 +513,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
 
         maxSpeedKmh = max(maxSpeedKmh, speedMps * 3.6)
-        if let last = lastLocationForDistance {
+        // Garde-fou "speed-freeze-low-speed" (it19) : fixs désormais continus même à l'arrêt
+        // (voir distanceFilter ci-dessus) — sans ce seuil, la gigue GPS à l'arrêt strict
+        // dériverait lentement totalDistanceTraveledMeters/averageSpeedKmh. N'affecte jamais
+        // rawSpeedKmh/smoothedSpeedKmh (spec "vraie vitesse à 1 Hz sans lissage", it12).
+        if let last = lastLocationForDistance, speedMps * 3.6 > RideConstants.distanceAccumulationMinSpeedKmh {
             totalDistanceTraveledMeters += location.distance(from: last)
         }
         lastLocationForDistance = location
