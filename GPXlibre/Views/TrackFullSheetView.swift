@@ -10,9 +10,10 @@ struct TrackFullSheetView: View {
     let track: GPXTrack
     let isFullyOffline: Bool
     let isActive: Bool
-    /// Spec "biblio-share-export" (it19) : URL du fichier `.gpx` tel que stocké depuis l'import
-    /// (voir `LibraryStore.fileURL(for:)`) — passée par l'appelant plutôt que recalculée ici,
-    /// cette vue n'ayant pas accès à `LibraryStore` autrement.
+    /// Spec "biblio-share-export"/"biblio-share-export-filename" (it19) : copie temporaire
+    /// nommée d'après le titre de la trace (voir `LibraryStore.exportURL(for:)`), contenu
+    /// identique octet pour octet au fichier stocké — passée par l'appelant plutôt que
+    /// recalculée ici, cette vue n'ayant pas accès à `LibraryStore` autrement.
     let shareURL: URL
     let onDelete: () -> Void
     let onRename: () -> Void

@@ -136,23 +136,33 @@ struct LibraryView: View {
                 // reste intact mais n'a plus de point d'entrée depuis cette liste (voir
                 // TODO.md) — "Utiliser pour le Ride" reste accessible via le check-mark de
                 // ligne et via TrackSettingsView, "voir la trace" via l'aperçu dans Paramètres.
-                Button {
-                    trackForFullSheet = track
-                } label: {
-                    TrackRow(
-                        track: track,
-                        isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
-                        isActive: library.activeTrackID == track.id,
-                        onToggleActive: {
-                            if library.activeTrackID == track.id {
-                                library.setDisplayed(track.id, false)
-                            } else {
-                                library.setActive(track.id)
-                            }
+                //
+                // Fix "biblio-checkmark-not-activating" (it19, bug terrain : "le check la
+                // première fois ne l'active pas réellement, il faut ouvrir la fiche pour que ça
+                // s'active") — root cause : un `Button` (le check-mark, dans TrackRow) imbriqué
+                // DANS un autre `Button` (toute la ligne, ci-dessous avant ce fix) est un
+                // anti-pattern SwiftUI connu dans une `List` : le tap sur le bouton interne est
+                // parfois "avalé" par le geste du bouton parent, qui ouvre la fiche au lieu
+                // d'activer. Remplacé par UN SEUL vrai bouton (le check-mark, dans TrackRow) +
+                // `.onTapGesture` sur le reste de la ligne : un `Button` enfant intercepte
+                // toujours son propre tap avant qu'un `.onTapGesture` du parent ne s'applique,
+                // contrairement à deux `Button` imbriqués — plus d'ambiguïté possible.
+                TrackRow(
+                    track: track,
+                    isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
+                    isActive: library.activeTrackID == track.id,
+                    onToggleActive: {
+                        if library.activeTrackID == track.id {
+                            library.setDisplayed(track.id, false)
+                        } else {
+                            library.setActive(track.id)
                         }
-                    )
+                    }
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    trackForFullSheet = track
                 }
-                .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         library.delete(track)
@@ -187,7 +197,7 @@ struct LibraryView: View {
                 track: track,
                 isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
                 isActive: library.activeTrackID == track.id,
-                shareURL: library.fileURL(for: track),
+                shareURL: library.exportURL(for: track) ?? library.fileURL(for: track),
                 onDelete: {
                     library.delete(track)
                     trackForFullSheet = nil

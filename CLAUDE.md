@@ -111,7 +111,11 @@ GPXlibre/
                    le bouton "Point" (POI rapide Essence/Eau/Bivouac) a été supprimé pour de
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
-  Recording/      Enregistrement GPS pendant le Ride + export GPX
+  Recording/      Enregistrement GPS pendant le Ride + export GPX ; RecordingConstants (it19,
+                   spec "recording-density-setting") : seuils intervalle/distance PAR PRESET
+                   (RecordingDensityPreset : précis/léger/très léger, Réglages > Enregistrement
+                   de la sortie) plutôt que codés en dur — `précis` reproduit exactement l'ancien
+                   comportement (5 s/15 m)
   Settings/       RideSettingsStore (réglages globaux persistés — SAUF exception explicite,
                    voir "Réglages stagés" plus bas), SettingsView, ValhallaSettingsView (it19 :
                    Réglages > Avancé > "Routage Valhalla", voir Ride/CLAUDE.md pour le détail),
@@ -125,11 +129,19 @@ GPXlibre/
                    DebugReplaySection (#if DEBUG, dans Réglages > Avancé).
   Views/          LibraryView (Biblio — tap sur une ligne ouvre TrackFullSheetView depuis
                    it13, spec "biblio-track-fullsheet" : fiche nom/stats + Partager/Exporter
-                   (it19, spec "biblio-share-export" : ShareLink sur `LibraryStore.fileURL
-                   (for:)`, le fichier `.gpx` stocké tel quel depuis l'import — jamais
-                   ré-exporté, garantit la fidélité au format ; le partage système iOS propose
-                   déjà "Enregistrer dans Fichiers" pour toute URL de fichier, donc un seul
-                   bouton couvre partage ET export)/Supprimer/Renommer/Paramètres ; PLUS
+                   (it19, spec "biblio-share-export" : ShareLink sur `LibraryStore.
+                   exportURL(for:)`, spec "biblio-share-export-filename" — COPIE temporaire
+                   nommée d'après le titre de la trace + date du jour `JJ.MM.AAAA`, contenu
+                   identique octet pour octet au fichier `.gpx` stocké depuis l'import ; le
+                   fichier de stockage interne lui-même (`fileURL(for:)`, nommé par UUID) n'est
+                   JAMAIS renommé — le partage système iOS propose déjà "Enregistrer dans
+                   Fichiers" pour toute URL de fichier, donc un seul bouton couvre partage ET
+                   export)/Supprimer/Renommer/Paramètres ; check-mark d'activation de ligne fix
+                   "biblio-checkmark-not-activating" (it19) : était un `Button` imbriqué DANS le
+                   `Button` de toute la ligne — anti-pattern SwiftUI en `List`, tap parfois avalé
+                   par le parent — remplacé par un seul `Button` (le check-mark) +
+                   `.onTapGesture` sur le reste de la ligne pour ouvrir la fiche, NE JAMAIS
+                   réintroduire un `Button` autour de toute la ligne ; PLUS
                    TrackDetailView, qui n'a donc plus de point
                    d'entrée UI mais reste intact, voir TODO.md), TrackDetailView,
                    TrackSettingsView (réglages par trace — sélecteur de départ personnalisé

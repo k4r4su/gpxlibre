@@ -89,6 +89,48 @@ final class LibraryStore: ObservableObject {
         tracksDirectory.appendingPathComponent(track.fileName)
     }
 
+    /// Spec "biblio-share-export-filename" (it19, retour terrain : "le nom de l'export est
+    /// random") — `fileURL(for:)` ci-dessus reste nommé par UUID (identifiant STABLE de
+    /// stockage interne, jamais montré à l'utilisateur, ne JAMAIS renommer ce fichier sur place :
+    /// `LibraryStore` s'en sert comme clé). Pour le partage/export, une COPIE temporaire — octet
+    /// pour octet, même garantie de fidélité que `fileURL(for:)` — nommée d'après le titre réel
+    /// de la trace + la date du jour, lisible dans Fichiers/le partage système. `nil` seulement
+    /// si le fichier source a disparu (ne devrait jamais arriver, invariant LibraryStore) ou si
+    /// l'écriture de la copie échoue — l'appelant retombe alors sur `fileURL(for:)`.
+    func exportURL(for track: GPXTrack) -> URL? {
+        guard let data = try? Data(contentsOf: fileURL(for: track)) else { return nil }
+
+        let sanitizedName = Self.sanitizedFileNameComponent(track.name)
+        let dateString = Self.exportDateFormatter.string(from: Date())
+        let destination = fileManager.temporaryDirectory.appendingPathComponent("\(sanitizedName)_export_\(dateString).gpx")
+
+        do {
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try data.write(to: destination)
+            return destination
+        } catch {
+            return nil
+        }
+    }
+
+    /// Remplace tout caractère invalide dans un nom de fichier (et les espaces, demande
+    /// explicite pour un nom d'export propre) par `_` — jamais un fichier vide même si le nom
+    /// de la trace ne contient QUE des caractères remplacés.
+    private static func sanitizedFileNameComponent(_ raw: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        let withoutInvalidCharacters = raw.components(separatedBy: invalidCharacters).joined(separator: "_")
+        let withoutSpaces = withoutInvalidCharacters.replacingOccurrences(of: " ", with: "_")
+        return withoutSpaces.isEmpty ? "trace" : withoutSpaces
+    }
+
+    private static let exportDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+        return formatter
+    }()
+
     /// `tracksDirectoryOverride`/`defaults` : seams de test (fix "single-source-active-track",
     /// it10) — évite que les tests unitaires ne lisent/écrivent le vrai `Documents/Tracks` ou
     /// le vrai `UserDefaults.standard` de l'app. En production, les deux paramètres restent à

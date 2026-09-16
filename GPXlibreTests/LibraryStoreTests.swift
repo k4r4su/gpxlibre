@@ -220,4 +220,45 @@ final class LibraryStoreTests: XCTestCase {
 
         XCTAssertEqual(storedContent, originalGPX, "le fichier exposé par fileURL(for:) doit être identique octet pour octet à l'original importé")
     }
+
+    /// Spec "biblio-share-export-filename" (it19, retour terrain : "le nom de l'export est
+    /// random") — le nom de fichier exposé pour le partage doit reprendre le titre de la trace
+    /// (espaces/caractères invalides remplacés) + la date du jour, jamais l'UUID de stockage
+    /// interne. Contenu toujours identique octet pour octet à l'original.
+    func testExportURLUsesSanitizedTrackNameAndTodaysDate() {
+        let store = makeStore()
+        let originalGPX = """
+        <?xml version="1.0"?>
+        <gpx><trk><name>Col / Été 2026</name><trkseg>
+        <trkpt lat="45.0" lon="5.0"></trkpt>
+        <trkpt lat="45.01" lon="5.01"></trkpt>
+        </trkseg></trk></gpx>
+        """
+        let importURL = tempDirectory.appendingPathComponent("\(UUID().uuidString).gpx")
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        try? originalGPX.write(to: importURL, atomically: true, encoding: .utf8)
+        store.importTrack(from: importURL)
+        guard let track = store.tracks.first(where: { $0.name == "Col / Été 2026" }) else {
+            return XCTFail("import doit avoir réussi")
+        }
+
+        guard let exportURL = store.exportURL(for: track) else {
+            return XCTFail("exportURL doit réussir pour une trace existante")
+        }
+        defer { try? FileManager.default.removeItem(at: exportURL) }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "dd.MM.yyyy"
+        let expectedDateString = dateFormatter.string(from: Date())
+
+        let fileName = exportURL.lastPathComponent
+        XCTAssertFalse(fileName.contains("/"), "les caractères invalides pour un nom de fichier doivent être remplacés")
+        XCTAssertFalse(fileName.contains(" "), "les espaces doivent être remplacés")
+        XCTAssertTrue(fileName.contains("Col"), "le nom de fichier doit rester reconnaissable par rapport au titre de la trace")
+        XCTAssertTrue(fileName.contains(expectedDateString), "le nom de fichier doit inclure la date du jour au format JJ.MM.AAAA")
+        XCTAssertTrue(fileName.hasSuffix(".gpx"))
+
+        let exportedContent = try? String(contentsOf: exportURL, encoding: .utf8)
+        XCTAssertEqual(exportedContent, originalGPX, "le contenu exporté doit rester identique octet pour octet à l'original")
+    }
 }
