@@ -127,6 +127,19 @@ par `.environment(...)` (voir `slopeWarningsEnabled`/`slopeWarningThresholdPerce
 `EnvironmentValues`), même contrainte `MapProvider` (init à signature fixe) que le marqueur
 replay debug ci-dessous.
 
+## Toggle orientation cap-en-haut/nord-en-haut (`leftMiddleLayer`, RideView.swift)
+
+Fix "orientation-toggle-nav-only-unreachable" (it19, retour terrain : "dans l'onglet Ride,
+toujours pas de boussole") — ce bouton (+ `SpeedLimitBadgeView`) vivait dans un bloc restreint
+à `modeStore.mode == .nav`, or le Mode Nav est MASQUÉ de l'UI depuis it12 (`RideModeSegmentedControl`
+plus appelée, voir CLAUDE.md racine section Nav/) : ce bouton n'a donc jamais été visible en
+usage réel avant ce fix. Affiché désormais quel que soit le mode — **ne JAMAIS regater un
+contrôle Ride derrière `modeStore.mode == .nav`** sans vérifier d'abord qu'il reste atteignable
+(Mode Nav n'a plus de point d'entrée UI). `SpeedLimitBadgeView` reste conditionné à
+`session.currentSpeedLimitKmh` (toujours `nil` en Mode Trace, `updateSpeedLimit` n'étant
+appelée que par `updateNavProgress`) — invisible tant que ce calcul n'est pas branché sur Mode
+Trace, sans risque de régression.
+
 ## Routage Valhalla optionnel (spec "valhalla-client-toggle", it19)
 
 Backend de routage ALTERNATIF à OSRM, désactivé par défaut (`RideSettingsStore.valhallaEnabled`) —
