@@ -10,6 +10,10 @@ struct TrackFullSheetView: View {
     let track: GPXTrack
     let isFullyOffline: Bool
     let isActive: Bool
+    /// Spec "biblio-share-export" (it19) : URL du fichier `.gpx` tel que stocké depuis l'import
+    /// (voir `LibraryStore.fileURL(for:)`) — passée par l'appelant plutôt que recalculée ici,
+    /// cette vue n'ayant pas accès à `LibraryStore` autrement.
+    let shareURL: URL
     let onDelete: () -> Void
     let onRename: () -> Void
     let onConfigure: () -> Void
@@ -54,6 +58,17 @@ struct TrackFullSheetView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+
+                    // Spec "biblio-share-export" (it19) : "une trace à la fois, share sheet iOS
+                    // standard + export GPX fidèle au format vers Fichiers iOS" — ShareLink sur
+                    // le fichier stocké tel quel couvre les deux (le share sheet standard
+                    // propose déjà "Enregistrer dans Fichiers" pour toute URL de fichier, même
+                    // patron que EndRideView.ShareLink après une sortie enregistrée).
+                    ShareLink(item: shareURL) {
+                        Label("Partager / Exporter", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
 
                     Button {
                         onRename()

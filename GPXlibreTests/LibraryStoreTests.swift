@@ -194,4 +194,30 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTrackID, reimported.id, "plus aucune trace active : le nouvel import doit le redevenir, comme un import initial")
         XCTAssertTrue(store.isDisplayed(reimported.id))
     }
+
+    /// Spec "biblio-share-export" (it19) : `fileURL(for:)` doit pointer vers le fichier
+    /// RÉELLEMENT écrit à l'import, avec un contenu OCTET POUR OCTET identique à l'original —
+    /// "export fidèle au format" repose entièrement sur ce fichier stocké tel quel, jamais un
+    /// ré-export qui pourrait diverger (extensions GPX non modélisées par GPXParser, etc.).
+    func testFileURLPointsToTheExactOriginallyImportedBytes() {
+        let store = makeStore()
+        let originalGPX = """
+        <?xml version="1.0"?>
+        <gpx><extensions><custom>préservé</custom></extensions><trk><name>Fidèle</name><trkseg>
+        <trkpt lat="45.0" lon="5.0"></trkpt>
+        <trkpt lat="45.01" lon="5.01"></trkpt>
+        </trkseg></trk></gpx>
+        """
+        let importURL = tempDirectory.appendingPathComponent("\(UUID().uuidString).gpx")
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        try? originalGPX.write(to: importURL, atomically: true, encoding: .utf8)
+        store.importTrack(from: importURL)
+        guard let track = store.tracks.first(where: { $0.name == "Fidèle" }) else {
+            return XCTFail("import doit avoir réussi")
+        }
+
+        let storedContent = try? String(contentsOf: store.fileURL(for: track), encoding: .utf8)
+
+        XCTAssertEqual(storedContent, originalGPX, "le fichier exposé par fileURL(for:) doit être identique octet pour octet à l'original importé")
+    }
 }

@@ -80,6 +80,15 @@ final class LibraryStore: ObservableObject {
         tracksDirectory.appendingPathComponent("index.json")
     }
 
+    /// Spec "biblio-share-export" (it19) : URL du fichier `.gpx` STOCKÉ TEL QUEL depuis l'import
+    /// (`addTrack` écrit `data` sans jamais la retraiter, voir plus haut) — partager/exporter
+    /// cette URL directement (ShareLink) garantit un GPX "fidèle au format" par construction,
+    /// sans repasser par un ré-export qui pourrait perdre des champs que `GPXParser` ne
+    /// modélise pas (extensions, routes, segments multiples...).
+    func fileURL(for track: GPXTrack) -> URL {
+        tracksDirectory.appendingPathComponent(track.fileName)
+    }
+
     /// `tracksDirectoryOverride`/`defaults` : seams de test (fix "single-source-active-track",
     /// it10) — évite que les tests unitaires ne lisent/écrivent le vrai `Documents/Tracks` ou
     /// le vrai `UserDefaults.standard` de l'app. En production, les deux paramètres restent à

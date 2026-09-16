@@ -120,8 +120,13 @@ GPXlibre/
                    (it18-bis : vignettes plutôt qu'un Picker texte), ControlsSide,
                    DebugReplaySection (#if DEBUG, dans Réglages > Avancé).
   Views/          LibraryView (Biblio — tap sur une ligne ouvre TrackFullSheetView depuis
-                   it13, spec "biblio-track-fullsheet" : fiche nom/stats + Supprimer/
-                   Renommer/Paramètres ; PLUS TrackDetailView, qui n'a donc plus de point
+                   it13, spec "biblio-track-fullsheet" : fiche nom/stats + Partager/Exporter
+                   (it19, spec "biblio-share-export" : ShareLink sur `LibraryStore.fileURL
+                   (for:)`, le fichier `.gpx` stocké tel quel depuis l'import — jamais
+                   ré-exporté, garantit la fidélité au format ; le partage système iOS propose
+                   déjà "Enregistrer dans Fichiers" pour toute URL de fichier, donc un seul
+                   bouton couvre partage ET export)/Supprimer/Renommer/Paramètres ; PLUS
+                   TrackDetailView, qui n'a donc plus de point
                    d'entrée UI mais reste intact, voir TODO.md), TrackDetailView,
                    TrackSettingsView (réglages par trace — sélecteur de départ personnalisé
                    RETIRÉ it14, spec "remove-start-choice", redondant avec le sens A→B/it12 ;

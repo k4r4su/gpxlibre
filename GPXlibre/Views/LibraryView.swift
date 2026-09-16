@@ -187,6 +187,7 @@ struct LibraryView: View {
                 track: track,
                 isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
                 isActive: library.activeTrackID == track.id,
+                shareURL: library.fileURL(for: track),
                 onDelete: {
                     library.delete(track)
                     trackForFullSheet = nil

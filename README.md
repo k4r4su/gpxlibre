@@ -36,6 +36,7 @@ GPXlibre est une application iOS pour suivre une trace GPX en moto, à vélo ou 
 - Toutes les traces importées ou enregistrées, triées par date
 - Aperçu cartographique par trace avec chevrons de direction et repères de départ/arrivée
 - Réglages indépendants par trace (sens, couleur, épaisseur, espacement des chevrons)
+- Partage et export GPX (une trace à la fois) via le partage système iOS standard
 
 ## Comment ça s'utilise
 
