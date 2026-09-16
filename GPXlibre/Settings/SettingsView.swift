@@ -192,6 +192,21 @@ struct SettingsView: View {
                     Toggle("Empêcher la mise en veille en Ride", isOn: $settings.keepScreenAwakeInRide)
                 }
 
+                // Spec "recording-density-setting" (it19, retour terrain "alléger le fichier
+                // GPX final") — `précis` (défaut) reproduit exactement le comportement d'avant
+                // ce réglage, live comme le reste (pas de bouton Sauvegarder).
+                Section {
+                    Picker("Densité d'enregistrement", selection: $settings.recordingDensityPreset) {
+                        ForEach(RecordingDensityPreset.allCases) { preset in
+                            Text(preset.label).tag(preset)
+                        }
+                    }
+                } header: {
+                    Text("Enregistrement de la sortie")
+                } footer: {
+                    Text("\(settings.recordingDensityPreset.detail). Un enregistrement plus léger produit un fichier GPX exporté plus petit, mais moins fidèle au tracé réel.")
+                }
+
                 Section {
                     Toggle("Partager mes signalements anonymement", isOn: $settings.shareBlockagesAnonymously)
                         .longPressTooltip("Envoie uniquement un point GPS, une date et une note optionnelle — aucune donnée nominative, aucun compte")

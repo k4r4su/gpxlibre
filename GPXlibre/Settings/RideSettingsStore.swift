@@ -42,6 +42,7 @@ final class RideSettingsStore: ObservableObject {
         static let slopeWarningThresholdPercent = "settings.slopeWarningThresholdPercent"
         static let valhallaEnabled = "settings.valhallaEnabled"
         static let valhallaEndpointURLString = "settings.valhallaEndpointURLString"
+        static let recordingDensityPreset = "settings.recordingDensityPreset"
     }
 
     private let defaults: UserDefaults
@@ -199,6 +200,12 @@ final class RideSettingsStore: ObservableObject {
         didSet { defaults.set(valhallaEndpointURLString, forKey: Keys.valhallaEndpointURLString) }
     }
 
+    /// Spec "recording-density-setting" (it19) : `précis` reproduit exactement le comportement
+    /// d'avant ce réglage — voir RecordingConstants.swift.
+    @Published var recordingDensityPreset: RecordingDensityPreset {
+        didSet { defaults.set(recordingDensityPreset.rawValue, forKey: Keys.recordingDensityPreset) }
+    }
+
     /// Repasse les 4 seuils à leurs défauts standards (30/45/90/135) — appelé quand l'utilisateur
     /// quitte le mode "personnalisé" (voir SettingsView), jamais automatiquement ailleurs.
     func resetRoadbookThresholdsToDefaults() {
@@ -327,5 +334,11 @@ final class RideSettingsStore: ObservableObject {
 
         valhallaEnabled = defaults.bool(forKey: Keys.valhallaEnabled)
         valhallaEndpointURLString = defaults.string(forKey: Keys.valhallaEndpointURLString) ?? ""
+
+        if let rawDensity = defaults.string(forKey: Keys.recordingDensityPreset), let preset = RecordingDensityPreset(rawValue: rawDensity) {
+            recordingDensityPreset = preset
+        } else {
+            recordingDensityPreset = .precis
+        }
     }
 }

@@ -550,17 +550,21 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
     }
 
-    /// Enregistre un point dès que l'un des deux seuils est atteint (5 s OU 15 m, le plus
+    /// Enregistre un point dès que l'un des deux seuils du preset actif est atteint (le plus
     /// fréquent des deux) — tourne automatiquement pendant tout le Ride, aucune action requise.
     /// Suspendu UNIQUEMENT par `isRecordingPaused` (bouton pause dédié) ; depuis it14, le Stop
-    /// de guidage (`stopGuidance()`) ne touche plus à l'enregistrement, voir sa doc.
+    /// de guidage (`stopGuidance()`) ne touche plus à l'enregistrement, voir sa doc. Seuils
+    /// pilotés par `settings.recordingDensityPreset` (spec "recording-density-setting", it19,
+    /// retour terrain "alléger le fichier GPX final") — `précis` reproduit exactement les 5 s/
+    /// 15 m d'avant ce réglage.
     private func recordRideTrack(location: CLLocation) {
         guard !isRecordingPaused else { return }
+        let preset = settings.recordingDensityPreset
         let shouldRecord: Bool
         if let lastDate = lastRecordedDate, let lastLocation = lastRecordedLocation {
             let elapsed = location.timestamp.timeIntervalSince(lastDate)
             let distance = location.distance(from: lastLocation)
-            shouldRecord = elapsed >= RecordingConstants.minIntervalSeconds || distance >= RecordingConstants.minDistanceMeters
+            shouldRecord = elapsed >= preset.minIntervalSeconds || distance >= preset.minDistanceMeters
         } else {
             shouldRecord = true
         }
