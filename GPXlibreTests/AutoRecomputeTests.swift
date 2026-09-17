@@ -177,4 +177,38 @@ final class AutoRecomputeTests: XCTestCase {
         }
         XCTAssertEqual(pinCumulativeDistanceMeters, expected.cumulativeDistanceMeters, accuracy: 0.01)
     }
+
+    /// Spec "auto-recompute-periodic-reevaluation" (it19, retour terrain : "la logique
+    /// actuelle est trop random... toutes les minutes, ajuster vers le point le plus proche").
+    /// Un guidage automatique déjà actif ne doit PAS rester figé sur sa cible d'origine si le
+    /// rider se rapproche entre-temps d'un tout autre point de la trace — mais seulement après
+    /// le délai de réévaluation (60 s), jamais avant (éviter un aller-retour réseau à chaque fix).
+    func testAutomaticGuidanceRetargetsAfterReevaluationIntervalButNotBefore() {
+        let suite = "AutoRecomputeTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let session = makeSession(defaultsSuiteName: suite)
+        let track = makeTrack()
+        session.start(track: track)
+        let t0 = Date()
+
+        // Déclenchement initial, cible ≈ points[10].
+        session.handle(location: location(offsetEast(track.points[10].coordinate, meters: 150), at: t0))
+        session.handle(location: location(offsetEast(track.points[10].coordinate, meters: 150), at: t0.addingTimeInterval(2.5)))
+        guard let firstPin = session.resumeGuidance?.pinCoordinate else {
+            return XCTFail("le recalcul automatique doit avoir posé un pin")
+        }
+        XCTAssertEqual(firstPin.latitude, track.points[10].coordinate.latitude, accuracy: 0.0001)
+
+        // Le rider se déplace près de points[30] (toujours hors-trace) — mais moins de 60 s
+        // après le déclenchement : la cible ne doit PAS bouger.
+        session.handle(location: location(offsetEast(track.points[30].coordinate, meters: 150), at: t0.addingTimeInterval(32.5)))
+        XCTAssertEqual(session.resumeGuidance?.pinCoordinate.latitude ?? -1, track.points[10].coordinate.latitude, accuracy: 0.0001,
+                        "avant le délai de réévaluation (60 s), la cible ne doit pas changer")
+
+        // 65 s après le déclenchement (> 60 s depuis la dernière réévaluation) : la cible doit
+        // maintenant se réajuster vers points[30], bien plus proche à vol d'oiseau.
+        session.handle(location: location(offsetEast(track.points[30].coordinate, meters: 150), at: t0.addingTimeInterval(67.5)))
+        XCTAssertEqual(session.resumeGuidance?.pinCoordinate.latitude ?? -1, track.points[30].coordinate.latitude, accuracy: 0.0001,
+                        "après le délai de réévaluation, la cible doit se réajuster vers le point le plus proche actuel")
+    }
 }

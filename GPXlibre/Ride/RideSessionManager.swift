@@ -69,6 +69,12 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// Depuis quand la divergence dépasse RECOMPUTE_DIVERGENCE_M en continu (spec "link-
     /// recompute-on-divergence", it18, Bloc 3) — `nil` tant que sous le seuil ou déjà déclenché.
     private var autoRecomputeSinceDate: Date?
+    /// Spec "auto-recompute-periodic-reevaluation" (it19, retour terrain : "la logique
+    /// actuelle est trop random... toutes les minutes, si on est hors trace, ajuster vers le
+    /// point le plus proche à vol d'oiseau") — dernière fois que la cible d'un guidage
+    /// automatique DÉJÀ actif a été réévaluée. `nil` tant qu'aucun guidage automatique n'est
+    /// actif (remis à `nil` par `start()`/`stop()` comme le reste de l'état de session).
+    private var lastAutoRecomputeEvaluationDate: Date?
     /// Change à chaque recalcul automatique déclenché : RideView observe ce token pour afficher
     /// un toast bref "Recalcul" (spec explicite "notification silencieuse, pas de bannière
     /// permanente").
@@ -421,6 +427,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         resumeRoutingError = nil
         resumeGuidanceLiveDistanceMeters = nil
         autoRecomputeSinceDate = nil
+        lastAutoRecomputeEvaluationDate = nil
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
@@ -778,6 +785,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             resumeGuidance = nil
             resumeRoutingError = nil
             resumeGuidanceLiveDistanceMeters = nil
+            lastAutoRecomputeEvaluationDate = nil
             return
         }
 
@@ -787,6 +795,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             resumeGuidance = nil
             resumeRoutingError = nil
             resumeGuidanceLiveDistanceMeters = nil
+            lastAutoRecomputeEvaluationDate = nil
         }
     }
 
@@ -802,7 +811,38 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// d'oiseau. Le routage lui-même reste inchangé : `requestResume` route vers la cible
     /// choisie via le réseau routier existant (DetourRoutingService), jamais à vol d'oiseau.
     private func updateAutoRecompute(from location: CLLocation, projection: TrackProjector.Projection?) {
-        guard resumeGuidance == nil, !isGuidanceStopped, let track, !trackCumulativeDistances.isEmpty, let projection else {
+        guard !isGuidanceStopped, let track, !trackCumulativeDistances.isEmpty, let projection else {
+            autoRecomputeSinceDate = nil
+            return
+        }
+
+        // Guidage automatique DÉJÀ actif (spec "auto-recompute-periodic-reevaluation", it19) :
+        // ré-évalue la cible toutes les `autoRecomputeReevaluationIntervalSeconds` tant que le
+        // rider reste hors-trace, plutôt que de figer la décision au moment du déclenchement —
+        // corrige le retour terrain "la logique est trop random" (une cible choisie une fois
+        // pouvait devenir obsolète si le rider continuait à s'éloigner ou se rapprochait d'un
+        // autre point de la trace entre-temps).
+        if let existing = resumeGuidance, existing.isAutomatic {
+            guard projection.distanceToTrackMeters > RideConstants.recomputeDivergenceThresholdMeters else { return }
+            guard let lastEvaluation = lastAutoRecomputeEvaluationDate else {
+                lastAutoRecomputeEvaluationDate = location.timestamp
+                return
+            }
+            guard location.timestamp.timeIntervalSince(lastEvaluation) >= RideConstants.autoRecomputeReevaluationIntervalSeconds else { return }
+            lastAutoRecomputeEvaluationDate = location.timestamp
+
+            guard let nearest = TrackProjector.nearestPointByAirDistance(
+                to: location.coordinate,
+                in: track.points,
+                cumulativeDistances: trackCumulativeDistances
+            ) else { return }
+            guard RoadbookAnalyzer.distanceMeters(nearest.coordinate, existing.pinCoordinate) > RideConstants.autoRecomputeRetargetMinDistanceMeters else { return }
+            requestResume(pinCoordinate: nearest.coordinate, pinCumulativeDistanceMeters: nearest.cumulativeDistanceMeters, isAutomatic: true)
+            autoRecomputeToastToken = UUID()
+            return
+        }
+
+        guard resumeGuidance == nil else {
             autoRecomputeSinceDate = nil
             return
         }
@@ -824,6 +864,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         ) else { return }
         requestResume(pinCoordinate: nearest.coordinate, pinCumulativeDistanceMeters: nearest.cumulativeDistanceMeters, isAutomatic: true)
         autoRecomputeToastToken = UUID()
+        lastAutoRecomputeEvaluationDate = location.timestamp
     }
 
     // MARK: - Chemin bloqué / détour

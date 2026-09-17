@@ -238,6 +238,19 @@ enum RideConstants {
     static let recomputeDivergenceThresholdMeters: Double = 100
     static let recomputeDivergenceDurationSeconds: Double = 2
 
+    /// Spec "auto-recompute-periodic-reevaluation" (it19, retour terrain : "la logique
+    /// actuelle est trop random... toutes les minutes, si on est hors trace, ajuster vers le
+    /// point le plus proche à vol d'oiseau") — une fois un guidage automatique déclenché, sa
+    /// cible n'était plus jamais réévaluée tant qu'il restait actif (figée à la position du
+    /// rider au moment du déclenchement), même si le rider continuait à s'éloigner ou se
+    /// rapprochait d'un point de la trace différent, plus pertinent. Réévalué toutes les 60 s
+    /// tant que le guidage automatique reste actif ET hors-trace.
+    static let autoRecomputeReevaluationIntervalSeconds: Double = 60
+    /// Écart minimal (m) entre la cible actuelle et le point le plus proche recalculé pour
+    /// déclencher un nouveau routage — évite un aller-retour réseau (OSRM/Valhalla) inutile
+    /// quand le point le plus proche n'a, dans les faits, pas changé (gigue GPS).
+    static let autoRecomputeRetargetMinDistanceMeters: Double = 10
+
     /// REJOINDRE_GUIDANCE_BANNER : feature flag (même patron que `guidanceButtonMode`) — permet
     /// de revenir instantanément au comportement précédent (pas de bannière latérale dédiée
     /// pendant un recalcul automatique, seul le tracé pointillé bleu sur la carte) sans toucher

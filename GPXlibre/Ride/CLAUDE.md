@@ -88,7 +88,14 @@ pas besoin de sortir en voiture pour reproduire un franchissement de seuil.
   point, plus loin dans l'ordre de la trace, n'était qu'à 2 km à vol d'oiseau.
   `updateOffTrackResumeTarget` (affichage informatif du chip hors-trace, voir plus bas) utilise
   la MÊME fonction, pour rester cohérent avec la cible réellement routée. Démarre DIRECTEMENT en
-  phase `.active`
+  phase `.active`. Réévalué PÉRIODIQUEMENT tant qu'actif ET hors-trace (spec "auto-recompute-
+  periodic-reevaluation", it19, retour terrain "la logique est trop random") :
+  `RideConstants.autoRecomputeReevaluationIntervalSeconds` (60 s) — sans ça, la cible restait
+  figée à la position du rider au moment du déclenchement, jamais réajustée s'il continuait à
+  s'éloigner ou se rapprochait d'un autre point de la trace entre-temps. Re-routage déclenché
+  seulement si le nouveau point le plus proche diffère de l'ancien de plus de
+  `autoRecomputeRetargetMinDistanceMeters` (10 m) — évite un aller-retour réseau (OSRM/Valhalla)
+  inutile quand la cible n'a, dans les faits, pas changé (gigue GPS)
   (auto-confirmé, jamais de preview à valider) — jamais déclenché si un guidage de reprise
   (manuel ou automatique) existe déjà (`resumeGuidance == nil` gardé en tête de fonction).
   Présentation DISTINCTE : pas de bannière du haut (`RideView.activeBanner` filtre
@@ -104,6 +111,30 @@ calcul figé au moment du déclenchement. Le tracé pointillé bleu sur la carte
 (`RideMapLibreView.updateResumeShape`) et la fin du guidage (jonction atteinte < 30 m, ou retour
 naturel sur trace) sont EXACTEMENT les mêmes pour les deux origines — seule la présentation
 diffère.
+
+## `start(track:)` vs `switchMode(track:)` — ne jamais les confondre dans RideView
+
+`RideSessionManager` expose deux façons de (re)donner une trace à la session, jamais
+interchangeables : `start(track:)` est un VRAI nouveau départ (réinitialise `rideStartDate`,
+`averageSpeedKmh`/`maxSpeedKmh`/`totalDistanceTraveledMeters`, `currentBucketIndex`,
+`speedSamples`, `isGuidanceStopped`...) ; `switchMode(track:)` reconstruit uniquement ce qui
+dépend de la trace (checkpoints, distance cumulée, état hors-trace) sans toucher aux stats en
+cours ni au zoom/historique de vitesse — pensé pour un retour d'onglet ou Trace↔Nav (spec
+"camera-mode-stability").
+
+Fix "ride-restarts-from-zero-on-tab-return" (it19, retour terrain : "si je switch d'onglet et
+reviens sur Ride, ça repart de zéro") — `RideView.onAppear` appelait INCONDITIONNELLEMENT
+`start(track:)`, or `.onAppear`/`.onDisappear` se déclenchent à CHAQUE changement de visibilité
+dans un `TabView` (pas seulement au montage initial) : chaque aller-retour Ride→Biblio→Ride
+remettait donc les stats de la sortie à zéro, alors même que `recordedPoints` (l'enregistrement
+GPS lui-même) survivait déjà correctement grâce au garde `recordingTrackID != track.id`.
+`RideView.hasStartedRideSession` (`@State`, non persisté) distingue désormais le VRAI premier
+lancement (`start`) de tout retour ultérieur (`switchMode`) — `.onChange(of:
+navigationState.selectedTab)` continue d'appeler `switchMode(track:)` séparément au retour
+d'onglet (double appel harmless, même patron déjà en place pour `stop()` via `.onDisappear` +
+la branche `else`) : ne pas essayer de dédupliquer ces deux déclencheurs, ils réagissent à des
+signaux différents (visibilité de vue vs changement d'onglet) et coexistaient déjà pour `stop()`
+avant ce fix.
 
 ## Avertissement de pente natif (spec "slope-warning-native", it19)
 
