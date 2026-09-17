@@ -22,6 +22,12 @@ private final class RegionOutlinePolygon: MLNPolygon {}
 struct RegionPickerMapView: UIViewRepresentable {
     @Binding var bounds: SimpleBounds?
     var downloadedRegions: [DownloadedRegion] = []
+    /// Fix "region-picker-atlantic-ocean-default" (it21) — résolu par l'appelant
+    /// (`RegionDownloadView` : position GPS actuelle, sinon dernière connue, sinon centre
+    /// France, voir `OfflineConstants.franceCenterCoordinate`) et appliqué UNE SEULE FOIS ici,
+    /// dans `makeUIView` (jamais dans `updateUIView`, appelé lui à chaque re-render) — la carte
+    /// ne doit jamais re-sauter sous l'utilisateur une fois qu'il a commencé à cadrer sa zone.
+    var initialCenterCoordinate: CLLocationCoordinate2D
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleJSON: MapEngineConstants.buildInitialStyleJSON())
@@ -35,7 +41,7 @@ struct RegionPickerMapView: UIViewRepresentable {
         // l'utilisateur cadre sa vraie zone ; le garde-fou de compte O(1) reste la protection
         // réelle (voir OfflineConstants.regionTileCountHardCap), ceci n'est qu'un confort pour
         // éviter le message "zone trop grande" à chaque ouverture de l'écran.
-        mapView.setZoomLevel(5, animated: false)
+        mapView.setCenter(initialCenterCoordinate, zoomLevel: 5, animated: false)
         syncRegionOutlines(on: mapView, context: context)
         return mapView
     }

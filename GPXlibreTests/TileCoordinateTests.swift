@@ -47,4 +47,39 @@ final class TileCoordinateTests: XCTestCase {
         XCTAssertEqual(corner.longitude, -180, accuracy: 0.001)
         XCTAssertEqual(corner.latitude, 85.05, accuracy: 0.01, "limite de Mercator standard (~85.0511°)")
     }
+
+    // MARK: - boundingBox(around:radiusMeters:) — spec "region-download-by-place" (it21),
+    // réutilisé pour le rayon région/ville autour d'un lieu géocodé (déjà utilisé depuis it17
+    // pour le corridor de trace, jamais testé directement jusqu'ici).
+
+    /// 1° de latitude ≈ 111.32 km partout sur Terre (contrairement à la longitude, qui varie
+    /// avec cos(latitude)) — un rayon de 111 320 m doit donc produire un delta lat ≈ 1°.
+    func testBoundingBoxAroundProducesRoughlyOneDegreeLatitudeDeltaFor111KmRadius() {
+        let coordinate = CLLocationCoordinate2D(latitude: 45.0, longitude: 5.0)
+        let box = TileCoordinate.boundingBox(around: coordinate, radiusMeters: 111_320)
+
+        XCTAssertEqual(box.maxLat - box.minLat, 2.0, accuracy: 0.01, "±1° de chaque côté")
+        XCTAssertEqual(box.minLat, coordinate.latitude - 1, accuracy: 0.01)
+        XCTAssertEqual(box.maxLat, coordinate.latitude + 1, accuracy: 0.01)
+    }
+
+    /// À 60° de latitude, cos(60°) = 0.5 — le même rayon en mètres doit donc produire un delta
+    /// de LONGITUDE environ deux fois plus grand qu'à l'équateur (les degrés de longitude sont
+    /// deux fois plus "serrés" en distance à cette latitude).
+    func testBoundingBoxAroundWidensLongitudeDeltaAtHigherLatitude() {
+        let equator = TileCoordinate.boundingBox(around: CLLocationCoordinate2D(latitude: 0, longitude: 5.0), radiusMeters: 50_000)
+        let sixtyNorth = TileCoordinate.boundingBox(around: CLLocationCoordinate2D(latitude: 60, longitude: 5.0), radiusMeters: 50_000)
+
+        let equatorLonDelta = equator.maxLon - equator.minLon
+        let sixtyLonDelta = sixtyNorth.maxLon - sixtyNorth.minLon
+        XCTAssertEqual(sixtyLonDelta, equatorLonDelta * 2, accuracy: 0.01)
+    }
+
+    func testBoundingBoxAroundIsCenteredOnTheOriginalCoordinate() {
+        let coordinate = CLLocationCoordinate2D(latitude: 45.0, longitude: 5.0)
+        let box = TileCoordinate.boundingBox(around: coordinate, radiusMeters: 20_000)
+
+        XCTAssertEqual((box.minLat + box.maxLat) / 2, coordinate.latitude, accuracy: 0.0001)
+        XCTAssertEqual((box.minLon + box.maxLon) / 2, coordinate.longitude, accuracy: 0.0001)
+    }
 }

@@ -23,6 +23,67 @@ liste réelle. Donner une caméra initiale raisonnable à une carte de sélectio
 PAS une protection suffisante — un utilisateur peut toujours pincer manuellement jusqu'au zoom
 monde, le garde-fou de compte reste la seule protection qui couvre tous les cas.
 
+## Prévisualisation centrée (fix "region-picker-atlantic-ocean-default", it21)
+
+Bug terrain : l'écran de sélection de zone s'ouvrait centré au milieu de l'océan Atlantique.
+Root cause : `RegionPickerMapView.makeUIView` posait un ZOOM initial (`setZoomLevel(5, ...)`,
+fix it16 ci-dessous) mais jamais de COORDONNÉE de centre — une `MLNMapView` sans centre
+explicite démarre à (0,0), en plein océan au large de l'Afrique de l'Ouest. Fix :
+`RegionPickerMapView.initialCenterCoordinate` (nouveau paramètre, résolu par l'appelant,
+appliqué UNE SEULE FOIS dans `makeUIView` via `setCenter(_:zoomLevel:animated:)` — jamais dans
+`updateUIView`, qui tournerait à chaque re-render et ferait re-sauter la carte sous
+l'utilisateur en train de cadrer sa zone). `RegionDownloadView` résout cette coordonnée par
+ordre de préférence : position GPS actuelle (`LocationManager.currentLocation`, même patron que
+`FavoriteAddressesView`/`TrackDetailView` — instance locale, pas d'injection globale) → sinon
+centre géographique de la France métropolitaine (`OfflineConstants.franceCenterCoordinate`).
+"Dernière position connue" (demandée par la spec) obtenue gratuitement en seedant
+`LocationManager.currentLocation` avec `manager.location` (cache SYNCHRONE de CoreLocation) dès
+`init()`, plutôt qu'une persistance dédiée — si l'autorisation a déjà été accordée par une
+session précédente (quasi toujours vrai, la fonctionnalité Ride en dépend), une position est
+donc disponible dès l'affichage de l'écran, sans attendre le premier `didUpdateLocations`.
+
+## Zone par lieu nommé + rayon (spec "region-download-by-place", it21)
+
+Alternative au cadrage manuel pan/zoom : `PlaceRegionPickerView` (sheet, ouverte depuis un
+bouton dans `RegionDownloadView`) — Picker Pays/Région/Ville (`PlaceKind`), recherche via
+`NominatimGeocodingService` (même service que "Aller à"/Domicile-Travail), rayon par défaut
+selon le type ("Pays" → emprise réelle du pays, pas de rayon ; "Région" → +50 km ; "Ville" →
++100 km, `OfflineConstants.placeRegionDefaultRadiusKm*`), modifiable ensuite par
+l'utilisateur (slider, `placeRegionRadiusRangeKm`).
+
+- `NominatimGeocodingService.search(query:featureType:)` : nouveau paramètre optionnel
+  `featureType` (`"country"`/`"state"`/`"city"`, valeur Nominatim la plus proche de chaque
+  `PlaceKind` — pas de valeur "region" dédiée côté Nominatim, "state" est l'équivalent le plus
+  proche d'une région administrative française), `nil` par défaut : les appelants existants
+  (NavDestinationSearchView, FavoriteAddressesView) sont inchangés.
+- `GeocodingResult.boundingBox` (nouveau champ optionnel, `GeocodingBoundingBox`) : décodé
+  depuis le champ `boundingbox` de Nominatim (déjà présent dans toute réponse `format=json`,
+  aucun paramètre supplémentaire requis) — extrait dans un initialiseur dédié
+  (`GeocodingBoundingBox.init?(nominatimStrings:)`) pour rester testable sans JSON brut ni
+  réseau réel. Utilisé UNIQUEMENT pour `.country` (l'emprise réelle d'un pays, forme
+  irrégulière, n'a aucun sens comme rayon fixe autour d'un centroïde) ; `.region`/`.city`
+  utilisent `TileCoordinate.boundingBox(around:radiusMeters:)` (existant depuis it17, corridor
+  de trace), jamais testé directement jusqu'ici — couvert par `TileCoordinateTests` depuis
+  cette itération.
+- `OfflineTileEstimator` (nouveau, `Offline/`) : extrait le patron "compter avant d'énumérer"
+  (fix "region-picker-huge-bbox-crash", it16) de `RegionDownloadView.updateEstimate()` pour être
+  réutilisé tel quel par `PlaceRegionPickerView` — une bbox "Pays" peut être tout aussi grande
+  qu'un pincement manuel jusqu'au zoom monde, même protection nécessaire. `RegionDownloadView`
+  a été refactorée pour appeler ce même estimateur (comportement strictement inchangé, non
+  duplication).
+- `DownloadedRegion.Kind` INCHANGÉ : une zone par lieu est enregistrée comme `.customArea`
+  (comme le cadrage manuel), distinguée seulement par son `name` (ex. "Grenoble +100 km") —
+  aucun autre code ne discrimine sur le type de provenance d'une zone `.customArea`.
+- Piège Swift rencontré en écrivant `PlaceRegionPickerView` : un seul `List` avec toute la
+  logique conditionnelle (Picker, recherche, résultats, rayon/pays, zoom, estimation,
+  téléchargement) en ligne dépasse ce que le type-checker peut résoudre en temps raisonnable
+  ("unable to type-check this expression") — PAS un message d'erreur qui pointe la vraie cause
+  au premier essai (le compilateur a d'abord rapporté des erreurs `Binding<...>` totalement
+  fantaisistes sur un `ForEach` par ailleurs correct, avant qu'un `id: \.id` explicite ne
+  révèle le vrai diagnostic). Corrigé en factorisant le corps en sous-vues distinctes
+  (`@ViewBuilder private var` par section/ligne) — à garder en tête pour tout futur écran avec
+  plusieurs sections conditionnelles denses dans un seul `List`.
+
 ## Contour des zones hors-ligne (spec "offline-zones-outline", it17, Bloc 1)
 
 `DownloadedRegion.boundingBox` dérive un rectangle englobant depuis la liste de tuiles —

@@ -13,6 +13,13 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
+        // Fix "region-picker-atlantic-ocean-default" (it21) — "dernière position connue" :
+        // `manager.location` renvoie SYNCHRONEMENT le dernier fix mis en cache par CoreLocation
+        // (déjà présent si l'autorisation a été accordée par une session précédente, sans
+        // attendre `startUpdating()`/le premier `didUpdateLocations`), utile pour tout écran qui
+        // a besoin d'une position raisonnable dès l'affichage (ex. RegionDownloadView) plutôt
+        // que de rester sur `nil` jusqu'au premier fix frais.
+        currentLocation = manager.location
     }
 
     func requestAuthorization() {

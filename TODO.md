@@ -1,5 +1,34 @@
 # TODO
 
+## Itération 21 (bugs Cartes hors-ligne / zone par lieu / refonte Mode Nav — en cours)
+
+Fiche de développement complète, trois chantiers. Les deux premiers (bugs Cartes hors-ligne)
+sont livrés dans cette section ; la refonte du Mode Nav (dépend du branchement Valhalla it20)
+suit dans une section dédiée une fois livrée.
+
+- **`fix:"region-picker-atlantic-ocean-default"`** : voir Offline/CLAUDE.md, section dédiée,
+  pour le détail root cause (coordonnée de centre jamais posée, seulement le zoom) et le fix
+  (LocationManager.currentLocation, seedé synchrone depuis `manager.location` pour la "dernière
+  position connue" demandée par la spec, sans nouvelle persistance dédiée).
+- **`feat:"region-download-by-place"`** : voir Offline/CLAUDE.md, section dédiée. Décision
+  d'implémentation notable : "Région" utilise le `featureType` Nominatim `"state"` (pas de
+  valeur "region" dédiée côté Nominatim, c'est l'équivalent le plus proche d'une région
+  administrative française). `OfflineTileEstimator` extrait le garde-fou "compter avant
+  d'énumérer" (it16) pour être partagé entre cadrage manuel ET zone par lieu — refactor sans
+  changement de comportement côté `RegionDownloadView`.
+- **Piège Swift documenté** (Offline/CLAUDE.md) : un `List` SwiftUI avec trop de sections
+  conditionnelles denses en ligne peut dépasser ce que le type-checker résout en temps
+  raisonnable, ET produire des erreurs de diagnostic complètement trompeuses (`Binding<...>`
+  fantaisistes sur un `ForEach` par ailleurs correct) avant qu'on isole la vraie cause — corrigé
+  en factorisant en sous-vues `@ViewBuilder` distinctes. À garder en tête pour tout futur écran
+  similaire.
+- **Non vérifié visuellement** (pas de device physique dans cet environnement) : le centrage
+  GPS réel de la prévisualisation, l'ergonomie du picker Pays/Région/Ville, l'exactitude des
+  résultats de recherche Nominatim avec `featureType` en conditions réelles. Logique pure
+  couverte par 14 nouveaux tests (193 au total, 0 échec) : `GeocodingBoundingBoxTests`,
+  `OfflineTileEstimatorTests`, `PlaceKindTests`, + 3 tests `TileCoordinate.boundingBox(around:)`
+  (existant depuis it17, jamais testé directement jusqu'ici).
+
 ## Itération 20 (branchement réel Valhalla / map matching pour virages légers)
 
 Fiche de développement complète fournie par le propriétaire, deux chantiers :

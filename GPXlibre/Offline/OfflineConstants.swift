@@ -1,6 +1,26 @@
 import Foundation
+import CoreLocation
 
 enum OfflineConstants {
+    /// Fix "region-picker-atlantic-ocean-default" (it21, bug terrain : "la prévisualisation de
+    /// zone hors-ligne s'ouvre centrée au milieu de l'océan Atlantique") — `RegionPickerMapView`
+    /// ne posait jamais de COORDONNÉE de centre, seulement un niveau de zoom (`setZoomLevel`) :
+    /// une `MLNMapView` sans centre explicite démarre à (0,0), en plein océan au large de
+    /// l'Afrique de l'Ouest. Repli utilisé quand aucune position (GPS actuelle ou dernière
+    /// connue, voir `RegionDownloadView`) n'est disponible — centre géographique approximatif
+    /// de la France métropolitaine (Bruère-Allichamps, Cher), un repli nettement plus utile
+    /// qu'un point au hasard en mer pour la quasi-totalité des utilisateurs de l'app.
+    static let franceCenterCoordinate = CLLocationCoordinate2D(latitude: 46.603354, longitude: 1.888334)
+
+    // MARK: - Zone par lieu nommé (spec "region-download-by-place", it21)
+    //
+    // "Pays → téléchargement du pays entier" (emprise Nominatim réelle, pas de rayon) ;
+    // "Région → région + 50 km autour" ; "Ville → ville + 100 km autour" — rayons par défaut,
+    // modifiables par l'utilisateur avant lancement (slider, voir PlaceRegionPickerView).
+    static let placeRegionDefaultRadiusKmRegion: Double = 50
+    static let placeRegionDefaultRadiusKmCity: Double = 100
+    static let placeRegionRadiusRangeKm: ClosedRange<Double> = 10...300
+
     /// Largeur totale du corridor pré-caché autour d'une trace (±1 km de chaque côté = 2 km).
     static let corridorHalfWidthMeters: Double = 1000
 

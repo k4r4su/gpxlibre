@@ -132,6 +132,11 @@ GPXlibre/
                    VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
                    régionaux (import/téléchargement, un seul actif à la fois). Voir section
                    "Compter avant d'énumérer" (bbox de tuiles) plus bas — piège vécu, it16.
+                   OfflineTileEstimator (it21, extrait de RegionDownloadView) ;
+                   PlaceRegionPickerView (it21, spec "region-download-by-place" : zone par lieu
+                   nommé Pays/Région/Ville + rayon, voir Offline/CLAUDE.md) ; fix "region-picker-
+                   atlantic-ocean-default" (it21, RegionPickerMapView centrée sur GPS/repli
+                   France plutôt que (0,0)).
   Waypoints/      RollingWaypoint(Store) — sert uniquement à "Signaler" (Nav) depuis it10 ;
                    le bouton "Point" (POI rapide Essence/Eau/Bivouac) a été supprimé pour de
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié

@@ -8,6 +8,9 @@ struct RegionDownloadView: View {
     @EnvironmentObject private var networkMonitor: NetworkMonitor
     @EnvironmentObject private var settings: RideSettingsStore
     @StateObject private var queue = TileDownloadQueue()
+    /// Fix "region-picker-atlantic-ocean-default" (it21) — même patron que
+    /// FavoriteAddressesView/TrackDetailView (instance locale, pas d'injection globale).
+    @StateObject private var locationManager = LocationManager()
 
     @State private var visibleBounds: SimpleBounds?
     @State private var maxZoom: Double = Double(OfflineConstants.regionMaxZoomSliderValue)
@@ -18,6 +21,10 @@ struct RegionDownloadView: View {
     /// Spec "tiles-zoom-explainer" (it17, Bloc 2) — replié par défaut, pas besoin d'imposer le
     /// texte à qui sait déjà ce qu'est un niveau de zoom.
     @State private var isExplainerExpanded = false
+    /// Spec "region-download-by-place" (it21) — alternative au cadrage manuel pan/zoom
+    /// ci-dessous : choisir un lieu nommé (pays/région/ville) + un rayon plutôt que cadrer à la
+    /// main sur la carte.
+    @State private var isPlacePickerPresented = false
 
     /// La zone téléchargée suit toujours le thème carte actif (#10), Relief inclus.
     private var activeSource: TileSource { TileSource.active(for: settings.mapThemePreset) }
@@ -29,10 +36,22 @@ struct RegionDownloadView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                // Spec "region-download-by-place" (it21) : alternative au cadrage manuel
+                // ci-dessous — recherche par nom de lieu (pays/région/ville) + rayon.
+                Button {
+                    isPlacePickerPresented = true
+                } label: {
+                    Label("Choisir par lieu (pays, région, ville)...", systemImage: "mappin.and.ellipse")
+                }
+
                 // Spec "offline-zones-outline" (it17, Bloc 1) : contour des zones DÉJÀ
                 // téléchargées visible en cadrant une nouvelle zone, pour voir la couverture
                 // existante d'un coup d'œil.
-                RegionPickerMapView(bounds: $visibleBounds, downloadedRegions: downloadedRegions.regions)
+                RegionPickerMapView(
+                    bounds: $visibleBounds,
+                    downloadedRegions: downloadedRegions.regions,
+                    initialCenterCoordinate: locationManager.currentLocation?.coordinate ?? OfflineConstants.franceCenterCoordinate
+                )
                     .frame(height: 220)
                     .listRowInsets(EdgeInsets())
 
@@ -117,9 +136,19 @@ struct RegionDownloadView: View {
             }
         }
         .navigationTitle("Cartes hors-ligne")
+        .onAppear {
+            locationManager.requestAuthorization()
+            locationManager.startUpdating()
+        }
+        .onDisappear {
+            locationManager.stopUpdating()
+        }
         .onChange(of: visibleBounds) { _ in updateEstimate() }
         .onChange(of: maxZoom) { _ in updateEstimate() }
         .onChange(of: settings.mapThemePreset) { _ in updateEstimate() }
+        .sheet(isPresented: $isPlacePickerPresented) {
+            PlaceRegionPickerView()
+        }
     }
 
     private var diskUsageRow: some View {
@@ -150,28 +179,22 @@ struct RegionDownloadView: View {
             estimate = nil
             return
         }
-        // Fix "region-picker-huge-bbox-crash" (bug terrain, it16) : compte D'ABORD en O(1) —
-        // une zone "monde" (caméra initiale non cadrée, ou pincement manuel jusqu'au zoom
-        // monde) énumérée directement jusqu'au zoom 16 gèle le thread principal (watchdog ~10 s).
-        var projectedTileCount = 0
-        for zoom in OfflineConstants.regionMinZoomSliderValue...cappedMaxZoom {
-            projectedTileCount += TileCoordinate.tileCount(
-                minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom, source: activeSource
-            )
-            if projectedTileCount > OfflineConstants.regionTileCountHardCap {
-                estimate = nil
-                isZoneTooLarge = true
-                return
-            }
+        // Fix "region-picker-huge-bbox-crash" (bug terrain, it16), factorisé dans
+        // OfflineTileEstimator (it21, réutilisé par PlaceRegionPickerView) : compte D'ABORD en
+        // O(1) — une zone "monde" (caméra initiale non cadrée, ou pincement manuel jusqu'au
+        // zoom monde) énumérée directement jusqu'au zoom 16 gèle le thread principal.
+        switch OfflineTileEstimator.estimate(
+            minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon,
+            minZoom: OfflineConstants.regionMinZoomSliderValue, maxZoom: cappedMaxZoom, source: activeSource
+        ) {
+        case .empty:
+            estimate = nil
+        case .tooLarge:
+            estimate = nil
+            isZoneTooLarge = true
+        case .estimate(let result):
+            estimate = result
         }
-        var tileSet = Set<TileCoordinate>()
-        for zoom in OfflineConstants.regionMinZoomSliderValue...cappedMaxZoom {
-            let tiles = TileCoordinate.tiles(
-                minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon, zoom: zoom, source: activeSource
-            )
-            tileSet.formUnion(tiles)
-        }
-        estimate = PrecacheEstimate(tiles: Array(tileSet))
     }
 
     private func startDownload() {
