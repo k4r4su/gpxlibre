@@ -18,6 +18,14 @@ enum RoadbookAnalyzer {
     ///     sur laquelle le cap entrant/sortant de chaque point est mesuré.
     ///   - lightThresholdDegrees...uTurnThresholdDegrees : paliers croissants (light < marked
     ///     < hard < uTurn) — un angle sous `lightThresholdDegrees` ne produit AUCUN événement.
+    /// - Parameter mapMatchedDirectionChangeCoordinates : points de changement de manœuvre/rue
+    ///   issus du map matching Valhalla (spec "valhalla-map-matching-direction-change", it20) —
+    ///   `[]` par défaut (comportement STRICTEMENT identique à avant it20, non-régression).
+    ///   Fusionnés dans la MÊME liste que les événements géométriques ci-dessous (invariant it14
+    ///   "source unique pour épingles carte ET bannière latérale" : un seul `[Checkpoint]`,
+    ///   jamais deux listes parallèles) — un point ignoré s'il tombe à moins de
+    ///   `mergeMinDistanceMeters` d'un événement géométrique déjà détecté (pas de doublon),
+    ///   sinon ajouté avec `tier: .lightDirectionChange`, DISTINCT des 4 paliers d'angle.
     static func buildRoadbookEvents(
         for track: GPXTrack,
         windowBeforeMeters: Double,
@@ -26,7 +34,8 @@ enum RoadbookAnalyzer {
         markedThresholdDegrees: Double,
         hardThresholdDegrees: Double,
         uTurnThresholdDegrees: Double,
-        mergeMinDistanceMeters: Double
+        mergeMinDistanceMeters: Double,
+        mapMatchedDirectionChangeCoordinates: [CLLocationCoordinate2D] = []
     ) -> [Checkpoint] {
         let points = track.points
         guard points.count > 2, windowBeforeMeters > 0, windowAfterMeters > 0 else { return [] }
@@ -45,52 +54,158 @@ enum RoadbookAnalyzer {
         var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
 
         for i in 1..<(points.count - 1) {
-            // Segment le plus ANCIEN considéré : recule depuis i-1 (le segment qui MÈNE à `i`,
-            // toujours inclus) tant que windowBeforeMeters n'est pas couvert.
-            var startSeg = i - 1
-            var distBefore: Double = 0
-            while startSeg > 0, distBefore < windowBeforeMeters {
-                distBefore += segmentLengths[startSeg - 1]
-                startSeg -= 1
-            }
-            // Segment le plus AVANCÉ considéré : avance depuis i (le segment qui PART de `i`,
-            // toujours inclus) tant que windowAfterMeters n'est pas couvert.
-            var endSeg = i
-            var distAfter: Double = 0
-            while endSeg < segmentBearings.count - 1, distAfter < windowAfterMeters {
-                distAfter += segmentLengths[endSeg]
-                endSeg += 1
-            }
-            guard endSeg > startSeg else { continue }
-
-            // Somme des deltas segment à segment de startSeg à endSeg (PAS une simple
-            // différence d'angle entre les deux bornes — un virage > 180° sur la fenêtre serait
-            // alors mal reconstruit ; la somme pas-à-pas, chacun normalisé dans (-180,180],
-            // reste correcte même au-delà).
-            var totalTurn: Double = 0
-            for m in startSeg..<endSeg {
-                totalTurn += signedAngleDifference(from: segmentBearings[m], to: segmentBearings[m + 1])
-            }
-            let absDelta = abs(totalTurn)
-            guard absDelta >= lightThresholdDegrees else { continue }
+            guard let windowed = windowedTurn(
+                at: i,
+                segmentBearings: segmentBearings,
+                segmentLengths: segmentLengths,
+                windowBeforeMeters: windowBeforeMeters,
+                windowAfterMeters: windowAfterMeters
+            ) else { continue }
+            guard windowed.absAngle >= lightThresholdDegrees else { continue }
 
             let tier: RoadbookTier
-            if absDelta >= uTurnThresholdDegrees {
+            if windowed.absAngle >= uTurnThresholdDegrees {
                 tier = .uTurn
-            } else if absDelta >= hardThresholdDegrees {
+            } else if windowed.absAngle >= hardThresholdDegrees {
                 tier = .hard
-            } else if absDelta >= markedThresholdDegrees {
+            } else if windowed.absAngle >= markedThresholdDegrees {
                 tier = .marked
             } else {
                 tier = .light
             }
 
-            let direction: TurnDirection = tier == .uTurn ? .uTurn : (totalTurn > 0 ? .right : .left)
+            let direction: TurnDirection = tier == .uTurn ? .uTurn : (windowed.signedAngle > 0 ? .right : .left)
 
-            raw.append((points[i].coordinate, absDelta, direction, tier, i))
+            raw.append((points[i].coordinate, windowed.absAngle, direction, tier, i))
         }
 
-        return mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
+        let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
+        guard !mapMatchedDirectionChangeCoordinates.isEmpty else { return geometricEvents }
+
+        return mergingMapMatchedDirectionChanges(
+            mapMatchedDirectionChangeCoordinates,
+            into: geometricEvents,
+            points: points,
+            segmentBearings: segmentBearings,
+            segmentLengths: segmentLengths,
+            windowBeforeMeters: windowBeforeMeters,
+            windowAfterMeters: windowAfterMeters,
+            mergeMinDistanceMeters: mergeMinDistanceMeters
+        )
+    }
+
+    /// Fusionne les points de map matching dans la liste géométrique déjà produite, DANS
+    /// L'ORDRE de progression le long de la trace (`sourcePointIndex`), quelle que soit la
+    /// source — la bannière latérale/la liste roadbook lisent cette liste séquentiellement, un
+    /// événement mal ordonné y apparaîtrait au mauvais moment du trajet.
+    private static func mergingMapMatchedDirectionChanges(
+        _ matchedCoordinates: [CLLocationCoordinate2D],
+        into geometricEvents: [Checkpoint],
+        points: [GPXPoint],
+        segmentBearings: [Double],
+        segmentLengths: [Double],
+        windowBeforeMeters: Double,
+        windowAfterMeters: Double,
+        mergeMinDistanceMeters: Double
+    ) -> [Checkpoint] {
+        var combined = geometricEvents
+
+        for matchedCoordinate in matchedCoordinates {
+            guard !combined.contains(where: { distanceMeters($0.coordinate, matchedCoordinate) < mergeMinDistanceMeters }) else { continue }
+            guard let pointIndex = nearestPointIndex(to: matchedCoordinate, in: points) else { continue }
+
+            let windowed = windowedTurn(
+                at: pointIndex,
+                segmentBearings: segmentBearings,
+                segmentLengths: segmentLengths,
+                windowBeforeMeters: windowBeforeMeters,
+                windowAfterMeters: windowAfterMeters
+            )
+            let direction: TurnDirection = (windowed?.signedAngle ?? 0) >= 0 ? .right : .left
+
+            combined.append(Checkpoint(
+                coordinate: points[pointIndex].coordinate,
+                turnAngleDegrees: windowed?.absAngle ?? 0,
+                direction: direction,
+                tier: .lightDirectionChange,
+                sequenceIndex: 0, // renuméroté ci-dessous une fois l'ordre final connu
+                sourcePointIndex: pointIndex
+            ))
+        }
+
+        return combined
+            .sorted { $0.sourcePointIndex < $1.sourcePointIndex }
+            .enumerated()
+            .map { index, checkpoint in
+                Checkpoint(
+                    coordinate: checkpoint.coordinate,
+                    turnAngleDegrees: checkpoint.turnAngleDegrees,
+                    direction: checkpoint.direction,
+                    tier: checkpoint.tier,
+                    sequenceIndex: index + 1,
+                    sourcePointIndex: checkpoint.sourcePointIndex
+                )
+            }
+    }
+
+    /// Angle de virage sur fenêtre AVANT/APRÈS le point `i` (extrait de `buildRoadbookEvents`
+    /// pour être réutilisé par la fusion map matching ci-dessus, SANS dupliquer la logique de
+    /// fenêtrage) — somme pas-à-pas des deltas de cap segment par segment (pas une simple
+    /// différence corde à corde, voir commentaire historique ci-dessous).
+    private static func windowedTurn(
+        at i: Int,
+        segmentBearings: [Double],
+        segmentLengths: [Double],
+        windowBeforeMeters: Double,
+        windowAfterMeters: Double
+    ) -> (absAngle: Double, signedAngle: Double)? {
+        guard i > 0, i < segmentBearings.count else { return nil }
+
+        // Segment le plus ANCIEN considéré : recule depuis i-1 (le segment qui MÈNE à `i`,
+        // toujours inclus) tant que windowBeforeMeters n'est pas couvert.
+        var startSeg = i - 1
+        var distBefore: Double = 0
+        while startSeg > 0, distBefore < windowBeforeMeters {
+            distBefore += segmentLengths[startSeg - 1]
+            startSeg -= 1
+        }
+        // Segment le plus AVANCÉ considéré : avance depuis i (le segment qui PART de `i`,
+        // toujours inclus) tant que windowAfterMeters n'est pas couvert.
+        var endSeg = i
+        var distAfter: Double = 0
+        while endSeg < segmentBearings.count - 1, distAfter < windowAfterMeters {
+            distAfter += segmentLengths[endSeg]
+            endSeg += 1
+        }
+        guard endSeg > startSeg else { return nil }
+
+        // Somme des deltas segment à segment de startSeg à endSeg (PAS une simple différence
+        // d'angle entre les deux bornes — un virage > 180° sur la fenêtre serait alors mal
+        // reconstruit ; la somme pas-à-pas, chacun normalisé dans (-180,180], reste correcte
+        // même au-delà).
+        var totalTurn: Double = 0
+        for m in startSeg..<endSeg {
+            totalTurn += signedAngleDifference(from: segmentBearings[m], to: segmentBearings[m + 1])
+        }
+        return (abs(totalTurn), totalTurn)
+    }
+
+    /// Point de la trace le plus proche à VOL D'OISEAU (parcours linéaire, trace de taille
+    /// raisonnable pour un roadbook — pas besoin d'index spatial) — retrouve l'index d'origine
+    /// (`sourcePointIndex`) d'une coordonnée de map matching, qui ne coïncide pas forcément
+    /// EXACTEMENT avec un point de `points` (coordonnées Valhalla arrondies au 1e6).
+    private static func nearestPointIndex(to coordinate: CLLocationCoordinate2D, in points: [GPXPoint]) -> Int? {
+        guard !points.isEmpty else { return nil }
+        var bestIndex = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (index, point) in points.enumerated() {
+            let distance = distanceMeters(coordinate, point.coordinate)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+        return bestIndex
     }
 
     /// Fusionne les points de virage trop rapprochés (même épingle détectée sur plusieurs

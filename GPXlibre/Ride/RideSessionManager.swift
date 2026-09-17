@@ -106,6 +106,25 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     var unsavedRideStore = UnsavedRideStore()
     @Published private(set) var isRecordingPaused = false
 
+    // MARK: - Map matching Valhalla / détection fine de virages (spec
+    // "valhalla-map-matching-direction-change", it20)
+
+    /// `internal` uniquement pour la testabilité (même patron que `unsavedRideStore` ci-dessus) —
+    /// remplaçable par un provider factice pour vérifier le déclenchement/cache SANS jamais
+    /// dépendre d'un vrai réseau Valhalla en test.
+    var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
+    /// idem, `directoryOverride` dédié en test — jamais le vrai `Documents/RoadbookMapMatchCache`.
+    var mapMatchCache = RoadbookMapMatchCache()
+    /// Trace pour laquelle le map matching a déjà été déclenché (succès, échec ou en cours) —
+    /// évite de relancer un appel réseau à CHAQUE `switchMode`/`start` (retour d'onglet), pas
+    /// seulement au vrai premier chargement de la trace.
+    private var mapMatchedTrackID: UUID?
+    /// `internal` uniquement pour la testabilité — permet à un test d'attendre
+    /// (`await session.mapMatchingTask?.value`) la fin de la tâche de fond avant d'asserter,
+    /// sans `Task.sleep` arbitraire.
+    var mapMatchingTask: Task<Void, Never>?
+    private(set) var mapMatchedDirectionChangePoints: [CLLocationCoordinate2D] = []
+
     /// Guidage arrêté (spec "stop-guidance-semantics", it14, Bloc 3) — DISTINCT de
     /// `isRecordingPaused` ci-dessus (jamais touché par Stop désormais, l'enregistrement
     /// continue toujours en arrière-plan). Masque roadbook/bannières de guidage (voir RideView)
@@ -289,6 +308,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         if let track {
             trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+            triggerMapMatchingIfNeeded(for: track)
             rebuildCheckpoints()
             resetBlockedPathState()
 
@@ -319,6 +339,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             inflectionPoints = []
             currentInflection = nil
             distanceToCurrentInflectionMeters = nil
+            mapMatchingTask?.cancel()
+            mapMatchedTrackID = nil
+            mapMatchedDirectionChangePoints = []
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
             resumeTask?.cancel()
@@ -346,6 +369,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         if let track {
             trackCumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+            triggerMapMatchingIfNeeded(for: track)
             rebuildCheckpoints()
             resetBlockedPathState()
             distanceRemainingMeters = track.totalDistanceMeters
@@ -366,6 +390,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             inflectionPoints = []
             currentInflection = nil
             distanceToCurrentInflectionMeters = nil
+            mapMatchingTask?.cancel()
+            mapMatchedTrackID = nil
+            mapMatchedDirectionChangePoints = []
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
             resumeTask?.cancel()
@@ -475,13 +502,68 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             markedThresholdDegrees: settings.roadbookMarkedThresholdDegrees,
             hardThresholdDegrees: settings.roadbookHardThresholdDegrees,
             uTurnThresholdDegrees: settings.roadbookUTurnThresholdDegrees,
-            mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
+            mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters,
+            mapMatchedDirectionChangeCoordinates: mapMatchedDirectionChangePoints
         )
         checkpoints = events
         inflectionPoints = events
         currentInflection = nil
         distanceToCurrentInflectionMeters = nil
         flashedRoadbookEventIDs.removeAll()
+    }
+
+    /// Déclenche le map matching Valhalla EN TÂCHE DE FOND, une fois par trace RÉELLEMENT
+    /// différente (spec "valhalla-map-matching-direction-change", it20) — jamais en temps réel
+    /// pendant le Ride, jamais relancé à chaque retour d'onglet (`mapMatchedTrackID` fait
+    /// exactement ce que `recordingTrackID` fait déjà pour l'enregistrement, un garde distinct
+    /// car ce sont deux préoccupations indépendantes). Dégradation propre : Valhalla désactivé
+    /// ou non configuré → aucun appel réseau, `mapMatchedDirectionChangePoints` reste vide, le
+    /// roadbook géométrique est strictement inchangé (comportement identique à avant it20).
+    private func triggerMapMatchingIfNeeded(for track: GPXTrack) {
+        guard mapMatchedTrackID != track.id else { return }
+        mapMatchedTrackID = track.id
+        mapMatchingTask?.cancel()
+
+        guard let configuration = currentValhallaConfiguration else {
+            mapMatchedDirectionChangePoints = []
+            return
+        }
+
+        if let cached = mapMatchCache.coordinates(for: track.id) {
+            // Pas de rebuildCheckpoints() ici : l'appelant (start/switchMode) en fait déjà un
+            // juste après avoir appelé cette fonction, qui lira cette valeur à jour.
+            mapMatchedDirectionChangePoints = cached
+            return
+        }
+
+        mapMatchedDirectionChangePoints = []
+        let trackID = track.id
+        let sampled = Self.downsampledForMapMatching(track.points.map(\.coordinate))
+        let provider = mapMatchingProvider
+
+        mapMatchingTask = Task { [weak self] in
+            guard let matched = try? await provider.matchRoute(coordinates: sampled, configuration: configuration) else { return }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, self.track?.id == trackID else { return }
+                self.mapMatchCache.store(trackID: trackID, coordinates: matched)
+                self.mapMatchedDirectionChangePoints = matched
+                // Contrairement au cas cache-hit ci-dessus, le rebuildCheckpoints() de
+                // start/switchMode a déjà eu lieu SANS ces points (réponse réseau arrivée après
+                // coup) — celui-ci est nécessaire pour les faire apparaître.
+                self.rebuildCheckpoints()
+            }
+        }
+    }
+
+    /// Sous-échantillonnage UNIFORME si la trace dépasse `RideConstants.mapMatchingMaxTracePoints`
+    /// — garde toujours le premier ET le dernier point (bornes réelles du trajet), préserve la
+    /// forme générale du tracé plutôt que de le tronquer.
+    private static func downsampledForMapMatching(_ coordinates: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        let maxPoints = RideConstants.mapMatchingMaxTracePoints
+        guard coordinates.count > maxPoints, maxPoints > 1 else { return coordinates }
+        let step = Double(coordinates.count - 1) / Double(maxPoints - 1)
+        return (0..<maxPoints).map { coordinates[Int((Double($0) * step).rounded())] }
     }
 
     func registerManualGesture() {
