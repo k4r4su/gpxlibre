@@ -28,6 +28,10 @@ enum NavConstants {
 
     static let maxSavedFavorites = 8
 
+    /// Spec "search-history" (it19, retour terrain "le menu Aller à est un peu vide, garder
+    /// un historique des 5 dernières recherches") — voir NavSearchHistoryStore.
+    static let maxSearchHistoryEntries = 5
+
     // MARK: - Limite de vitesse (OSM maxspeed via Overpass, silencieux si absent)
 
     static let speedLimitMinIntervalSeconds: Double = 20

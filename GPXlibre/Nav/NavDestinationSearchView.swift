@@ -1,12 +1,14 @@
 import SwiftUI
 import CoreLocation
 
-/// Recherche d'adresse (Nominatim), favoris Domicile/Travail en 1 tap, et point choisi
-/// directement sur la carte (long-press, voir RideView).
+/// Recherche d'adresse (Nominatim), favoris Domicile/Travail en 1 tap, historique des dernières
+/// recherches (spec "search-history", it19), et point choisi directement sur la carte
+/// (long-press, voir RideView).
 struct NavDestinationSearchView: View {
     let onSelect: (CLLocationCoordinate2D, String, GoToProfile) -> Void
 
     @EnvironmentObject private var favorites: NavFavoritesStore
+    @EnvironmentObject private var searchHistory: NavSearchHistoryStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
@@ -26,6 +28,20 @@ struct NavDestinationSearchView: View {
                     .padding(.vertical, 4)
                 }
 
+                // Spec "search-history" (it19, retour terrain : "le menu est un peu vide
+                // sinon") — visible uniquement avant de taper quoi que ce soit, comme les
+                // résultats de recherche eux-mêmes qu'il remplace le temps qu'on tape.
+                if query.isEmpty, !searchHistory.entries.isEmpty {
+                    Section("Recherches récentes") {
+                        ForEach(searchHistory.entries) { entry in
+                            destinationRow(label: entry.label, coordinate: entry.coordinate.coordinate)
+                        }
+                        .onDelete { offsets in
+                            for index in offsets { searchHistory.remove(searchHistory.entries[index]) }
+                        }
+                    }
+                }
+
                 if isSearching {
                     ProgressView()
                 } else if let errorMessage {
@@ -33,36 +49,7 @@ struct NavDestinationSearchView: View {
                 }
 
                 ForEach(results) { result in
-                    VStack(alignment: .leading, spacing: 6) {
-                        // Fix "icon-text-consistency" (it19, étude UX) : les favoris
-                        // Domicile/Travail juste au-dessus ont déjà une icône — même incohérence
-                        // que FavoriteAddressesView, corrigée à l'identique (mappin.and.ellipse).
-                        Label {
-                            Text(result.displayName)
-                                .multilineTextAlignment(.leading)
-                                .lineLimit(2)
-                        } icon: {
-                            Image(systemName: "mappin.and.ellipse")
-                        }
-                        // Chip de profil (Bloc 4) : Route / Offroad / Mixte, sur chaque résultat.
-                        HStack(spacing: 8) {
-                            ForEach(GoToProfile.allCases) { profile in
-                                Button {
-                                    onSelect(result.coordinate, result.displayName, profile)
-                                    dismiss()
-                                } label: {
-                                    Label(profile.label, systemImage: profile.systemImageName)
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.accentColor.opacity(0.15))
-                                        .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 2)
+                    destinationRow(label: result.displayName, coordinate: result.coordinate)
                 }
             }
             .searchable(text: $query, prompt: "Adresse ou lieu")
@@ -76,6 +63,41 @@ struct NavDestinationSearchView: View {
                 }
             }
         }
+    }
+
+    /// Ligne réutilisée pour un résultat de recherche ET une entrée d'historique — même
+    /// libellé + chips de profil (Bloc 4 : Route / Offroad / Mixte), seule la source diffère.
+    private func destinationRow(label: String, coordinate: CLLocationCoordinate2D) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Fix "icon-text-consistency" (it19, étude UX) : les favoris Domicile/Travail juste
+            // au-dessus ont déjà une icône — même incohérence que FavoriteAddressesView,
+            // corrigée à l'identique (mappin.and.ellipse).
+            Label {
+                Text(label)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+            } icon: {
+                Image(systemName: "mappin.and.ellipse")
+            }
+            HStack(spacing: 8) {
+                ForEach(GoToProfile.allCases) { profile in
+                    Button {
+                        searchHistory.record(coordinate: coordinate, label: label)
+                        onSelect(coordinate, label, profile)
+                        dismiss()
+                    } label: {
+                        Label(profile.label, systemImage: profile.systemImageName)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private func favoriteButton(title: String, systemImage: String, favorite: NavFavorite?) -> some View {

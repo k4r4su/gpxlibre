@@ -115,6 +115,12 @@ GPXlibre/
                    d'origine) deviennent des no-op inoffensifs hors contexte de présentation
                    modale, comportement standard de `\.dismiss`, rien à corriger côté vue
                    réutilisée. `AppTab.search` inséré entre `.ride` et `.library`.
+                   NavSearchHistoryStore (it19, spec "search-history", retour terrain "le menu
+                   Aller à est un peu vide") — dernières recherches CHOISIES (pas Domicile/
+                   Travail, déjà leur accès direct), max `NavConstants.maxSearchHistoryEntries`
+                   (5), dédupliquées par libellé, persistées `Documents/nav-search-history.json`
+                   (même patron que NavFavoritesStore). Affichées dans NavDestinationSearchView
+                   uniquement quand le champ de recherche est vide.
   Offline/        Téléchargement de tuiles raster par région, cache, précalcul de taille ;
                    VectorPackageStore/VectorPackagesView (it11) — paquets `.pmtiles`
                    régionaux (import/téléchargement, un seul actif à la fois). Voir section
@@ -125,9 +131,23 @@ GPXlibre/
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
   Recording/      Enregistrement GPS pendant le Ride + export GPX ; RecordingConstants (it19,
                    spec "recording-density-setting") : seuils intervalle/distance PAR PRESET
-                   (RecordingDensityPreset : précis/léger/très léger, Réglages > Enregistrement
-                   de la sortie) plutôt que codés en dur — `précis` reproduit exactement l'ancien
-                   comportement (5 s/15 m)
+                   (RecordingDensityPreset : précis/léger/très léger/ultra léger, Réglages >
+                   Enregistrement de la sortie) plutôt que codés en dur — `précis` reproduit
+                   exactement l'ancien comportement (5 s/15 m), progression géométrique ×2
+                   ensuite (10/30 → 20/60 → 40/120). UnsavedRideStore (it19, spec "unsaved-ride-
+                   recovery", retour terrain "ça enregistre direct, si on oublie de l'enregistrer
+                   c'est perdu") : filet de secours DISTINCT de LibraryStore
+                   (`Documents/UnsavedRides/`, jamais mélangé aux vraies traces) — un GPX de la
+                   sortie en cours réécrit tous les `RideConstants.
+                   unsavedRideCheckpointEveryNPoints` (10) points enregistrés par
+                   RideSessionManager (voir `checkpointUnsavedRideIfNeeded`), purgé
+                   automatiquement au-delà de `settings.unsavedRideRetentionLimit` sorties
+                   (défaut 10, réglable). Affiché dans Biblio (LibraryView, section "Sorties non
+                   enregistrées") avec "Récupérer" (importe normalement, même couleur ambre
+                   qu'un export EndRideView) ou "Supprimer". `EndRideView.save()` appelle
+                   `session.discardUnsavedRideCheckpoint()` juste avant `resetRecording()` (dans
+                   cet ordre précis — resetRecording efface l'id de session dont discard a
+                   besoin) dès qu'une sortie est proprement enregistrée.
   Settings/       RideSettingsStore (réglages globaux persistés — SAUF exception explicite,
                    voir "Réglages stagés" plus bas), SettingsView, ValhallaSettingsView (it19 :
                    Réglages > Avancé > "Routage Valhalla", voir Ride/CLAUDE.md pour le détail),
@@ -153,7 +173,11 @@ GPXlibre/
                    `Button` de toute la ligne — anti-pattern SwiftUI en `List`, tap parfois avalé
                    par le parent — remplacé par un seul `Button` (le check-mark) +
                    `.onTapGesture` sur le reste de la ligne pour ouvrir la fiche, NE JAMAIS
-                   réintroduire un `Button` autour de toute la ligne ; PLUS
+                   réintroduire un `Button` autour de toute la ligne ; section "Sorties non
+                   enregistrées" (it19, spec "unsaved-ride-recovery", `UnsavedRideStore` propre
+                   à cette vue — voir Recording/ ci-dessus pour le détail) affichée au-dessus
+                   des traces normales quand non vide, rechargée à chaque apparition
+                   (`.onAppear { unsavedRides.reload() }`) ; PLUS
                    TrackDetailView, qui n'a donc plus de point
                    d'entrée UI mais reste intact, voir TODO.md), TrackDetailView,
                    TrackSettingsView (réglages par trace — sélecteur de départ personnalisé

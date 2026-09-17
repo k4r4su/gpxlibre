@@ -11,6 +11,7 @@ struct GPXlibreApp: App {
     @StateObject private var waypointStore = RollingWaypointStore()
     @StateObject private var rideModeStore = RideModeStore()
     @StateObject private var navFavorites = NavFavoritesStore()
+    @StateObject private var navSearchHistory = NavSearchHistoryStore()
     @StateObject private var sharedBlockages: SharedBlockageSyncCoordinator
     @StateObject private var trackRideSettings = TrackRideSettingsStore()
     @StateObject private var vectorPackages = VectorPackageStore()
@@ -41,6 +42,7 @@ struct GPXlibreApp: App {
                 .environmentObject(waypointStore)
                 .environmentObject(rideModeStore)
                 .environmentObject(navFavorites)
+                .environmentObject(navSearchHistory)
                 .environmentObject(sharedBlockages)
                 .environmentObject(trackRideSettings)
                 .environmentObject(vectorPackages)
