@@ -27,7 +27,9 @@ enum DetourProfile: String, CaseIterable {
         }
     }
 
-    fileprivate var osrmProfile: String {
+    /// Plus `fileprivate` (spec "routing-provider-protocol", it20) : lu depuis
+    /// `OSRMRoutingProvider` (RoutingProvider.swift), un fichier distinct désormais.
+    var osrmProfile: String {
         switch self {
         case .route: return "driving"
         case .offroad: return "cycling"
@@ -52,8 +54,10 @@ enum DetourRoutingError: Error {
     case network(Error)
 }
 
-/// Appelle l'API publique de démonstration OSRM (gratuite, sans clé, usage raisonnable).
-/// À remplacer par une instance auto-hébergée en cas de montée en charge (voir doc OSRM).
+/// Point d'entrée du routage point-à-point pour le contournement/la reprise hors-trace/le
+/// hors-route d'Aller à. Depuis it20 (spec "valhalla-live-routing"), délègue à un
+/// `RoutingProvider` résolu par `RoutingProviderResolver` — voir RoutingProvider.swift pour le
+/// détail de l'abstraction et du mécanisme de repli en chaîne.
 enum DetourRoutingService {
     static func requestRoute(
         from origin: CLLocationCoordinate2D,
@@ -78,48 +82,46 @@ enum DetourRoutingService {
     /// réutilisé par RideSessionManager.startGoTo pour le profil hors-route d'Aller à (spec
     /// "offroad-routing-preference", it13), donc internal plutôt que private désormais.
     ///
-    /// `valhalla` (spec "valhalla-client-toggle", it19) : `nil` tant que le toggle Réglages est
-    /// désactivé (défaut) — comportement OSRM inchangé à l'identique. Non-nil : tente Valhalla
-    /// EN PREMIER, puis retombe automatiquement sur OSRM en cas d'échec (réseau, auth, serveur
-    /// down) — désactiver le toggle plus tard revient donc instantanément et sans reste à ce
-    /// même comportement OSRM, jamais de guidage cassé par un serveur Valhalla indisponible.
+    /// `valhalla` (spec "valhalla-client-toggle", it19 ; branché réellement sur le guidage,
+    /// it20) : `nil` tant que le toggle Réglages est désactivé (défaut) — comportement OSRM
+    /// inchangé à l'identique. Non-nil : tente Valhalla EN PREMIER via `RoutingProviderResolver`,
+    /// puis retombe automatiquement sur OSRM en cas d'échec (réseau, auth, serveur down) —
+    /// désactiver le toggle plus tard revient donc instantanément et sans reste à ce même
+    /// comportement OSRM, jamais de guidage cassé par un serveur Valhalla indisponible.
     static func route(
-        from: CLLocationCoordinate2D,
-        to: CLLocationCoordinate2D,
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
         profile: DetourProfile,
         valhalla: ValhallaConfiguration? = nil
     ) async throws -> [CLLocationCoordinate2D] {
-        if let valhalla, let coordinates = try? await ValhallaRoutingService.route(from: from, to: to, profile: profile, configuration: valhalla) {
-            return coordinates
-        }
-
-        let urlString = "\(RideConstants.osrmPublicBaseURL)/route/v1/\(profile.osrmProfile)/"
-            + "\(from.longitude),\(from.latitude);\(to.longitude),\(to.latitude)"
-            + "?overview=full&geometries=geojson"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-
-        var request = URLRequest(url: url, timeoutInterval: RideConstants.detourRoutingTimeoutSeconds)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-
-        let decoded = try JSONDecoder().decode(OSRMResponse.self, from: data)
-        guard let geometry = decoded.routes.first?.geometry.coordinates, !geometry.isEmpty else {
-            throw URLError(.cannotParseResponse)
-        }
-        return geometry.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) }
+        try await route(
+            from: origin,
+            to: destination,
+            profile: profile,
+            providers: RoutingProviderResolver.orderedProviders(valhallaEnabled: valhalla != nil, configuration: valhalla)
+        )
     }
-}
 
-private struct OSRMResponse: Decodable {
-    let routes: [OSRMRoute]
-}
-private struct OSRMRoute: Decodable {
-    let geometry: OSRMGeometry
-}
-private struct OSRMGeometry: Decodable {
-    let coordinates: [[Double]]
+    /// `internal` uniquement pour la testabilité (spec "routing-provider-protocol", it20) —
+    /// permet aux tests d'injecter des `RoutingProvider` factices (succès/échec contrôlés) pour
+    /// vérifier le repli en chaîne SANS jamais dépendre d'un vrai réseau (ni OSRM, ni Valhalla).
+    /// Aucun appelant réel ne passe `providers:` explicitement — toujours via l'overload
+    /// ci-dessus, résolu depuis les Réglages.
+    static func route(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        profile: DetourProfile,
+        providers: [RoutingProvider]
+    ) async throws -> [CLLocationCoordinate2D] {
+        var lastError: Error?
+        for provider in providers {
+            do {
+                return try await provider.route(from: origin, to: destination, profile: profile)
+            } catch {
+                lastError = error
+                continue
+            }
+        }
+        throw lastError ?? URLError(.unknown)
+    }
 }

@@ -64,7 +64,7 @@ enum ValhallaRoutingService {
         guard let url = endpointURL(configuration.endpointURLString, path: "route") else {
             throw ValhallaRoutingError.invalidEndpoint
         }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "locations": [
                 ["lat": origin.latitude, "lon": origin.longitude],
                 ["lat": destination.latitude, "lon": destination.longitude],
@@ -72,6 +72,18 @@ enum ValhallaRoutingService {
             "costing": costing(for: profile),
             "units": "kilometers",
         ]
+        // Spec "valhalla-live-routing" (it20) : le costing "auto" par défaut privilégie
+        // l'autoroute la plus rapide, peu pertinent pour un contournement/une reprise moto —
+        // le profil `.offroad` (costing "bicycle") évite déjà nativement l'autoroute, donc
+        // seul `.route` a besoin de ce réglage.
+        if profile == .route {
+            body["costing_options"] = [
+                "auto": [
+                    "use_highways": RideConstants.valhallaAutoCostingUseHighways,
+                    "use_tolls": RideConstants.valhallaAutoCostingUseTolls,
+                ],
+            ]
+        }
 
         var request = URLRequest(url: url, timeoutInterval: RideConstants.valhallaRequestTimeoutSeconds)
         request.httpMethod = "POST"
@@ -105,7 +117,11 @@ enum ValhallaRoutingService {
         return decoded.version ?? "connecté"
     }
 
-    private static func performRequest(_ request: URLRequest) async throws -> Data {
+    /// Plus `private` (spec "valhalla-map-matching-direction-change", it20) : réutilisées telles
+    /// quelles par `ValhallaMapMatchingService` (`/trace_route`) — même gestion d'erreur réseau/
+    /// HTTP, même construction d'URL/Basic Auth, pas de duplication entre les deux clients du
+    /// même serveur.
+    static func performRequest(_ request: URLRequest) async throws -> Data {
         let data: Data
         let response: URLResponse
         do {
@@ -119,13 +135,13 @@ enum ValhallaRoutingService {
         return data
     }
 
-    private static func endpointURL(_ endpointURLString: String, path: String) -> URL? {
+    static func endpointURL(_ endpointURLString: String, path: String) -> URL? {
         let trimmed = endpointURLString.hasSuffix("/") ? String(endpointURLString.dropLast()) : endpointURLString
         guard !trimmed.isEmpty else { return nil }
         return URL(string: "\(trimmed)/\(path)")
     }
 
-    private static func applyBasicAuth(to request: inout URLRequest, configuration: ValhallaConfiguration) {
+    static func applyBasicAuth(to request: inout URLRequest, configuration: ValhallaConfiguration) {
         guard !configuration.username.isEmpty || !configuration.password.isEmpty else { return }
         let raw = "\(configuration.username):\(configuration.password)"
         let encoded = Data(raw.utf8).base64EncodedString()

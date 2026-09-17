@@ -25,8 +25,16 @@ struct ValhallaSettingsView: View {
             Section {
                 Toggle("Utiliser Valhalla pour le routage", isOn: $settings.valhallaEnabled)
                     .longPressTooltip("Remplace OSRM pour le détour/la reprise hors-trace/le hors-route d'Aller à — désactiver revient instantanément au comportement OSRM habituel")
+                // Spec "valhalla-live-routing" (it20) : rendre visible que le toggle est
+                // désormais le VRAI interrupteur du provider actif, pas seulement du test de
+                // connexion — périmètre réel (voir RoutingProviderResolver), pas une simplification.
+                if settings.valhallaEnabled {
+                    Text("Utilisé pour : contournement (chemin bloqué), reprise hors-trace, hors-route d'Aller à, détection fine de virages légers.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             } footer: {
-                Text("Désactivé par défaut. Le Mode Nav (\"Aller à\" routé/mixte) continue d'utiliser OSRM dans tous les cas — cette itération couvre le détour et la reprise hors-trace.")
+                Text("Désactivé par défaut. Le Mode Nav (\"Aller à\" routé/mixte) continue d'utiliser OSRM dans tous les cas — Valhalla reste retenté en premier partout ailleurs, avec repli automatique et silencieux vers OSRM en cas d'échec.")
             }
 
             Section {

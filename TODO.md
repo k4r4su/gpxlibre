@@ -1,5 +1,61 @@
 # TODO
 
+## Itération 20 (branchement réel Valhalla / map matching pour virages légers)
+
+Fiche de développement complète fournie par le propriétaire, deux chantiers :
+
+- **Constat de départ à nuancer** : la fiche affirmait "`ValhallaRoutingService` n'est utilisé
+  que par le bouton Tester la connexion" — en réalité, DÉJÀ FAUX au moment de recevoir cette
+  fiche : `DetourRoutingService.route(from:to:profile:valhalla:)` appelait déjà Valhalla en
+  premier (repli OSRM inline) depuis it19, branché sur le contournement/la reprise hors-trace/
+  le hors-route d'Aller à (voir `RideSessionManager.currentValhallaConfiguration`, section
+  "Routage Valhalla optionnel" du CLAUDE.md Ride/, ligne appelante `requestRoute`/`route` déjà
+  passée `valhalla: currentValhallaConfiguration`). La partie RÉELLEMENT neuve de ce chantier :
+  extraire cette logique inline dans un vrai protocole `RoutingProvider` + un
+  `RoutingProviderResolver` testable (voir Ride/CLAUDE.md, "Branchement réel de Valhalla") — un
+  refactor de clarté/testabilité, pas un branchement qui manquait fonctionnellement. Ligne
+  d'état ajoutée dans Réglages (visible seulement toggle ON) pour rendre le périmètre RÉEL
+  explicite au propriétaire, plutôt que le texte suggéré par la fiche (incomplet : omettait le
+  contournement et le hors-route d'Aller à, déjà couverts depuis it19).
+- **Map matching (`valhalla-map-matching-direction-change`)** : nouveau, voir Ride/CLAUDE.md
+  pour le détail complet (`ValhallaMapMatchingService`/`RoadbookMapMatchCache`/
+  `RoadbookTier.lightDirectionChange`). Décision d'implémentation : `/trace_route`
+  (`maneuvers[]`) plutôt que `/trace_attributes` — suffit pour détecter un changement de
+  manœuvre/rue sans interpréter des attributs d'arête bas niveau, plus simple pour un résultat
+  équivalent dans ce périmètre.
+- **Découverte en cours de route (tests), documentée pour référence future — PAS corrigée ce
+  tour-ci, hors périmètre de cette fiche** : `RoadbookAnalyzer.windowedTurn` (donc
+  `buildRoadbookEvents` depuis it14, comportement PRÉEXISTANT, pas introduit par it20) a une
+  particularité de fenêtrage sur une trace à segments LONGS (≥ la fenêtre avant/après, ex.
+  100-300 m — un enregistrement GPS réel a des segments bien plus courts, quelques mètres à
+  quelques dizaines de mètres selon la densité, donc ce cas ne se présente normalement jamais en
+  usage réel) : dès qu'un point intérieur a au moins un segment de chaque côté (`startSeg > 0`
+  ou extension avant `endSeg`), la fenêtre s'étend TOUJOURS d'au moins un segment complet
+  supplémentaire, même si le segment immédiatement adjacent dépasse déjà largement la fenêtre
+  demandée — la mesure résultante (somme télescopique des deltas de cap) peut alors capter le
+  virage d'UN sommet voisin en plus de celui visé, et deux sommets voisins portant le même angle
+  réel peuvent se voir mesurés identiquement puis fusionnés par `mergeNearby` sur le PREMIER
+  rencontré plutôt que celui géométriquement "central". Trouvé en écrivant
+  `RoadbookMapMatchingTests.testMergedEventsStayOrderedByProgressionAlongTheTrack` (trace
+  synthétique à segments longs, jamais exercée par la suite de tests existante qui n'utilise que
+  des traces à 2-4 segments ou des segments courts). Aucun symptôme terrain rapporté à ce jour
+  (aucune trace réelle n'a des segments aussi longs) — à garder en tête si un futur bug roadbook
+  "virage détecté au mauvais point" est signalé sur une trace au maillage GPS inhabituellement
+  large (import externe rééchantillonné, par exemple).
+- **Non vérifié visuellement/en conditions réelles (pas de device physique ni de serveur
+  Valhalla réel dans cet environnement)** : l'apparition effective de l'icône "signpost" sur la
+  carte pour un vrai virage léger détecté par map matching, le temps réel d'un appel
+  `/trace_route` sur une trace de plusieurs milliers de points (voir
+  `mapMatchingMaxTracePoints`, sous-échantillonnage jamais exercé contre un vrai serveur), et la
+  ligne d'état des Réglages Valhalla (texte, pas de bug de layout attendu mais jamais rendue à
+  l'écran ici). Logique couverte par 23 nouveaux tests unitaires (179 au total, 0 échec) :
+  `RoutingProviderTests` (résolution + repli en chaîne, providers factices), 
+  `RoadbookMapMatchingTests` (fusion géométrique/map matching, non-régression explicite),
+  `ValhallaMapMatchingServiceTests` (extraction pure des manœuvres intermédiaires),
+  `RoadbookMapMatchCacheTests` (persistance disque par trace),
+  `RideSessionManagerMapMatchingTests` (déclenchement une fois par trace, cache, dégradation
+  propre — provider Valhalla toujours factice, jamais de vrai réseau).
+
 ## Étude UX "boutons icône+texte" (it19, propriétaire : "proposition, pas une refonte")
 
 Recensement exhaustif effectué (sous-agent dédié) de tous les boutons texte-seul de l'app.

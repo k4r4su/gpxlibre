@@ -42,6 +42,13 @@ GPXlibre/
                    roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
                    ValhallaRoutingService/ValhallaKeychainStore (it19, spec "valhalla-client-
                    toggle" : backend de routage alternatif optionnel — voir Ride/CLAUDE.md),
+                   RoutingProvider (it20, spec "valhalla-live-routing" : protocole commun OSRM/
+                   Valhalla + RoutingProviderResolver, branche RÉELLEMENT Valhalla sur le
+                   guidage — voir Ride/CLAUDE.md), ValhallaMapMatchingService/
+                   RoadbookMapMatchCache (it20, spec "valhalla-map-matching-direction-change" :
+                   `/trace_route` détecte les bifurcations invisibles géométriquement,
+                   nouveau tier RoadbookTier.lightDirectionChange, cache disque par trace — voir
+                   Ride/CLAUDE.md),
                    RoadbookPanelView (bandeau "hors trace" plein-largeur) ORPHELINE depuis it18
                    (spec "offtrack-compact-chip" — remplacée par OffTrackChipView, colonne
                    latérale) : fichier intact, même patron que TrackDetailView/

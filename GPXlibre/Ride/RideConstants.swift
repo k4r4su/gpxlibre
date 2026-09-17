@@ -288,6 +288,32 @@ enum RideConstants {
     /// HTTP/2 + vérification d'auth, sans connexion déjà "chaude").
     static let valhallaRequestTimeoutSeconds: Double = 20
 
+    // MARK: - Routage Valhalla réellement branché (spec "valhalla-live-routing", it20)
+
+    /// Réduit la préférence autoroute/péage du costing "auto" Valhalla (profil `.route`) — même
+    /// esprit que le profil `.offroad` existant (costing "bicycle", qui évite déjà nativement
+    /// l'autoroute) : sans ça, "auto" par défaut privilégie l'autoroute la plus rapide, peu
+    /// pertinent pour un contournement/une reprise moto sur petites routes. Réduites, pas
+    /// interdites (0 interdirait totalement, ce qui peut produire "no route" sur un point isolé
+    /// mal desservi autrement).
+    static let valhallaAutoCostingUseHighways: Double = 0.3
+    static let valhallaAutoCostingUseTolls: Double = 0.1
+
+    // MARK: - Map matching Valhalla / détection fine de virages (spec
+    // "valhalla-map-matching-direction-change", it20)
+
+    /// Timeout DÉDIÉ pour `/trace_route` (map matching) — DISTINCT de
+    /// `valhallaRequestTimeoutSeconds` (`/route`, deux points) : recaler une trace entière de
+    /// plusieurs centaines/milliers de points sur le réseau routier réel peut légitimement
+    /// prendre plus de temps qu'un simple calcul d'itinéraire point à point.
+    static let valhallaMapMatchingTimeoutSeconds: Double = 45
+
+    /// Nombre max de points de trace envoyés à `/trace_route` en une fois — au-delà,
+    /// sous-échantillonnage UNIFORME (jamais de perte de forme générale du tracé) avant
+    /// l'appel, pour rester dans une charge utile raisonnable même sur une trace de plusieurs
+    /// milliers de points GPS bruts (ex. enregistrement dense "précis", 5 s/15 m).
+    static let mapMatchingMaxTracePoints: Int = 2000
+
     // MARK: - "Reprendre la trace ici" (feat "resume-at-point", Bloc 3, it10)
 
     /// Tolérance de tap sur la trace (points écran, ~30-40 pt demandés) — convertie en mètres

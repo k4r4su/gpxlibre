@@ -211,6 +211,91 @@ device physique, voir CLAUDE.md racine) :
   cause. Si le timeout persiste après ces deux fixs, le code d'erreur affiché est le point de
   départ du prochain diagnostic.
 
+## Branchement réel de Valhalla (spec "valhalla-live-routing", it20)
+
+Avant it20, `DetourRoutingService.route(...)` appelait `ValhallaRoutingService` directement en
+dur (tenter Valhalla, repli OSRM inline) — fonctionnellement déjà correct, mais dupliquant la
+logique de repli à chaque site d'appel potentiel et sans point de résolution unique testable.
+Depuis it20, `RoutingProvider.swift` introduit :
+
+- Un protocole `RoutingProvider` (`route(from:to:profile:) async throws -> [CLLocationCoordinate2D]`)
+  que `OSRMRoutingProvider` et `ValhallaProvider` implémentent tous deux — même signature
+  d'entrée/sortie qu'avant, AUCUN appelant existant (`ResumeGuidance`/`requestResume`,
+  `requestDetour`/`requestDirectDetour`, `startGoTo` profil `.offroad`) n'a changé.
+- `RoutingProviderResolver.orderedProviders(valhallaEnabled:configuration:)` — résolution PURE
+  (même patron que `MapSourceResolver`, it11) : Valhalla en tête si activé+configuré, OSRM
+  TOUJOURS en dernier maillon, jamais désactivable.
+- `DetourRoutingService.route(from:to:profile:valhalla:)` (API publique inchangée) délègue à un
+  second overload `route(from:to:profile:providers:)`, `internal` uniquement pour la
+  testabilité — permet d'injecter des `RoutingProvider` factices (voir `RoutingProviderTests`)
+  et de vérifier le repli en chaîne SANS jamais dépendre d'un vrai réseau (ni OSRM, ni Valhalla).
+
+Portée INCHANGÉE depuis it19 (voir section "Routage Valhalla optionnel" ci-dessous) : toujours
+`DetourRoutingService.route(...)` uniquement (contournement, reprise hors-trace, offroad
+d'Aller à), jamais `NavRoutingService` (profils route/mixte d'Aller à, manœuvres turn-by-turn).
+Nouveauté it20 : le costing "auto" Valhalla (profil `.route`) reçoit désormais des
+`costing_options` réduisant `use_highways`/`use_tolls` (`RideConstants.valhallaAutoCosting*`) —
+même esprit que le profil `.offroad` (costing "bicycle", qui évite déjà l'autoroute
+nativement) : "auto" par défaut privilégierait sinon l'autoroute la plus rapide, peu pertinent
+pour un contournement/une reprise moto sur petites routes.
+
+## Détection fine de virages via map matching (spec
+## "valhalla-map-matching-direction-change", it20)
+
+Retour terrain : un léger virage (< `roadbookLightThresholdDegrees`, 30° par défaut)
+correspondant à un VRAI changement de rue/bifurcation n'était pas signalé — le roadbook ne
+regarde QUE l'angle géométrique cumulé de la trace GPX, qui ne distingue pas une simple
+courbure d'un vrai changement de segment routier. Résolu par map matching complet (`/trace_route`
+Valhalla, "préparé mais non branché" depuis it19), PAS par un simple abaissement du seuil
+d'angle (aurait aussi fait ressortir de vraies simples courbures sans rapport avec un
+changement de rue) :
+
+- `ValhallaMapMatchingService.matchRoute(coordinates:configuration:)` recale la trace ENTIÈRE
+  sur le réseau routier réel via `/trace_route` (`shape_match: "map_snap"`, costing "auto") —
+  PAS `/trace_attributes` (endpoint dédié aux attributs d'arête par point, plus riche mais plus
+  complexe à interpréter) : chaque élément de `trip.legs[].maneuvers[]` délimite déjà un segment
+  de manœuvre distinct (nom de rue/type différent), exactement ce qu'on veut détecter sans
+  reconstruire cette segmentation depuis des attributs bas niveau. Première ET dernière manœuvre
+  (Départ/Arrivée) toujours exclues (`intermediateManeuverCoordinates`) — seules les manœuvres
+  EN COURS de route sont des candidats. `RideConstants.mapMatchingMaxTracePoints` (2000) :
+  sous-échantillonnage UNIFORME en amont si la trace dépasse ce nombre de points (charge utile
+  raisonnable même sur un enregistrement dense "précis", 5 s/15 m).
+- `RoadbookTier.lightDirectionChange` : nouveau palier, DISTINCT des 4 paliers d'angle existants
+  (light/marked/hard/uTurn) — icône "signpost.left/right" (panneau de signalisation, pas une
+  flèche), signale explicitement "pas un virage géométrique classique".
+- `RoadbookAnalyzer.buildRoadbookEvents(..., mapMatchedDirectionChangeCoordinates: [] par
+  défaut)` — respecte l'invariant it14 "source unique pour épingles carte ET bannière latérale" :
+  UNE SEULE liste `[Checkpoint]`, enrichie plutôt que dupliquée. Un point de map matching à
+  moins de `mergeMinDistanceMeters` d'un événement géométrique déjà détecté est ignoré (pas de
+  doublon) ; sinon assigné au point de trace le plus proche à vol d'oiseau
+  (`nearestPointIndex`, parcours linéaire — trace de taille raisonnable, pas besoin d'index
+  spatial) et ajouté avec `tier: .lightDirectionChange`. La liste fusionnée est re-triée par
+  `sourcePointIndex` (progression le long du trajet) puis renumérotée — l'ordre d'INSERTION
+  (géométrique toujours ajouté avant map matching dans le code) ne reflète pas forcément l'ordre
+  RÉEL le long du trajet. `windowedTurn(at:...)`, extrait de la boucle principale sans
+  changement de comportement, est réutilisé pour donner à ces nouveaux points un angle/une
+  direction cohérents à l'affichage (mais jamais gating — un point de map matching est TOUJOURS
+  ajouté, quel que soit l'angle mesuré à cet endroit).
+- `RoadbookMapMatchCache` (Ride/, `Documents/RoadbookMapMatchCache/`) : cache disque PAR TRACE
+  (clé `GPXTrack.id`) — une trace GPX ne change jamais une fois importée (`let points`), donc
+  aucune invalidation temporelle nécessaire ; une trace supprimée puis réimportée obtient un
+  nouvel `id`, jamais de collision avec un cache périmé.
+- `RideSessionManager.triggerMapMatchingIfNeeded(for:)`, appelée depuis `start(track:)` ET
+  `switchMode(track:)` juste avant `rebuildCheckpoints()` (garde `mapMatchedTrackID`, même
+  patron que `recordingTrackID` pour l'enregistrement — deux préoccupations indépendantes,
+  gardes distinctes) : ne se déclenche qu'une fois par trace RÉELLEMENT différente, jamais à
+  chaque retour d'onglet. EN TÂCHE DE FOND uniquement (jamais en temps réel pendant le Ride) :
+  cache hit → synchrone, lu par le `rebuildCheckpoints()` de l'appelant qui suit immédiatement ;
+  cache miss → `Task` réseau, qui appelle `rebuildCheckpoints()` lui-même à la fin (le
+  `rebuildCheckpoints()` synchrone de l'appelant a déjà eu lieu SANS ces points). Dégradation
+  propre partout : Valhalla désactivé/non configuré → aucun appel réseau, roadbook géométrique
+  identique à avant it20 (voir `RoadbookMapMatchingTests.
+  testOmittingMapMatchedParameterLeavesGeometricEventsUnchanged`, non-régression explicite) ;
+  échec réseau (`try?`) → même résultat, jamais de crash ni de blocage du roadbook existant.
+  `RideSessionManager.mapMatchingProvider`/`mapMatchCache`/`mapMatchingTask` sont `internal`
+  plutôt que `private`, uniquement pour la testabilité (même patron que `unsavedRideStore`) —
+  voir `RideSessionManagerMapMatchingTests` (provider factice, jamais de vrai réseau en test).
+
 ## Replay debug v2 (spec "replay-marker-heading-x2", it17, Bloc 4)
 
 Root cause vérifiée avant de coder : le rond bleu NATIF de MapLibre (`showsUserLocation`) ne
