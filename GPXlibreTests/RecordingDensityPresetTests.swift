@@ -13,7 +13,7 @@ final class RecordingDensityPresetTests: XCTestCase {
     }
 
     func testEachPresetIsStrictlyLighterThanTheNext() {
-        let presets: [RecordingDensityPreset] = [.precis, .leger, .tresLeger]
+        let presets: [RecordingDensityPreset] = [.precis, .leger, .tresLeger, .ultraLeger]
         for (lighter, denser) in zip(presets.dropFirst(), presets) {
             XCTAssertGreaterThan(lighter.minIntervalSeconds, denser.minIntervalSeconds)
             XCTAssertGreaterThan(lighter.minDistanceMeters, denser.minDistanceMeters)
