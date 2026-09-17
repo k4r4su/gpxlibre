@@ -24,6 +24,10 @@ struct RideView: View {
     /// Ride depuis un autre onglet (voir `.onChange(of: navigationState.selectedTab)` plus bas),
     /// demande explicite du propriétaire plutôt qu'un "masqué pour de bon".
     @State private var isNoTrackBannerDismissed = false
+    /// Spec "ride-restarts-from-zero-on-tab-return" (it19) — voir `.onAppear` plus bas :
+    /// distingue le vrai premier lancement de RideView (start, réinitialise vraiment tout) de
+    /// tout retour ultérieur sur l'onglet Ride (switchMode, préserve les stats en cours).
+    @State private var hasStartedRideSession = false
     @State private var is2DNorthUp = false
     /// Spec "replay-marker-heading-x2" (it17, Bloc 4) : force cap-en-haut pendant un replay
     /// debug si le toggle du menu est activé — NE modifie JAMAIS `is2DNorthUp` lui-même (le
@@ -623,7 +627,27 @@ struct RideView: View {
                 }
             }
         }
-        .onAppear { session.start(track: track) }
+        // Fix "ride-restarts-from-zero-on-tab-return" (it19, retour terrain : "si je switch sur
+        // un autre onglet et reviens sur Ride, ça repart de zéro") — `.onAppear` fire aussi bien
+        // au VRAI premier lancement qu'à chaque retour sur l'onglet Ride (TabView appelle
+        // onAppear/onDisappear à chaque changement de visibilité, pas juste au montage initial).
+        // Appeler `start(track:)` inconditionnellement à chaque fois remettait `rideStartDate`/
+        // `averageSpeedKmh`/`maxSpeedKmh`/`totalDistanceTraveledMeters` à zéro sur un simple
+        // aller-retour Ride→Biblio→Ride — la trace enregistrée elle-même (`recordedPoints`)
+        // survivait déjà correctement (protégée par le garde `recordingTrackID != track.id`,
+        // voir RideSessionManager.start), mais les stats affichées, elles, non. `switchMode(
+        // track:)` existe déjà précisément pour ce cas ("retour d'onglet SANS repartir de
+        // zéro", spec "camera-mode-stability") — `hasStartedRideSession` (local, non persisté)
+        // distingue le VRAI premier lancement (start) de tout retour ultérieur (switchMode),
+        // y compris après un `.onDisappear` qui a appelé `stop()` entre-temps.
+        .onAppear {
+            if hasStartedRideSession {
+                session.switchMode(track: modeStore.mode == .trace ? track : nil)
+            } else {
+                hasStartedRideSession = true
+                session.start(track: track)
+            }
+        }
         .onDisappear { session.stop() }
         .onChange(of: track?.id) { _ in
             guard modeStore.mode == .trace else { return }

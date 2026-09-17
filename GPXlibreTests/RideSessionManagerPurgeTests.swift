@@ -53,4 +53,33 @@ final class RideSessionManagerPurgeTests: XCTestCase {
         XCTAssertNil(session.goToGuidance)
         XCTAssertFalse(session.isActive)
     }
+
+    /// Fix "ride-restarts-from-zero-on-tab-return" (it19, retour terrain : "si je switch
+    /// d'onglet et reviens sur Ride, ça repart de zéro") — RideView.onAppear appelait
+    /// inconditionnellement `start(track:)`, y compris sur un simple retour d'onglet (TabView
+    /// appelle onAppear à chaque changement de visibilité, pas juste au montage initial),
+    /// remettant les stats de la sortie à zéro à chaque aller-retour. `switchMode(track:)`
+    /// existe précisément pour ce cas et doit préserver les stats — `start(track:)`, lui, doit
+    /// vraiment repartir de zéro (c'est la garantie qui rend le fix RideView correct : basculer
+    /// sur switchMode() pour tout retour ne doit rien casser du "vrai nouveau départ").
+    func testSwitchModePreservesRideStatsButStartResetsThem() {
+        let suite = "RideSessionManagerPurgeTests.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let session = makeSession(defaultsSuiteName: suite)
+        let track = makeTrack()
+        session.start(track: track)
+
+        let fastLocation = CLLocation(
+            coordinate: track.points[0].coordinate, altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 0, speed: 20 / 3.6, timestamp: Date()
+        )
+        session.handle(location: fastLocation)
+        XCTAssertGreaterThan(session.maxSpeedKmh, 0, "précondition : une vitesse doit avoir été enregistrée")
+
+        session.switchMode(track: track)
+        XCTAssertGreaterThan(session.maxSpeedKmh, 0, "switchMode (retour d'onglet) ne doit JAMAIS remettre les stats de la sortie à zéro")
+
+        session.start(track: track)
+        XCTAssertEqual(session.maxSpeedKmh, 0, "start() (vrai nouveau départ) doit repartir de zéro")
+    }
 }
