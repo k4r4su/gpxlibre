@@ -140,6 +140,26 @@ final class LibraryStore: ObservableObject {
         self.defaults = defaults
         loadIndex()
         loadActiveState()
+        reconcileActiveStateWithTracks()
+    }
+
+    /// Fix "orphaned-active-track-id" (it19, trouvé en instrumentant le cycle de vie Ride pour
+    /// un tout autre bug terrain) : `activeTrackID`/`displayedTrackIDs` sont persistés dans
+    /// UserDefaults SÉPARÉMENT de `tracks` (fichier `index.json`) — si les deux se
+    /// désynchronisent (ex. `index.json` perdu/corrompu, restauration partielle, trace
+    /// supprimée hors invariant), `activeTrack` retombait silencieusement à `nil` (Ride affiche
+    /// "Aucune trace sélectionnée") SANS jamais se corriger tout seul, y compris à l'import
+    /// d'une nouvelle trace (`activeTrackID == nil` ne redevenait jamais vrai puisque
+    /// l'ancien id orphelin restait en place). Purge les références à des traces qui n'existent
+    /// plus dans `tracks`, une fois à l'ouverture — ne fait jamais tomber une trace VALIDE.
+    private func reconcileActiveStateWithTracks() {
+        let validIDs = Set(tracks.map(\.id))
+        let cleanedDisplayed = displayedTrackIDs.intersection(validIDs)
+        let cleanedActive = activeTrackID.flatMap { validIDs.contains($0) ? $0 : nil }
+        guard cleanedDisplayed != displayedTrackIDs || cleanedActive != activeTrackID else { return }
+        displayedTrackIDs = cleanedDisplayed
+        activeTrackID = cleanedActive
+        persistActiveState()
     }
 
     /// Import déclenché depuis le partage système iOS (Mail/Safari/Fichiers → "Ouvrir dans GPXlibre")

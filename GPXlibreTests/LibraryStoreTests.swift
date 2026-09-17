@@ -261,4 +261,25 @@ final class LibraryStoreTests: XCTestCase {
         let exportedContent = try? String(contentsOf: exportURL, encoding: .utf8)
         XCTAssertEqual(exportedContent, originalGPX, "le contenu exporté doit rester identique octet pour octet à l'original")
     }
+
+    /// Fix "orphaned-active-track-id" (it19, trouvé en instrumentant un tout autre bug terrain) —
+    /// `activeTrackID` (UserDefaults) et `tracks` (index.json) sont persistés SÉPARÉMENT et
+    /// peuvent se désynchroniser (index.json perdu/corrompu, restauration partielle...) : sans
+    /// réconciliation, `activeTrack` retombe silencieusement à `nil` pour de bon, y compris
+    /// après l'import d'une NOUVELLE trace (le vieil id orphelin reste en place puisque
+    /// `activeTrackID == nil` ne redevient jamais vrai). Doit se nettoyer tout seul au démarrage.
+    func testOrphanedActiveTrackIDIsReconciledOnInit() {
+        let store1 = makeStore()
+        let track = importSampleTrack(into: store1, name: "T")
+        XCTAssertEqual(store1.activeTrackID, track.id)
+
+        // Simule une désynchronisation (ex. index.json remplacé/restauré sans les UserDefaults
+        // correspondants) : l'UserDefaults pointe vers une trace qui n'existe plus.
+        testDefaults.set(UUID().uuidString, forKey: "library.activeTrackID")
+
+        let store2 = makeStore()
+
+        XCTAssertNil(store2.activeTrackID, "un activeTrackID orphelin doit être nettoyé au démarrage, jamais laissé en place")
+        XCTAssertNotNil(store2.tracks.first(where: { $0.id == track.id }), "la trace elle-même doit rester intacte, seul l'état actif orphelin est nettoyé")
+    }
 }

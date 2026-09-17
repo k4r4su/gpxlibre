@@ -217,6 +217,16 @@ sous ce dossier) — 2D-only, fond vectoriel PMTiles, priorité MapSourceResolve
 - `RideSessionManager.stop()` purge explicitement (checkpoints, index, track, détour,
   resume) — ne jamais compter sur un futur `start()` pour nettoyer un état fantôme.
 - Ne JAMAIS réintroduire un `selectedTrackID` parallèle dans une vue ou un autre store.
+- Fix "orphaned-active-track-id" (it19, trouvé en instrumentant un tout autre bug terrain via
+  NSLog/`simctl spawn log stream` — voir méthode dans l'historique de commit) :
+  `activeTrackID`/`displayedTrackIDs` (UserDefaults) et `tracks` (fichier `index.json`) sont
+  persistés SÉPARÉMENT et peuvent se désynchroniser (index.json perdu/corrompu, restauration
+  partielle...) — sans réconciliation, `activeTrack` (`tracks.first { $0.id == activeTrackID
+  }`) retombait silencieusement à `nil` POUR DE BON, y compris après l'import d'une nouvelle
+  trace (l'id orphelin restait en place, `activeTrackID == nil` ne redevenant jamais vrai).
+  `LibraryStore.reconcileActiveStateWithTracks()`, appelée une fois à l'init juste après
+  `loadIndex()`/`loadActiveState()`, purge toute référence à une trace qui n'existe plus dans
+  `tracks` — jamais appelée ailleurs (mutations normales déjà cohérentes par construction).
 
 Même patron appliqué à `VectorPackageStore` (Offline/, it11) : `activePackageID: UUID?`, un
 seul paquet vectoriel actif à la fois, `setActive(_:)` seul point d'écriture — pas de fusion
