@@ -17,7 +17,6 @@ struct RideView: View {
     @State private var dismissedSharedBlockageAlertID: String?
     @State private var showStatsPanel = false
     @State private var showEndRideSheet = false
-    @State private var showDestinationSearch = false
     @State private var mapLoadStatus: MapLoadStatus = .loading
     /// Spec "ride-empty-state-shows-map" (it19) : dismissible mais volontairement PAS persisté
     /// (UserDefaults/etc.) — redevient `false` (bandeau visible) à chaque retour sur l'onglet
@@ -114,10 +113,12 @@ struct RideView: View {
         // retirent" pendant un guidage arrêté — la détection hors-trace continue de tourner en
         // arrière-plan (session.isOffTrackPaused), seul l'AFFICHAGE se tait.
         guard !session.isGuidanceStopped else { return false }
-        switch modeStore.mode {
-        case .trace: return false
-        case .nav: return session.navRoute != nil
-        }
+        // Fix "nav-classic-rebuild" (it21) : ne dépend plus de `modeStore.mode` (toujours
+        // `.trace` en usage réel, RideModeSegmentedControl masqué depuis it12/13 — ce guidage
+        // n'était donc jamais atteignable). Le guidage classique se déclenche désormais depuis
+        // "Aller à" (profil Itinéraire + Valhalla configuré), qu'une trace soit suivie ou non,
+        // exactement comme `GoToGuidance` fonctionne déjà en parallèle du Mode Trace.
+        return session.navRoute != nil
     }
 
     /// Bannières éphémères (spec "overlay-grid") : UNE seule visible à la fois, par priorité —
@@ -130,40 +131,42 @@ struct RideView: View {
         case resumeGuidance(ResumeGuidance)
         case goTo(GoToGuidance)
         case sharedBlockageAlert(SharedBlockage)
-        case navChooseDestination
         case navError(String)
         case navRouting
     }
 
     private func activeBanner(track: GPXTrack?) -> BannerKind? {
         if case .failed(let message) = mapLoadStatus { return .mapLoadError(message) }
-        switch modeStore.mode {
-        case .trace:
-            // Fix "offtrack-compact-chip" (it18, Bloc 1, terrain 15/09) : le panneau "Portion
-            // bloquée ? Contourner" en pleine largeur ne se déclenche plus automatiquement — il
-            // s'empilait avec le bandeau hors-trace et prenait ~40 % de l'écran à eux deux. Le
-            // chip hors-trace compact (bottomControlsColumn) indique déjà qu'une reprise est en
-            // cours ; ce n'est pas bloquant tant que ce chip reste visible. `isBlockedBannerVisible`
-            // continue de tourner en arrière-plan (déclenche toujours la même confirmation via le
-            // bouton "Bloqué", toujours visible) — seul cet AFFICHAGE automatique est retiré.
-            // Backlog (non implémenté ce tour-ci, voir TODO.md) : action contextuelle par
-            // appui-long sur le chip hors-trace, "Marquer portion bloquée & Contourner".
-            if let detour = session.detourRoute { return .detour(detour) }
-            // Spec "rejoin-trace-guidance-banner" (it18, Bloc 5) : un guidage AUTOMATIQUE
-            // (divergence soutenue, voir ResumeGuidance.isAutomatic) n'affiche jamais la
-            // bannière du haut avec confirmation — celle-ci reste réservée au tap manuel sur la
-            // trace. La bannière latérale dédiée (bottomControlsColumn) le remplace.
-            if let resume = session.resumeGuidance, !resume.isAutomatic { return .resumeGuidance(resume) }
-            if let guidance = session.goToGuidance { return .goTo(guidance) }
-            if let alert = nearbySharedBlockageAlert(track: track) { return .sharedBlockageAlert(alert) }
-            return nil
-        case .nav:
-            if let guidance = session.goToGuidance { return .goTo(guidance) }
-            if session.navRoute == nil { return .navChooseDestination }
-            if let error = session.navRoutingError { return .navError(error) }
+
+        // Fix "nav-classic-rebuild" (it21) : ne dépend plus de `modeStore.mode` (voir
+        // hasDirectionPanel ci-dessus, même raison). `.navError`/`.navRouting` UNIQUEMENT tant
+        // qu'aucun itinéraire n'est encore affiché (`navRoute == nil`) — un recalcul automatique
+        // en arrière-plan (écart soutenu, voir RideSessionManager.updateNavProgress) reste
+        // "silencieux, pas de notification" comme demandé : ne réaffiche jamais cette bannière
+        // pendant qu'un itinéraire est déjà affiché, succès ou échec du recalcul.
+        if session.navRoute == nil {
             if session.isRoutingInProgress { return .navRouting }
-            return nil
+            if let error = session.navRoutingError { return .navError(error) }
         }
+
+        // Fix "offtrack-compact-chip" (it18, Bloc 1, terrain 15/09) : le panneau "Portion
+        // bloquée ? Contourner" en pleine largeur ne se déclenche plus automatiquement — il
+        // s'empilait avec le bandeau hors-trace et prenait ~40 % de l'écran à eux deux. Le
+        // chip hors-trace compact (bottomControlsColumn) indique déjà qu'une reprise est en
+        // cours ; ce n'est pas bloquant tant que ce chip reste visible. `isBlockedBannerVisible`
+        // continue de tourner en arrière-plan (déclenche toujours la même confirmation via le
+        // bouton "Bloqué", toujours visible) — seul cet AFFICHAGE automatique est retiré.
+        // Backlog (non implémenté ce tour-ci, voir TODO.md) : action contextuelle par
+        // appui-long sur le chip hors-trace, "Marquer portion bloquée & Contourner".
+        if let detour = session.detourRoute { return .detour(detour) }
+        // Spec "rejoin-trace-guidance-banner" (it18, Bloc 5) : un guidage AUTOMATIQUE
+        // (divergence soutenue, voir ResumeGuidance.isAutomatic) n'affiche jamais la
+        // bannière du haut avec confirmation — celle-ci reste réservée au tap manuel sur la
+        // trace. La bannière latérale dédiée (bottomControlsColumn) le remplace.
+        if let resume = session.resumeGuidance, !resume.isAutomatic { return .resumeGuidance(resume) }
+        if let guidance = session.goToGuidance { return .goTo(guidance) }
+        if let alert = nearbySharedBlockageAlert(track: track) { return .sharedBlockageAlert(alert) }
+        return nil
     }
 
     @ViewBuilder
@@ -199,18 +202,6 @@ struct RideView: View {
             )
         case .sharedBlockageAlert(let alert):
             SharedBlockageAlertPillView(blockage: alert, onDismiss: { dismissedSharedBlockageAlertID = alert.id })
-        case .navChooseDestination:
-            Button {
-                showDestinationSearch = true
-            } label: {
-                Label("Choisir une destination", systemImage: "magnifyingglass")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.blue.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
         case .navError(let error):
             HStack {
                 Text(error)
@@ -289,13 +280,23 @@ struct RideView: View {
     /// TODO.md).
     @ViewBuilder
     private var directionPanelLayer: some View {
-        if modeStore.mode == .nav, session.navRoute != nil {
-            NavGuidancePanelView(
-                maneuver: session.currentManeuver,
-                distanceMeters: session.distanceToCurrentManeuverMeters,
-                destinationLabel: session.navRoute?.destinationLabel ?? "",
-                isRecalculating: session.isRecalculatingRoute
-            )
+        // Fix "nav-classic-rebuild" (it21) : ne dépend plus de `modeStore.mode`, voir
+        // hasDirectionPanel ci-dessus.
+        if session.navRoute != nil {
+            VStack(spacing: 6) {
+                NavGuidancePanelView(
+                    maneuver: session.currentManeuver,
+                    distanceMeters: session.distanceToCurrentManeuverMeters,
+                    destinationLabel: session.navRoute?.destinationLabel ?? "",
+                    isRecalculating: session.isRecalculatingRoute
+                )
+                // Spec "nav-classic-rebuild" (P1) : bannière secondaire "puis..." — visible
+                // UNIQUEMENT si Valhalla signale un enchaînement rapproché (verbal_multi_cue)
+                // sur la manœuvre courante.
+                if session.currentManeuver?.isMultiCue == true, let next = session.nextManeuver {
+                    NavSecondaryBannerView(maneuver: next)
+                }
+            }
         }
     }
 
@@ -618,15 +619,6 @@ struct RideView: View {
                 onFinished: { showEndRideSheet = false }
             )
         }
-        .sheet(isPresented: $showDestinationSearch) {
-            NavDestinationSearchView { coordinate, label, profile in
-                if modeStore.mode == .nav, profile == .route {
-                    session.startNav(to: coordinate, label: label)
-                } else {
-                    session.startGoTo(to: coordinate, label: label, profile: profile)
-                }
-            }
-        }
         // Fix "ride-restarts-from-zero-on-tab-return" (it19, retour terrain : "si je switch sur
         // un autre onglet et reviens sur Ride, ça repart de zéro") — `.onAppear` fire aussi bien
         // au VRAI premier lancement qu'à chaque retour sur l'onglet Ride (TabView appelle
@@ -795,6 +787,10 @@ struct RideView: View {
             // Spec "slope-warning-native" (it19) : même raison (conformité MapProvider).
             .environment(\.slopeWarningsEnabled, settings.slopeWarningsEnabled)
             .environment(\.slopeWarningThresholdPercent, settings.slopeWarningThresholdPercent)
+            // Spec "nav-classic-rebuild" (it21) : même raison — MapKit (comparaison) n'a pas
+            // besoin de parité sur cette distinction visuelle, comme les autres features
+            // avancées (chevrons, fond vectoriel, pente).
+            .environment(\.navRouteTraveledCoordinateCount, session.navRouteTraveledCoordinateCount)
         case .mapKit:
             RideMapView(
                 track: track,

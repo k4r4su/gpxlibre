@@ -161,12 +161,25 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var goToTask: Task<Void, Never>?
 
     // MARK: - Mode Nav (guidage A→B, recalcul automatique — jamais en Mode Trace)
+    //
+    // Spec "nav-classic-rebuild" (it21) : `navRoute` reste un `NavRoute` "fin" (coordonnées +
+    // totaux, `maneuvers: []` désormais inutilisé) pour ne rien changer côté carte
+    // (`MapProvider`, signature contractuelle) — la liste RICHE de manœuvres Valhalla vit à
+    // part dans `navManeuvers`. `NavRoutingService`/`NavManeuver` (OSRM, it5) restent intacts
+    // mais ORPHELINS (plus jamais appelés ici) — voir Ride/CLAUDE.md.
     @Published private(set) var navRoute: NavRoute?
+    @Published private(set) var navManeuvers: [ValhallaNavManeuver] = []
     @Published private(set) var isRoutingInProgress = false
     @Published private(set) var navRoutingError: String?
     @Published private(set) var currentManeuverIndex = 0
     @Published private(set) var distanceToCurrentManeuverMeters: Double?
     @Published private(set) var isRecalculatingRoute = false
+    /// Nombre de coordonnées de `navRoute.coordinates` déjà parcourues (spec "nav-classic-
+    /// rebuild" : "tracé de progression... distinction parcouru/restant") — `nil` tant
+    /// qu'aucune projection n'a pu être calculée. Alimente `RideMapLibreView` via
+    /// `.environment(\.navRouteTraveledCoordinateCount, ...)`, jamais un paramètre `MapProvider`
+    /// (même contrainte que le marqueur replay debug/l'avertissement de pente, it17/it19).
+    @Published private(set) var navRouteTraveledCoordinateCount: Int?
 
     private var navDestinationCoordinate: CLLocationCoordinate2D?
     private var navDestinationLabel = ""
@@ -174,18 +187,46 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var navRouteCumulativeDistances: [Double] = []
     private var announcedManeuverThresholds: [Int: Set<Double>] = [:]
     private var navOffRouteSinceDate: Date?
-    private var navRoutingTask: Task<Void, Never>?
+    /// Cooldown MINIMUM entre deux recalculs automatiques (spec, test attendu : "sans boucle de
+    /// recalcul infinie") — en plus des gardes `isRecalculatingRoute`/`isRoutingInProgress`
+    /// (empêchent un recalcul CONCURRENT), celui-ci empêche un recalcul IMMÉDIAT si le nouvel
+    /// itinéraire laisse le rider hors-route (route mal desservie, GPS bruité en zone urbaine
+    /// dense) — sans lui, chaque fix hors-seuil après le cooldown précédent redéclencherait
+    /// aussitôt un nouvel appel réseau.
+    private var navLastAutoRecomputeDate: Date?
+    /// `internal` uniquement pour la testabilité — permet à un test d'attendre
+    /// (`await session.navRoutingTask?.value`) la fin du calcul d'itinéraire (ou du recalcul)
+    /// avant d'asserter, sans `Task.sleep` arbitraire (même patron que `mapMatchingTask`).
+    var navRoutingTask: Task<Void, Never>?
     private let voiceAnnouncer = NavVoiceAnnouncer()
+    /// `internal` uniquement pour la testabilité (même patron que `mapMatchingProvider`,
+    /// it20) — remplaçable par un provider factice pour tester la progression/le recalcul
+    /// SANS jamais dépendre d'un vrai réseau Valhalla.
+    var navRoutingProvider: NavRoutingProvider = ValhallaNavRoutingProvider()
 
     // MARK: - Limite de vitesse (Mode Nav, OSM maxspeed, silencieux si absent)
     @Published private(set) var currentSpeedLimitKmh: Int?
     @Published private(set) var isOverSpeedLimit = false
     private var lastSpeedLimitLookupDate: Date?
 
-    var currentManeuver: NavManeuver? {
-        guard let navRoute, navRoute.maneuvers.indices.contains(currentManeuverIndex) else { return nil }
-        return navRoute.maneuvers[currentManeuverIndex]
+    var currentManeuver: ValhallaNavManeuver? {
+        guard navManeuvers.indices.contains(currentManeuverIndex) else { return nil }
+        return navManeuvers[currentManeuverIndex]
     }
+
+    /// Prochaine manœuvre après l'actuelle — alimente la bannière secondaire "puis..." (spec,
+    /// affichée UNIQUEMENT si `currentManeuver.isMultiCue` signale un enchaînement rapproché).
+    var nextManeuver: ValhallaNavManeuver? {
+        guard navManeuvers.indices.contains(currentManeuverIndex + 1) else { return nil }
+        return navManeuvers[currentManeuverIndex + 1]
+    }
+
+    /// Spec "nav-classic-rebuild" (it21) : "dépend du branchement Valhalla livré en it20 — sans
+    /// lui, ce mode n'a pas de source de données de manœuvres suffisamment détaillée (OSRM
+    /// public ne fournit pas un niveau de détail équivalent)". `internal` (pas `private`) —
+    /// lu par `DestinationSearchTabView` pour décider si le profil "Itinéraire" déclenche ce
+    /// guidage riche ou retombe sur le guidage simple existant (`startGoTo`, pointillés + ETA).
+    var isRichNavAvailable: Bool { currentValhallaConfiguration != nil }
 
     private let manager = CLLocationManager()
     /// Expose uniquement `distanceFilter` (pas `manager` en entier) pour la testabilité —
@@ -633,8 +674,21 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         updateRideContext()
         updateZoomBucket()
 
-        switch modeStore.mode {
-        case .trace:
+        // Fix "nav-classic-rebuild" (it21) : ne dépend plus de `modeStore.mode` (toujours
+        // `.trace` en usage réel, RideModeSegmentedControl masqué depuis it12/13 — la branche
+        // `.nav` d'origine, `updateNavProgress`, n'était donc JAMAIS exécutée, quel que soit le
+        // guidage classique lancé via `startNav`). Bascule désormais sur `navDestinationCoordinate`
+        // (présent dès `startNav`, effacé par `stopNav`) : les deux branches restent MUTUELLEMENT
+        // EXCLUSIVES (pas un simple ajout côte à côte) parce qu'elles écrivent les MÊMES
+        // propriétés partagées (`distanceRemainingMeters`/`percentComplete`/
+        // `estimatedArrivalDate`, lues par RideStatsPanel quel que soit le mode) — les faire
+        // tourner toutes les deux en même temps ferait gagner arbitrairement celle exécutée en
+        // dernier. `GoToGuidance` (updateGoToGuidance, juste après) reste totalement
+        // indépendant de ce choix : propriétés dédiées (`goToDistanceRemainingMeters`), jamais
+        // partagées, donc déjà correctement "parallèle" sans ce problème.
+        if navDestinationCoordinate != nil {
+            updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
+        } else {
             // La projection (distance perpendiculaire + position curviligne) sert à la fois au
             // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
@@ -642,8 +696,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             updateAutoRecompute(from: location, projection: projection)
             updateRoadbookBanner(projection: projection)
             updateRideStats(from: location, projection: projection, etaSpeedKmh: etaSpeedKmh)
-        case .nav:
-            updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
         }
 
         updateGoToGuidance(from: location)
@@ -1282,6 +1334,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     func stopNav() {
         navRoutingTask?.cancel()
         navRoute = nil
+        navManeuvers = []
+        navRouteTraveledCoordinateCount = nil
+        navLastAutoRecomputeDate = nil
         navDestinationCoordinate = nil
         navRoutePoints = []
         navRouteCumulativeDistances = []
@@ -1428,29 +1483,49 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         isGuidanceStopped = false
     }
 
+    /// Spec "nav-classic-rebuild" (it21) : bascule OSRM → Valhalla pour ce mode (voir
+    /// `isRichNavAvailable` — le dépendant côté UI, `DestinationSearchTabView`, ne déclenche
+    /// `startNav` que si Valhalla est configuré). Filet de sécurité ici quand même (Valhalla
+    /// désactivé/déconfiguré PENDANT un guidage déjà lancé, ex. utilisateur qui va couper le
+    /// toggle en Réglages en cours de route) : erreur honnête plutôt qu'un guidage cassé.
     private func requestNavRoute() {
         guard let destination = navDestinationCoordinate, let origin = currentLocation?.coordinate else {
             navRoutingError = "Position GPS indisponible pour l'instant."
             return
         }
+        guard let configuration = currentValhallaConfiguration else {
+            isRoutingInProgress = false
+            isRecalculatingRoute = false
+            navRoutingError = "Le guidage classique nécessite Valhalla (Réglages > Avancé > Routage Valhalla)."
+            return
+        }
         navRoutingTask?.cancel()
         isRoutingInProgress = true
         navRoutingError = nil
+        let provider = navRoutingProvider
 
         navRoutingTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let route = try await NavRoutingService.route(
-                    from: origin, to: destination, destinationLabel: self.navDestinationLabel, networkMonitor: self.networkMonitor
+                let valhallaRoute = try await provider.route(
+                    from: origin, to: destination, destinationLabel: self.navDestinationLabel, configuration: configuration
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    self.navRoute = route
-                    self.navRoutePoints = route.coordinates.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) }
+                    self.navRoute = NavRoute(
+                        coordinates: valhallaRoute.coordinates,
+                        maneuvers: [],
+                        totalDistanceMeters: valhallaRoute.totalDistanceMeters,
+                        totalDurationSeconds: valhallaRoute.totalDurationSeconds,
+                        destinationLabel: valhallaRoute.destinationLabel
+                    )
+                    self.navManeuvers = valhallaRoute.maneuvers
+                    self.navRoutePoints = valhallaRoute.coordinates.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) }
                     self.navRouteCumulativeDistances = TrackProjector.cumulativeDistances(for: self.navRoutePoints)
                     self.currentManeuverIndex = 0
                     self.announcedManeuverThresholds = [:]
                     self.navOffRouteSinceDate = nil
+                    self.navRouteTraveledCoordinateCount = nil
                     self.isRoutingInProgress = false
                     self.isRecalculatingRoute = false
                 }
@@ -1465,24 +1540,43 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
     }
 
+    /// Guidage vocal à 3 temps (spec "nav-classic-rebuild") : Valhalla fournit un texte DIFFÉRENT
+    /// pour l'alerte lointaine (`verbal_transition_alert_instruction`) et l'instruction proche
+    /// (`verbal_pre_transition_instruction`) — remplace l'ancien comportement (it5, OSRM) qui
+    /// répétait le même `instructionText` aux deux seuils, faute d'avoir plus d'un texte par
+    /// manœuvre. Repli sur `instruction` (toujours présente) si l'un des champs verbaux manque.
+    private func announceIfNeeded(_ maneuver: ValhallaNavManeuver, distanceToManeuver: Double) {
+        guard let farThreshold = NavConstants.voiceAnnounceDistancesMeters.max() else { return }
+        var thresholds = announcedManeuverThresholds[currentManeuverIndex] ?? []
+        for threshold in NavConstants.voiceAnnounceDistancesMeters where distanceToManeuver <= threshold && !thresholds.contains(threshold) {
+            thresholds.insert(threshold)
+            let text = threshold == farThreshold
+                ? (maneuver.verbalTransitionAlertInstruction ?? maneuver.instruction)
+                : (maneuver.verbalPreTransitionInstruction ?? maneuver.instruction)
+            voiceAnnouncer.announce(text, volume: Float(settings.voiceGuidanceVolume))
+        }
+        announcedManeuverThresholds[currentManeuverIndex] = thresholds
+    }
+
     private func updateNavProgress(from location: CLLocation, etaSpeedKmh: Double) {
         guard let route = navRoute else { return }
 
-        if currentManeuverIndex < route.maneuvers.count {
-            let maneuver = route.maneuvers[currentManeuverIndex]
-            let distance = RoadbookAnalyzer.distanceMeters(location.coordinate, maneuver.coordinate)
+        if currentManeuverIndex < navManeuvers.count {
+            let maneuver = navManeuvers[currentManeuverIndex]
+            let maneuverCoordinate = navRoutePoints.indices.contains(maneuver.beginShapeIndex)
+                ? navRoutePoints[maneuver.beginShapeIndex].coordinate
+                : location.coordinate
+            let distance = RoadbookAnalyzer.distanceMeters(location.coordinate, maneuverCoordinate)
             distanceToCurrentManeuverMeters = distance
 
             if settings.voiceGuidanceEnabled {
-                var thresholds = announcedManeuverThresholds[currentManeuverIndex] ?? []
-                for threshold in NavConstants.voiceAnnounceDistancesMeters where distance <= threshold && !thresholds.contains(threshold) {
-                    thresholds.insert(threshold)
-                    voiceAnnouncer.announce(maneuver.instructionText, volume: Float(settings.voiceGuidanceVolume))
-                }
-                announcedManeuverThresholds[currentManeuverIndex] = thresholds
+                announceIfNeeded(maneuver, distanceToManeuver: distance)
             }
 
             if distance <= NavConstants.maneuverPassedRadiusMeters {
+                if settings.voiceGuidanceEnabled, let post = maneuver.verbalPostTransitionInstruction {
+                    voiceAnnouncer.announce(post, volume: Float(settings.voiceGuidanceVolume))
+                }
                 currentManeuverIndex += 1
             }
         } else {
@@ -1492,6 +1586,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         guard !navRouteCumulativeDistances.isEmpty,
               let projection = TrackProjector.project(location.coordinate, onto: navRoutePoints, cumulativeDistances: navRouteCumulativeDistances)
         else { return }
+
+        // Spec "nav-classic-rebuild" : tracé de progression parcouru/restant — index dans
+        // `navRoute.coordinates` le plus proche de la position actuelle, lu par
+        // `RideMapLibreView` via `.environment(\.navRouteTraveledCoordinateCount, ...)`.
+        navRouteTraveledCoordinateCount = projection.nearestSegmentIndex + 1
 
         let remaining = max(route.totalDistanceMeters - projection.cumulativeDistanceMeters, 0)
         distanceRemainingMeters = remaining
@@ -1503,12 +1602,20 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             : nil
 
         // Recalcul automatique et silencieux si écart > 30 m pendant > 30 s — UNIQUEMENT en
-        // Mode Nav. En Mode Trace ceci n'existe pas : la trace ne se recalcule jamais.
+        // Mode Nav. En Mode Trace ceci n'existe pas : la trace ne se recalcule jamais. Cooldown
+        // (`navRecomputeCooldownSeconds`) EN PLUS des gardes isRecalculatingRoute/
+        // isRoutingInProgress (celles-ci empêchent un recalcul CONCURRENT ; celui-ci empêche un
+        // recalcul IMMÉDIAT si le nouvel itinéraire laisse quand même le rider hors-route) —
+        // sans lui, chaque fix hors-seuil juste après un recalcul en redéclencherait aussitôt
+        // un autre, boucle de recalcul en continu (test explicite attendu, voir
+        // NavAutoRecomputeTests).
         if projection.distanceToTrackMeters > NavConstants.offRouteDistanceThresholdMeters {
             if navOffRouteSinceDate == nil { navOffRouteSinceDate = location.timestamp }
             let elapsed = location.timestamp.timeIntervalSince(navOffRouteSinceDate ?? location.timestamp)
-            if elapsed >= NavConstants.offRouteToleranceSeconds, !isRecalculatingRoute, !isRoutingInProgress {
+            let cooldownElapsed = navLastAutoRecomputeDate.map { location.timestamp.timeIntervalSince($0) >= NavConstants.navRecomputeCooldownSeconds } ?? true
+            if elapsed >= NavConstants.offRouteToleranceSeconds, cooldownElapsed, !isRecalculatingRoute, !isRoutingInProgress {
                 isRecalculatingRoute = true
+                navLastAutoRecomputeDate = location.timestamp
                 requestNavRoute()
             }
         } else {

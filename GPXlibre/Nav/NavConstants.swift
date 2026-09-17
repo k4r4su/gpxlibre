@@ -24,6 +24,12 @@ enum NavConstants {
     /// Durée de tolérance avant de recalculer réellement (silencieux, pas de notification).
     static let offRouteToleranceSeconds: Double = 30
 
+    /// Spec "nav-classic-rebuild" (it21, test attendu "sans boucle de recalcul infinie") —
+    /// délai minimum entre deux recalculs automatiques, EN PLUS des gardes isRecalculatingRoute/
+    /// isRoutingInProgress (celles-ci empêchent un recalcul CONCURRENT ; celui-ci empêche un
+    /// recalcul IMMÉDIAT si le nouvel itinéraire laisse quand même le rider hors-route).
+    static let navRecomputeCooldownSeconds: Double = 30
+
     // MARK: - Favoris
 
     static let maxSavedFavorites = 8

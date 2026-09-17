@@ -41,6 +41,21 @@ extension EnvironmentValues {
     }
 }
 
+/// Spec "nav-classic-rebuild" (it21, "tracé de progression... distinction parcouru/restant") —
+/// même contrainte `MapProvider` (signature fixe) que les clés ci-dessus : nombre de
+/// coordonnées de `navRoute.coordinates` déjà parcourues, `nil`/`0` tant qu'aucune projection
+/// n'a pu être calculée (comportement identique à avant it21, une seule couleur).
+private struct NavRouteTraveledCoordinateCountKey: EnvironmentKey {
+    static let defaultValue: Int? = nil
+}
+
+extension EnvironmentValues {
+    var navRouteTraveledCoordinateCount: Int? {
+        get { self[NavRouteTraveledCoordinateCountKey.self] }
+        set { self[NavRouteTraveledCoordinateCountKey.self] = newValue }
+    }
+}
+
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
 /// raster OSM, trace + détour + route Nav en sources vectorielles stylées localement,
 /// checkpoints/waypoints en annotations. Même contrat que RideMapView (MapKit), conservé
@@ -260,6 +275,14 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
     }
 
+    /// Spec "nav-classic-rebuild" (it21) : distinction visuelle parcouru/restant — DEUX
+    /// features dans la MÊME source (`traveled: true/false` en attribut), filtrées chacune par
+    /// un `NSPredicate` sur sa propre couche (`navRouteTraveledLayer`/`navRouteColorLayer`,
+    /// voir `syncNavRouteLayers`) — plutôt qu'une expression de couleur data-driven (API
+    /// `NSExpression` TERNARY jamais éprouvée ailleurs dans ce fichier, contrairement à
+    /// `.predicate`, déjà bien établi côté MapLibre). Toujours DEUX features même sans
+    /// progression connue (`traveled: false` partout) : un seul code path, pas de branche
+    /// spéciale "pas encore de split".
     private func updateNavRouteShape(on mapView: MLNMapView, context: Context) {
         guard let style = mapView.style,
               let source = style.source(withIdentifier: MapEngineConstants.navRouteSourceIdentifier) as? MLNShapeSource
@@ -270,7 +293,26 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             return
         }
         let coordinates = navRoute.coordinates
-        source.shape = MLNPolyline(coordinates: coordinates, count: UInt(coordinates.count))
+        let traveledCount = min(max(context.environment.navRouteTraveledCoordinateCount ?? 0, 0), coordinates.count)
+
+        guard traveledCount > 1, traveledCount < coordinates.count else {
+            // Rien parcouru (départ) ou plus rien à distinguer (arrivée) — une seule feature,
+            // jamais "traveled".
+            let feature = MLNPolylineFeature(coordinates: coordinates, count: UInt(coordinates.count))
+            feature.attributes = ["traveled": false]
+            source.shape = feature
+            return
+        }
+
+        // Chevauche d'UN point (traveledCount - 1) pour que les deux segments se rejoignent
+        // visuellement sans discontinuité au point de jonction.
+        let traveledCoordinates = Array(coordinates[0..<traveledCount])
+        let remainingCoordinates = Array(coordinates[(traveledCount - 1)...])
+        let traveledFeature = MLNPolylineFeature(coordinates: traveledCoordinates, count: UInt(traveledCoordinates.count))
+        traveledFeature.attributes = ["traveled": true]
+        let remainingFeature = MLNPolylineFeature(coordinates: remainingCoordinates, count: UInt(remainingCoordinates.count))
+        remainingFeature.attributes = ["traveled": false]
+        source.shape = MLNShapeCollectionFeature(shapes: [traveledFeature, remainingFeature])
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -295,6 +337,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         private weak var trackColorLayer: MLNLineStyleLayer?
         private weak var navRouteCasingLayer: MLNLineStyleLayer?
         private weak var navRouteColorLayer: MLNLineStyleLayer?
+        private weak var navRouteTraveledLayer: MLNLineStyleLayer?
         private weak var detourLayerRef: MLNLineStyleLayer?
         private weak var goToLayerRef: MLNLineStyleLayer?
         private weak var resumeRouteCasingLayer: MLNLineStyleLayer?
@@ -377,6 +420,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             navRouteCasingLayer?.lineColor = NSExpression(forConstantValue: appearance.casingColor)
             navRouteCasingLayer?.lineWidth = NSExpression(forConstantValue: appearance.casingWidth)
             navRouteColorLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
+            navRouteTraveledLayer?.lineWidth = NSExpression(forConstantValue: appearance.lineWidth)
             detourLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.detourLineWidth)
             goToLayerRef?.lineWidth = NSExpression(forConstantValue: appearance.goToLineWidth)
             // "Reprendre ici" (Bloc 3) : même classe de poids visuel que le détour.
@@ -708,7 +752,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             let navRouteLayer = MLNLineStyleLayer(identifier: MapEngineConstants.navRouteLayerIdentifier, source: navRouteSource)
             navRouteLayer.lineColor = NSExpression(forConstantValue: MapEngineConstants.navRouteColor(isNightMode: isNightMode))
             navRouteLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+            // Spec "nav-classic-rebuild" (it21) : cette couche ne montre que la portion RESTANTE
+            // (voir updateNavRouteShape, attribut "traveled" posé sur chaque feature).
+            navRouteLayer.predicate = NSPredicate(format: "traveled == NO")
             navRouteColorLayer = navRouteLayer
+
+            let navRouteTraveledLayer = MLNLineStyleLayer(identifier: MapEngineConstants.navRouteTraveledLayerIdentifier, source: navRouteSource)
+            navRouteTraveledLayer.lineColor = NSExpression(forConstantValue: MapEngineConstants.navRouteTraveledColor)
+            navRouteTraveledLayer.lineWidth = NSExpression(forConstantValue: traceAppearance.lineWidth)
+            navRouteTraveledLayer.predicate = NSPredicate(format: "traveled == YES")
+            self.navRouteTraveledLayer = navRouteTraveledLayer
 
             // "Aller à" universel (Bloc 4) : toujours cyan pointillé, jamais confondu avec la
             // trace (couleur choisie), la route Nav (bleu) ou le détour (rouge).
@@ -819,6 +872,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             // Détour, route Nav et "Aller à" ajoutés après la trace : ils doivent rester
             // visibles au-dessus.
             style.addLayer(detourLayer)
+            style.addLayer(navRouteTraveledLayer)
             style.addLayer(navRouteLayer)
             style.addLayer(goToLayer)
 

@@ -29,6 +29,10 @@ enum MapEngineConstants {
     static let navRouteSourceIdentifier = "nav-route-source"
     static let navRouteLayerIdentifier = "nav-route-layer"
     static let navRouteCasingLayerIdentifier = "nav-route-layer-casing"
+    /// Spec "nav-classic-rebuild" (it21, "tracé de progression... distinction parcouru/
+    /// restant") — MÊME source que `navRouteLayerIdentifier` (`traveled: true/false` en
+    /// attribut de feature), filtrée par `.predicate` plutôt que dupliquer la source.
+    static let navRouteTraveledLayerIdentifier = "nav-route-layer-traveled"
 
     /// Couleur de la route Nav (spec fix "nav-route-overlay") : DISTINCTE de la trace GPX
     /// (couleur choisie par l'utilisateur) et du guidage "Aller à" (cyan pointillé) — un bleu
@@ -39,6 +43,12 @@ enum MapEngineConstants {
             ? UIColor(red: 0.40, green: 0.80, blue: 1.0, alpha: 1)
             : UIColor(red: 0.05, green: 0.16, blue: 0.55, alpha: 1)
     }
+
+    /// Portion DÉJÀ PARCOURUE de la route Nav (it21) — gris neutre atténué, volontairement
+    /// INDÉPENDANT du mode nuit (un gris discret reste lisible dans les deux cas, pas besoin
+    /// d'une seconde variante) : la portion à venir (`navRouteColor`) doit rester le point
+    /// d'attention visuel, celle déjà parcourue s'efface.
+    static let navRouteTraveledColor = UIColor(white: 0.55, alpha: 0.9)
     static let goToSourceIdentifier = "goto-source"
     static let goToLayerIdentifier = "goto-layer"
     static let resumeRouteSourceIdentifier = "resume-route-source"

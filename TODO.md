@@ -1,10 +1,58 @@
 # TODO
 
-## Itération 21 (bugs Cartes hors-ligne / zone par lieu / refonte Mode Nav — en cours)
+## Itération 21 (bugs Cartes hors-ligne / zone par lieu / refonte Mode Nav)
 
-Fiche de développement complète, trois chantiers. Les deux premiers (bugs Cartes hors-ligne)
-sont livrés dans cette section ; la refonte du Mode Nav (dépend du branchement Valhalla it20)
-suit dans une section dédiée une fois livrée.
+Fiche de développement complète, trois chantiers — tous livrés.
+
+### Refonte du guidage classique ("Aller à" > Itinéraire, `feat:"nav-classic-rebuild"`)
+
+Voir Nav/CLAUDE.md pour le détail complet. Points saillants :
+
+- **Bug critique trouvé et corrigé, PAS introduit par cette itération** : `modeStore.mode ==
+  .nav` (jamais vrai en usage réel depuis it12, `RideModeSegmentedControl` masqué) rendait TOUT
+  le guidage classique complètement inerte depuis it5 — y compris `updateNavProgress`
+  elle-même, jamais appelée. Trouvé en écrivant `NavProgressTests`/`NavAutoRecomputeTests`
+  (leurs premières versions échouaient silencieusement) plutôt qu'en lisant le code seul —
+  aucun test n'existait sur cette zone avant it21, donc ce bug n'avait jamais pu être détecté.
+  Fix dans `RideSessionManager.handle(location:)` ET `RideView` (bannières/panneau de
+  direction) : les deux dépendent désormais de `navDestinationCoordinate`/`navRoute`
+  directement, jamais de `modeStore.mode`.
+- **Vérification active de l'énumération Valhalla** (demandée explicitement par la fiche,
+  "pas supposées") : récupérée via WebSearch/WebFetch contre `valhalla/valhalla-docs`
+  pendant cette itération, pas depuis la mémoire seule. Deux champs de la fiche de départ
+  n'existent PAS réellement dans le schéma `/route` (vérifié, pas supposé) :
+  `bearing_before`/`bearing_after` (existent seulement côté `/trace_attributes`, un autre
+  endpoint) et `mergeLeft`/`mergeRight` (seul `kMerge` existe, sans variante directionnelle).
+  Icône orientée par CATÉGORIE de type plutôt que par angle exact — couvre les catégories
+  demandées par la fiche sans field inexistant.
+- **Beaucoup moins de code neuf que prévu à la lecture initiale de la fiche** : le guidage
+  vocal (P2), le recalcul automatique de base, la progression de manœuvre et les stats ETA/
+  distance/pourcentage existaient déjà depuis it5 (juste jamais exécutés, voir le bug
+  ci-dessus) — le travail réel a été de brancher Valhalla à la place d'OSRM (données plus
+  riches, texte déjà en français via `language: "fr-FR"`, plus besoin de synthétiser
+  l'instruction), rendre le point d'entrée réellement atteignable, et ajouter les deux
+  vraies nouveautés P1 (bannière secondaire "puis...", tracé de progression parcouru/restant).
+- **Décision de scope assumée** : "Aller à" > Itinéraire ET Valhalla configuré → guidage
+  riche ; sinon (Valhalla désactivé/non configuré, ou profil Piste/Mixte) → repli sur le
+  guidage simple existant (`GoToGuidance`, pointillés + ETA), inchangé. Pas de guidage riche
+  à moitié construit avec des données insuffisantes (OSRM n'a pas l'équivalent).
+- **Duplication retirée, pas orpheline** : un second sheet de recherche de destination dans
+  `RideView` (accessible seulement via le bouton mort `.navChooseDestination`) était un strict
+  doublon de `DestinationSearchTabView` (it19) — supprimé plutôt que laissé en place, pour ne
+  pas perpétuer le même bug si quelqu'un le rebranchait un jour.
+- Tests (9 nouveaux, 202 au total avec le reste de l'itération, 0 échec, 1 skip
+  préexistant) : `ValhallaManeuverTypeTests` (mapping exhaustif type → icône, valeurs
+  numériques vérifiées), `NavProgressTests` (avancement de manœuvre + countdown décroissant +
+  bannière secondaire multi-cue), `NavAutoRecomputeTests` (recalcul déclenché après écart
+  soutenu, cooldown empêchant une boucle si le recalcul échoue en continu, minuteur remis à
+  zéro au retour sur trace). Provider Valhalla toujours factice (`NavRoutingProvider`, même
+  patron que `RoutingProvider`/`MapMatchingProvider` it20) — jamais de vrai réseau en test.
+- **Non vérifié visuellement** (pas de device physique ni de serveur Valhalla réel ici) :
+  rendu de la bannière/l'icône/la bannière secondaire, découpage visuel parcouru/restant sur
+  la carte (deux `MLNPolylineFeature` filtrées par `.predicate`, technique jamais éprouvée
+  ailleurs dans ce fichier), guidage vocal entendu en conditions réelles.
+
+### Bugs Cartes hors-ligne (déjà livrés, section historique ci-dessous)
 
 - **`fix:"region-picker-atlantic-ocean-default"`** : voir Offline/CLAUDE.md, section dédiée,
   pour le détail root cause (coordonnée de centre jamais posée, seulement le zoom) et le fix

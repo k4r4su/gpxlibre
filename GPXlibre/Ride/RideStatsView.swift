@@ -74,6 +74,16 @@ struct RideStatsPanel: View {
                 stat("Parcouru", percentComplete.map { "\(Int($0.rounded()))" } ?? "—", unit: percentComplete != nil ? "%" : "")
                 stat("Arrivée", estimatedArrivalDate.map(Self.timeFormatter.string) ?? "—", unit: "")
             }
+            // Spec "nav-classic-rebuild" (it21) : "barre d'état... ETA, distance restante,
+            // durée restante" — les trois premiers stats ci-dessus sont partagés Trace/Nav
+            // (déjà écrits par les deux, voir RideSessionManager.updateNavProgress/
+            // updateRideStats) ; "durée restante" (countdown, pas une heure d'horloge) manquait
+            // et profite aux deux modes de la même façon, pas seulement au Mode Nav.
+            if let estimatedArrivalDate {
+                HStack(spacing: 24) {
+                    stat("Durée restante", remainingDurationText(until: estimatedArrivalDate), unit: "")
+                }
+            }
             Button(action: onEndRide) {
                 Label("Terminer la sortie (\(recordedPointsCount) pts enregistrés)", systemImage: "flag.checkered")
                     .font(.caption.bold())
@@ -99,5 +109,11 @@ struct RideStatsPanel: View {
 
     private func formattedDistance(_ meters: Double) -> String {
         meters < 1000 ? "\(Int(meters.rounded()))m" : String(format: "%.1fkm", meters / 1000)
+    }
+
+    private func remainingDurationText(until arrival: Date) -> String {
+        let minutes = Int((max(arrival.timeIntervalSinceNow, 0) / 60).rounded())
+        guard minutes >= 60 else { return "\(minutes) min" }
+        return "\(minutes / 60) h \(minutes % 60) min"
     }
 }

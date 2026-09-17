@@ -29,12 +29,12 @@ struct ValhallaSettingsView: View {
                 // désormais le VRAI interrupteur du provider actif, pas seulement du test de
                 // connexion — périmètre réel (voir RoutingProviderResolver), pas une simplification.
                 if settings.valhallaEnabled {
-                    Text("Utilisé pour : contournement (chemin bloqué), reprise hors-trace, hors-route d'Aller à, détection fine de virages légers.")
+                    Text("Utilisé pour : contournement (chemin bloqué), reprise hors-trace, hors-route d'Aller à, détection fine de virages légers, guidage classique complet (Aller à > Itinéraire).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Désactivé par défaut. Le Mode Nav (\"Aller à\" routé/mixte) continue d'utiliser OSRM dans tous les cas — Valhalla reste retenté en premier partout ailleurs, avec repli automatique et silencieux vers OSRM en cas d'échec.")
+                Text("Désactivé par défaut. \"Aller à\" > Mixte continue d'utiliser OSRM dans tous les cas — Valhalla reste retenté en premier partout ailleurs (dont le guidage classique \"Aller à\" > Itinéraire, qui en a besoin pour ses manœuvres détaillées), avec repli automatique et silencieux en cas d'échec ou si désactivé.")
             }
 
             Section {

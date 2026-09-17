@@ -98,18 +98,29 @@ GPXlibre/
                    confiance à ce mécanisme. Les checkpoints/waypoints (annotations
                    MLNPointAnnotation, mécanisme différent) ne sont PAS concernés par cette
                    suspicion.
-  Nav/            Mode Nav (guidage A→B, recalcul automatique) — RideMode/RideModeStore
-                   (Trace vs Nav), NavRoutingService, GoToGuidance ("Aller à" parallèle —
+  Nav/            Guidage classique complet reconstruit (spec "nav-classic-rebuild", it21,
+                   sur Valhalla — voir Nav/CLAUDE.md, section dédiée) : "Aller à" > profil
+                   Itinéraire déclenche désormais un vrai guidage turn-by-turn riche
+                   (ValhallaNavigationService/ValhallaNavManeuver/ValhallaManeuverType) si
+                   Valhalla est configuré (`session.isRichNavAvailable`), sinon repli sur le
+                   guidage simple existant (pointillés + ETA). Bug de fond trouvé et corrigé en
+                   route : `modeStore.mode == .nav` (jamais vrai en usage réel,
+                   RideModeSegmentedControl masqué depuis it12) rendait TOUT le guidage
+                   classique — y compris `updateNavProgress`, l'avancement des manœuvres, le
+                   recalcul automatique — complètement inerte depuis it5, jamais détecté faute
+                   de tests sur cette zone avant it21. RideMode/RideModeStore/
+                   RideModeSegmentedControl restent intacts (fichiers non supprimés, `.trace`
+                   par défaut, toujours aucun moyen de le changer depuis l'UI) mais ne sont
+                   plus le mécanisme d'activation du guidage classique. NavRoutingService/
+                   NavManeuver (OSRM, it5) ORPHELINS (repli documenté si Valhalla indisponible,
+                   jamais rappelés). GoToGuidance ("Aller à" parallèle, pointillés cyan —
                    `.offroad` route réellement en hors-route depuis it13, spec "offroad-
                    routing-preference", via DetourRoutingService.route(profile: .offroad)
                    réutilisé, PLUS une ligne droite ; `.mixed` termine aussi en hors-route
                    routé plutôt qu'à vol d'oiseau), NavFavoritesStore (Domicile/Travail,
                    configurables depuis it13 via Settings/FavoriteAddressesView),
                    NavReportButton ("Signaler" — indépendant du POI supprimé en it10).
-                   RideModeSegmentedControl n'est plus appelé depuis it12 (spec
-                   "hide-nav-tab", Trace seul visible/actif) — fichier intact, tout le code
-                   Nav reste en place tel quel, ne PAS le supprimer : sera relancé dans une
-                   itération future, après la trace door-to-door. DestinationSearchTabView
+                   DestinationSearchTabView
                    (it19, spec "search-as-tab", retour terrain : "la loupe passe par-dessus le
                    bandeau/les contrôles Ride") — héberge `NavDestinationSearchView` (déjà
                    existant, ex-sheet) comme ONGLET à part entière du TabView racine (voir
