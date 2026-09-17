@@ -5,6 +5,8 @@ struct LibraryView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
     @EnvironmentObject private var settings: RideSettingsStore
+    @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
+    @StateObject private var unsavedRides = UnsavedRideStore()
     @State private var isImporting = false
     @State private var renamingTrack: GPXTrack?
     @State private var renameText = ""
@@ -18,12 +20,16 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if library.tracks.isEmpty {
+                // Spec "unsaved-ride-recovery" (it19) : l'état vide ne s'affiche que si NI
+                // trace ni sauvegarde de secours n'existe — sinon la section "Sorties non
+                // enregistrées" doit rester visible même sans aucune trace "propre" encore.
+                if library.tracks.isEmpty && unsavedRides.rides.isEmpty {
                     emptyState
                 } else {
                     trackList
                 }
             }
+            .onAppear { unsavedRides.reload() }
             .navigationTitle("Bibliothèque")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -128,6 +134,22 @@ struct LibraryView: View {
 
     private var trackList: some View {
         List {
+            // Spec "unsaved-ride-recovery" (it19, retour terrain : "créer dans Biblio une
+            // catégorie 'non-enregistré' qui récupère les traces non enregistrées") — filet de
+            // secours réécrit périodiquement pendant tout enregistrement (RideSessionManager),
+            // purgé automatiquement au-delà de `settings.unsavedRideRetentionLimit` sorties.
+            if !unsavedRides.rides.isEmpty {
+                Section {
+                    ForEach(unsavedRides.rides.sorted { $0.startedAt > $1.startedAt }) { ride in
+                        unsavedRideRow(ride)
+                    }
+                } header: {
+                    Text("Sorties non enregistrées")
+                } footer: {
+                    Text("Sauvegardées automatiquement pendant l'enregistrement — récupère-les avant qu'elles ne soient purgées (les \(settings.unsavedRideRetentionLimit) plus récentes conservées, réglable dans Réglages).")
+                }
+            }
+
             ForEach(library.tracks) { track in
                 // Fix "biblio-track-fullsheet" (it13, terrain : "Tap sur une ligne trace = fiche
                 // complète") — le tap n'ouvre plus TrackDetailView (carte + "Utiliser pour le
@@ -214,6 +236,54 @@ struct LibraryView: View {
             )
         }
     }
+
+    /// Ligne "Sortie non enregistrée" — "Récupérer" l'importe dans la Bibliothèque normale
+    /// (même patron que EndRideView.save() : couleur ambre par défaut) puis retire le filet de
+    /// secours ; "Supprimer" (swipe) l'écarte sans la récupérer.
+    private func unsavedRideRow(_ ride: UnsavedRide) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Self.unsavedRideDateFormatter.string(from: ride.startedAt))
+                    .font(.headline)
+                Text("\(ride.pointCount) points enregistrés")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                recoverUnsavedRide(ride)
+            } label: {
+                Label("Récupérer", systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                unsavedRides.delete(ride)
+            } label: {
+                Label("Supprimer", systemImage: "trash")
+            }
+        }
+    }
+
+    private func recoverUnsavedRide(_ ride: UnsavedRide) {
+        guard let newID = library.importTrack(from: unsavedRides.fileURL(for: ride)) else { return }
+        // RECORDED_TRACK_DISPLAY_COLOR (spec "ride-record-tracks-visible", it18, Bloc 2) — même
+        // couleur distinctive par défaut qu'un export normal via EndRideView.save().
+        var recordedSettings = trackRideSettings.settings(for: newID)
+        recordedSettings.colorOverride = RideConstants.recordedTrackColorPreset
+        trackRideSettings.setSettings(recordedSettings, for: newID)
+        unsavedRides.delete(ride)
+    }
+
+    private static let unsavedRideDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 private struct TrackRow: View {

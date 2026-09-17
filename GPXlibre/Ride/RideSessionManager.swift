@@ -93,6 +93,17 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private var recordingTrackID: UUID?
     private var lastRecordedLocation: CLLocation?
     private var lastRecordedDate: Date?
+    /// Spec "unsaved-ride-recovery" (it19) : identifie la session d'enregistrement en cours
+    /// pour le filet de secours (UnsavedRideStore) — généré au premier point enregistré,
+    /// remis à `nil` partout où `recordedPoints` repart de zéro (même cycle de vie).
+    private var recordingSessionID: UUID?
+    private var recordingSessionStartDate: Date?
+    /// `internal` plutôt que `private` uniquement pour la testabilité (même patron que
+    /// `handle(location:)` plus haut) — remplaçable par les tests avec un `directoryOverride`
+    /// dédié pour ne JAMAIS écrire dans le vrai `Documents/UnsavedRides` de l'app pendant un
+    /// test qui enregistrerait ≥ `unsavedRideCheckpointEveryNPoints` points (déclenchant
+    /// `checkpointUnsavedRideIfNeeded`, appelée à CHAQUE point enregistré).
+    var unsavedRideStore = UnsavedRideStore()
     @Published private(set) var isRecordingPaused = false
 
     /// Guidage arrêté (spec "stop-guidance-semantics", it14, Bloc 3) — DISTINCT de
@@ -299,6 +310,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 recordingTrackID = track.id
                 lastRecordedLocation = nil
                 lastRecordedDate = nil
+                recordingSessionID = nil
+                recordingSessionStartDate = nil
             }
         } else {
             trackCumulativeDistances = []
@@ -344,6 +357,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 recordingTrackID = track.id
                 lastRecordedLocation = nil
                 lastRecordedDate = nil
+                recordingSessionID = nil
+                recordingSessionStartDate = nil
             }
         } else {
             trackCumulativeDistances = []
@@ -586,7 +601,49 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             time: location.timestamp
         ))
         recordedPointsCount = recordedPoints.count
+        checkpointUnsavedRideIfNeeded()
     }
+
+    /// Spec "unsaved-ride-recovery" (it19, retour terrain : "quand on allume l'app, ça
+    /// enregistre direct, puis il faut manuellement l'enregistrer à la fin — créer une
+    /// catégorie Biblio 'non-enregistré' pour récupérer les traces oubliées") — réécrit un GPX
+    /// de secours toutes les `unsavedRideCheckpointEveryNPoints` points (pas à chaque point,
+    /// coût I/O) pendant tout enregistrement, avec ou sans trace suivie. `recordingSessionID`
+    /// généré au premier point d'une session, remis à `nil` partout où `recordedPoints` repart
+    /// de zéro (même cycle de vie, voir déclarations plus haut) — un GPX PAR session, jamais
+    /// mélangé aux vraies traces de `LibraryStore` tant qu'il n'est pas explicitement récupéré
+    /// depuis Biblio.
+    private func checkpointUnsavedRideIfNeeded() {
+        if recordingSessionID == nil {
+            recordingSessionID = UUID()
+            recordingSessionStartDate = recordedPoints.first?.time ?? Date()
+        }
+        guard let sessionID = recordingSessionID,
+              let startedAt = recordingSessionStartDate,
+              recordedPoints.count % RideConstants.unsavedRideCheckpointEveryNPoints == 0
+        else { return }
+
+        let data = GPXExporter.export(
+            trackName: "Sortie non enregistrée – \(Self.unsavedRideNameDateFormatter.string(from: startedAt))",
+            points: recordedPoints,
+            waypoints: [],
+            comment: nil
+        )
+        unsavedRideStore.checkpoint(
+            sessionID: sessionID,
+            startedAt: startedAt,
+            gpxData: data,
+            pointCount: recordedPoints.count,
+            maxRetained: settings.unsavedRideRetentionLimit
+        )
+    }
+
+    private static let unsavedRideNameDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "d MMM yyyy HH:mm"
+        return formatter
+    }()
 
     /// À appeler après un export réussi (voir EndRideView) pour repartir d'un enregistrement vide.
     func resetRecording() {
@@ -596,6 +653,16 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         lastRecordedLocation = nil
         lastRecordedDate = nil
         isRecordingPaused = false
+        recordingSessionID = nil
+        recordingSessionStartDate = nil
+    }
+
+    /// Spec "unsaved-ride-recovery" (it19) — à appeler juste après un import réussi dans la
+    /// Bibliothèque (EndRideView.save()) : la sortie vient d'être proprement enregistrée, le
+    /// filet de secours de CETTE session n'a plus lieu d'être.
+    func discardUnsavedRideCheckpoint() {
+        guard let sessionID = recordingSessionID else { return }
+        unsavedRideStore.discard(sessionID: sessionID)
     }
 
     /// Distance totale de la portion enregistrée — sert à décider si un export est proposé

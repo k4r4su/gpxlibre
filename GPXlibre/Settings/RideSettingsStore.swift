@@ -43,6 +43,7 @@ final class RideSettingsStore: ObservableObject {
         static let valhallaEnabled = "settings.valhallaEnabled"
         static let valhallaEndpointURLString = "settings.valhallaEndpointURLString"
         static let recordingDensityPreset = "settings.recordingDensityPreset"
+        static let unsavedRideRetentionLimit = "settings.unsavedRideRetentionLimit"
     }
 
     private let defaults: UserDefaults
@@ -206,6 +207,12 @@ final class RideSettingsStore: ObservableObject {
         didSet { defaults.set(recordingDensityPreset.rawValue, forKey: Keys.recordingDensityPreset) }
     }
 
+    /// Spec "unsaved-ride-recovery" (it19) : nombre de sauvegardes de secours (sorties non
+    /// enregistrées) conservées avant que les plus anciennes ne soient purgées automatiquement.
+    @Published var unsavedRideRetentionLimit: Int {
+        didSet { defaults.set(unsavedRideRetentionLimit, forKey: Keys.unsavedRideRetentionLimit) }
+    }
+
     /// Repasse les 4 seuils à leurs défauts standards (30/45/90/135) — appelé quand l'utilisateur
     /// quitte le mode "personnalisé" (voir SettingsView), jamais automatiquement ailleurs.
     func resetRoadbookThresholdsToDefaults() {
@@ -340,5 +347,9 @@ final class RideSettingsStore: ObservableObject {
         } else {
             recordingDensityPreset = .precis
         }
+
+        let storedRetentionLimit = defaults.integer(forKey: Keys.unsavedRideRetentionLimit)
+        unsavedRideRetentionLimit = RideConstants.unsavedRideRetentionLimitOptions.contains(storedRetentionLimit)
+            ? storedRetentionLimit : RideConstants.unsavedRideRetentionLimitDefault
     }
 }

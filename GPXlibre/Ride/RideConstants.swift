@@ -24,6 +24,17 @@ enum RideConstants {
     static let flashCountDefault: Int = 3
     static let flashCountOptions: [Int] = [3, 5]
 
+    /// Spec "unsaved-ride-recovery" (it19, retour terrain "cleanup au bout de 10 ou 20 traces,
+    /// réglable") — nombre de sauvegardes de secours conservées avant purge automatique des
+    /// plus anciennes.
+    static let unsavedRideRetentionLimitDefault: Int = 10
+    static let unsavedRideRetentionLimitOptions: [Int] = [5, 10, 20, 50]
+
+    /// Un point de secours réécrit toutes les N points RÉELLEMENT enregistrés (pas tous les
+    /// fixs GPS) — coût I/O négligeable (un GPX de quelques centaines de points reste petit),
+    /// tout en gardant la perte maximale possible bornée et prévisible.
+    static let unsavedRideCheckpointEveryNPoints: Int = 10
+
     static let flashOnDurationSeconds: Double = 0.12
     static let flashOffDurationSeconds: Double = 0.12
 

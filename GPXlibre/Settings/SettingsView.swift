@@ -207,6 +207,19 @@ struct SettingsView: View {
                     Text("\(settings.recordingDensityPreset.detail). Un enregistrement plus léger produit un fichier GPX exporté plus petit, mais moins fidèle au tracé réel.")
                 }
 
+                // Spec "unsaved-ride-recovery" (it19, retour terrain "cleanup au bout de 10 ou
+                // 20 traces, réglable") — nombre de sauvegardes de secours conservées dans
+                // Biblio > "Sorties non enregistrées" avant purge automatique des plus anciennes.
+                Section {
+                    Picker("Sauvegardes de secours conservées", selection: $settings.unsavedRideRetentionLimit) {
+                        ForEach(RideConstants.unsavedRideRetentionLimitOptions, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                } footer: {
+                    Text("Pendant l'enregistrement, une copie de secours de la sortie en cours est sauvegardée automatiquement — récupérable dans Biblio si tu oublies de faire \"Terminer la sortie\". Les plus anciennes au-delà de ce nombre sont supprimées automatiquement.")
+                }
+
                 Section {
                     Toggle("Partager mes signalements anonymement", isOn: $settings.shareBlockagesAnonymously)
                         .longPressTooltip("Envoie uniquement un point GPS, une date et une note optionnelle — aucune donnée nominative, aucun compte")
