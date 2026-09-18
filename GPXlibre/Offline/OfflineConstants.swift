@@ -12,14 +12,14 @@ enum OfflineConstants {
     /// qu'un point au hasard en mer pour la quasi-totalité des utilisateurs de l'app.
     static let franceCenterCoordinate = CLLocationCoordinate2D(latitude: 46.603354, longitude: 1.888334)
 
-    // MARK: - Zone par lieu nommé (spec "region-download-by-place", it21)
+    // MARK: - Zone circulaire (spec "region-download-by-shape", it21)
     //
-    // "Pays → téléchargement du pays entier" (emprise Nominatim réelle, pas de rayon) ;
-    // "Région → région + 50 km autour" ; "Ville → ville + 100 km autour" — rayons par défaut,
-    // modifiables par l'utilisateur avant lancement (slider, voir PlaceRegionPickerView).
-    static let placeRegionDefaultRadiusKmRegion: Double = 50
-    static let placeRegionDefaultRadiusKmCity: Double = 100
-    static let placeRegionRadiusRangeKm: ClosedRange<Double> = 10...300
+    // Remplace "region-download-by-place" (recherche par nom de lieu, retiré) — retour terrain
+    // "pas ultra fan de ça, juste une carte avec un cercle qu'on peut agrandir/réduire". Rayon
+    // par défaut modeste (échelle "petite ville"), plage large pour couvrir aussi bien une
+    // portion de trajet qu'une grande région.
+    static let circleRegionDefaultRadiusKm: Double = 15
+    static let circleRegionRadiusRangeKm: ClosedRange<Double> = 1...200
 
     /// Largeur totale du corridor pré-caché autour d'une trace (±1 km de chaque côté = 2 km).
     static let corridorHalfWidthMeters: Double = 1000

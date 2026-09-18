@@ -42,7 +42,42 @@ centre géographique de la France métropolitaine (`OfflineConstants.franceCente
 session précédente (quasi toujours vrai, la fonctionnalité Ride en dépend), une position est
 donc disponible dès l'affichage de l'écran, sans attendre le premier `didUpdateLocations`.
 
-## Zone par lieu nommé + rayon (spec "region-download-by-place", it21)
+## Zone circulaire (spec "region-download-by-shape", it21, REMPLACE "region-download-by-place")
+
+Retour terrain après livraison de la recherche par nom de lieu (section suivante) : "pas ultra
+fan de ça, je pense qu'il faudrait juste avoir une carte, avec un cercle qu'on peut augmenter
+ou diminuer et cliquer sur télécharger. Simple efficace avec toujours la taille que ça va
+prendre. Possibilité de supprimer si ça prend trop de place." Décision confirmée avec le
+propriétaire : REMPLACER entièrement l'écran par lieu (pas coexister) — `PlaceRegionPickerView`/
+`PlaceKind`/`PlaceKindTests` supprimés (pas orphelins : un rework de picker jamais réellement
+utilisé en conditions réelles, remplacé dans la foulée, contrairement au reste du code
+"orphelin mais intact" de ce projet qui a eu un vrai usage passé). `GeocodingBoundingBox`/le
+paramètre `featureType` de `NominatimGeocodingService` restent en place (généralement
+réutilisables, indépendants de cette UI précise) — voir `GeocodingBoundingBoxTests`.
+
+- `CircleRegionPickerMapView` (nouveau) : carte centrée par pan libre (comme
+  `RegionPickerMapView`, mais rapporte `centerCoordinate` au lieu du viewport entier) — dessine
+  un cercle de sélection (bleu) au centre, rayon en mètres passé par l'appelant, ET le contour
+  des zones déjà téléchargées (ambré, même patron que `RegionPickerMapView`). Cercle dessiné par
+  approximation équirectangulaire (36 segments, même formule que `TileCoordinate.boundingBox`)
+  — PUREMENT visuel, le calcul réel des tuiles reste basé sur la vraie bounding box géographique
+  (`TileCoordinate.boundingBox(around:radiusMeters:)`, inchangé depuis it17).
+- `CircleRegionPickerView` : carte + slider rayon (`OfflineConstants.circleRegionRadiusRangeKm`,
+  1-200 km) + slider zoom max + estimation (`OfflineTileEstimator`, partagé avec le cadrage
+  manuel) + toggle Wi-Fi + bouton télécharger. "Possibilité de supprimer si ça prend trop de
+  place" déjà couverte par la section "Zones téléchargées" (swipe) de `RegionDownloadView`,
+  l'écran parent — rien à dupliquer ici. Body factorisé en sous-vues `@ViewBuilder` distinctes
+  DÈS LE DÉPART (leçon retenue du piège Swift ci-dessous, jamais reproduit).
+- Piège rencontré : `CLLocationCoordinate2D` n'est PAS `Equatable` — `.onChange(of:
+  centerCoordinate)` ne compile pas pour un `CLLocationCoordinate2D?`. Résolu par un `Binding`
+  personnalisé (`get`/`set`) qui appelle directement `updateEstimate()` à chaque écriture,
+  plutôt qu'un wrapper Equatable dédié (comme `SimpleBounds` l'est pour les bounds) pour cette
+  seule utilisation ponctuelle.
+
+## Zone par lieu nommé + rayon (spec "region-download-by-place", it21, REMPLACÉE ci-dessus)
+
+Section conservée pour l'historique (le code lui-même est supprimé, pas seulement orphelin —
+voir section ci-dessus pour les raisons).
 
 Alternative au cadrage manuel pan/zoom : `PlaceRegionPickerView` (sheet, ouverte depuis un
 bouton dans `RegionDownloadView`) — Picker Pays/Région/Ville (`PlaceKind`), recherche via

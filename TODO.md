@@ -17,14 +17,11 @@ vrai GPS !") et remonté 3 fixes + 1 nouvelle demande :
   TrackFullSheetView — durée/vitesse moyenne globale et "en mouvement"/vitesse max/dénivelé +
   et −/altitude min-max/pente max. `nil` proprement affiché (message explicatif) si la trace n'a
   pas d'horodatage réel exploitable (import externe).
-- **Non tranché, en attente d'un retour** : refonte de l'écran "Zone par lieu" (it21,
-  `PlaceRegionPickerView`) — retour "pas ultra fan de ça, je pense qu'il faudrait juste une
-  carte avec un cercle ou carré qu'on peut agrandir/réduire, cliquer télécharger, avec la taille
-  affichée, et pouvoir supprimer après si ça prend trop de place." Question posée au
-  propriétaire : remplacer entièrement `PlaceRegionPickerView` (recherche par nom de lieu) par
-  ce picker à forme redimensionnable, ou l'ajouter comme troisième option à côté du cadrage
-  manuel existant et de la recherche par lieu ? Pas implémenté tant que la réponse n'est pas
-  connue — un rework de picker complet ne doit pas être deviné à moitié.
+- **`feat:"region-download-by-shape"`** : refonte de l'écran "Zone par lieu" — confirmé par le
+  propriétaire, REMPLACE entièrement `PlaceRegionPickerView` (recherche par nom de lieu,
+  supprimée, pas orpheline) par `CircleRegionPickerView`/`CircleRegionPickerMapView` : carte +
+  cercle de sélection redimensionnable (slider rayon), estimation de taille en direct, bouton
+  télécharger. Voir Offline/CLAUDE.md, section dédiée.
 - Tests (7 nouveaux ce tour-ci, 211 au total, 0 échec, 1 skip préexistant) :
   `TrackMetricsCalculatorTests` (moyenne exacte sur cas simple, gain/perte dénivelé séparés,
   filtrage des sauts GPS/segments trop courts, moyenne "en mouvement" > moyenne globale avec un
