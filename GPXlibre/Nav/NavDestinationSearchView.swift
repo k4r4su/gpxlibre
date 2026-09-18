@@ -52,7 +52,14 @@ struct NavDestinationSearchView: View {
                     destinationRow(label: result.displayName, coordinate: result.coordinate)
                 }
             }
-            .searchable(text: $query, prompt: "Adresse ou lieu")
+            // Fix "search-bar-requires-pull-down" (it21, retour terrain : "pour afficher la
+            // barre de recherche dans Aller à il faut faire un petit swipe down") — placement
+            // par défaut de `.searchable` se réduit/masque tant que le contenu n'a pas été
+            // tiré vers le bas, quirk connu de SwiftUI particulièrement visible ici depuis que
+            // cette vue vit comme ONGLET permanent (spec "search-as-tab", it19) plutôt que
+            // poussée dans une pile de navigation. `.navigationBarDrawer(displayMode: .always)`
+            // force la barre à rester visible en permanence, sans geste requis.
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Adresse ou lieu")
             .onChange(of: query) { newValue in
                 scheduleSearch(for: newValue)
             }
