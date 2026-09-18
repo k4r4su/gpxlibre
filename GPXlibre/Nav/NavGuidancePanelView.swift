@@ -1,10 +1,18 @@
 import SwiftUI
 
 /// Panneau de guidage tour-par-tour Mode Nav, EN HAUT pleine largeur (fix
-/// "overlay-layout-grid", Bug 3) — instruction texte + flèche, distance jusqu'à la manœuvre.
-/// Pendant du RoadbookPanelView côté Trace, même style (fix "panel-consistency", Bug 6).
+/// "overlay-layout-grid", Bug 3). Pendant du RoadbookPanelView côté Trace, même style (fix
+/// "panel-consistency", Bug 6).
 ///
-/// Spec "nav-classic-rebuild" (it21) : `maneuver` est désormais un `ValhallaNavManeuver` — son
+/// Fix "nav-banner-too-verbose" (it21, retour terrain : "trop d'info. Je veux juste la
+/// direction et dans combien de mètres on change de direction. Le numéro de sortie si c'est un
+/// rond-point. [...] 2 parties : à gauche la direction et la distance, à droite des infos de
+/// texte plus petites pour prioriser la visibilité de la direction") — deux zones cloisonnées :
+/// GAUCHE proéminente (icône + distance + badge sortie, ce qu'un coup d'œil rapide en conduisant
+/// doit capter), DROITE en retrait (texte d'instruction + nom de rue EN DESSOUS, séparés, pas
+/// "à la suite" comme dans la version précédente qui empilait tout au même niveau visuel).
+///
+/// Spec "nav-classic-rebuild" (it21) : `maneuver` est un `ValhallaNavManeuver` — son
 /// `instruction` est déjà un texte français complet composé par Valhalla lui-même (requête
 /// `language: "fr-FR"`), plus besoin de synthétiser une phrase depuis un `type`/`modifier` OSRM
 /// brut comme le faisait l'ancien `NavManeuver.instructionText`.
@@ -15,40 +23,47 @@ struct NavGuidancePanelView: View {
     let isRecalculating: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: maneuver?.systemImageName ?? "location.north.line.fill")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 60, height: 60)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(distanceText)
-                        .font(.system(.title2, design: .rounded).bold())
+        HStack(alignment: .center, spacing: 14) {
+            // Zone GAUCHE (proéminente) : direction + distance + sortie de rond-point — tout ce
+            // qu'un coup d'œil rapide doit capter, rien d'autre.
+            VStack(spacing: 4) {
+                Image(systemName: maneuver?.systemImageName ?? "location.north.line.fill")
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(distanceText)
+                    .font(.system(.title3, design: .rounded).bold())
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+                // "roundabout_exit_count → Numéro de sortie affiché dans l'icône rond-point" —
+                // reste dans la zone GAUCHE (fait partie de "la direction"), pas dans le texte.
+                if let exitCount = maneuver?.roundaboutExitCount, maneuver?.type.isRoundabout == true {
+                    Text("Sortie \(exitCount)")
+                        .font(.caption2.bold())
                         .foregroundStyle(.white)
-                        .monospacedDigit()
-                    // "roundabout_exit_count → Numéro de sortie affiché dans l'icône rond-point"
-                    // — Valhalla compose déjà ce numéro dans `instruction` en français
-                    // ("...prenez la 2ème sortie..."), ce badge est un rappel visuel compact en
-                    // plus, pas un doublon nécessaire au texte.
-                    if let exitCount = maneuver?.roundaboutExitCount, maneuver?.type.isRoundabout == true {
-                        Text("Sortie \(exitCount)")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.white.opacity(0.25))
-                            .clipShape(Capsule())
-                    }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.white.opacity(0.25))
+                        .clipShape(Capsule())
                 }
+            }
+            .frame(minWidth: 76)
+
+            Rectangle()
+                .fill(.white.opacity(0.25))
+                .frame(width: 1)
+                .padding(.vertical, 4)
+
+            // Zone DROITE (en retrait) : texte, plus petit, nom de rue sur SA PROPRE ligne en
+            // dessous — jamais à la suite de l'instruction sur la même ligne.
+            VStack(alignment: .leading, spacing: 3) {
                 Text(maneuver?.instruction ?? "Vers \(destinationLabel)")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
                 if let street = maneuver?.displayStreetName, !street.isEmpty {
                     Text(street)
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                 }
             }
@@ -60,7 +75,7 @@ struct NavGuidancePanelView: View {
                     .tint(.white)
             }
         }
-        .padding(16)
+        .padding(14)
         .ridePanelStyle(tint: .blue, tintOpacity: 0.45)
         .padding(.horizontal, 12)
     }
