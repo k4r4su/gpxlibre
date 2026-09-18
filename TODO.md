@@ -1,5 +1,35 @@
 # TODO
 
+## Retours terrain it21 (premier vrai test du guidage classique + demande de métriques)
+
+Le propriétaire a testé la livraison it21 en conditions réelles ("je peux l'utiliser comme un
+vrai GPS !") et remonté 3 fixes + 1 nouvelle demande :
+
+- **`fix:"search-bar-requires-pull-down"`** : voir Nav/CLAUDE.md, section "Retours terrain
+  post-livraison".
+- **`fix:"nav-banner-too-verbose"`** : idem — bannière redécoupée en 2 zones (direction/distance
+  proéminentes à gauche, texte en retrait à droite).
+- **`fix:"nav-goto-mutual-exclusion"`** : bug RÉEL trouvé via le retour "je vois pas de diff" en
+  testant le repli sans Valhalla — voir Nav/CLAUDE.md pour le détail (startNav/startGoTo ne
+  s'excluaient jamais mutuellement à l'activation).
+- **`feat:"track-geek-metrics"`** : voir CLAUDE.md racine (section Views/Rendering) et
+  `TrackMetricsCalculator`. Nouvelle section "Statistiques avancées" repliée par défaut dans
+  TrackFullSheetView — durée/vitesse moyenne globale et "en mouvement"/vitesse max/dénivelé +
+  et −/altitude min-max/pente max. `nil` proprement affiché (message explicatif) si la trace n'a
+  pas d'horodatage réel exploitable (import externe).
+- **Non tranché, en attente d'un retour** : refonte de l'écran "Zone par lieu" (it21,
+  `PlaceRegionPickerView`) — retour "pas ultra fan de ça, je pense qu'il faudrait juste une
+  carte avec un cercle ou carré qu'on peut agrandir/réduire, cliquer télécharger, avec la taille
+  affichée, et pouvoir supprimer après si ça prend trop de place." Question posée au
+  propriétaire : remplacer entièrement `PlaceRegionPickerView` (recherche par nom de lieu) par
+  ce picker à forme redimensionnable, ou l'ajouter comme troisième option à côté du cadrage
+  manuel existant et de la recherche par lieu ? Pas implémenté tant que la réponse n'est pas
+  connue — un rework de picker complet ne doit pas être deviné à moitié.
+- Tests (7 nouveaux ce tour-ci, 211 au total, 0 échec, 1 skip préexistant) :
+  `TrackMetricsCalculatorTests` (moyenne exacte sur cas simple, gain/perte dénivelé séparés,
+  filtrage des sauts GPS/segments trop courts, moyenne "en mouvement" > moyenne globale avec un
+  arrêt), `NavGoToMutualExclusionTests` (les deux sens, vérifiés au niveau synchrone).
+
 ## Itération 21 (bugs Cartes hors-ligne / zone par lieu / refonte Mode Nav)
 
 Fiche de développement complète, trois chantiers — tous livrés.

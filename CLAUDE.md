@@ -196,7 +196,12 @@ GPXlibre/
                    `Button` de toute la ligne — anti-pattern SwiftUI en `List`, tap parfois avalé
                    par le parent — remplacé par un seul `Button` (le check-mark) +
                    `.onTapGesture` sur le reste de la ligne pour ouvrir la fiche, NE JAMAIS
-                   réintroduire un `Button` autour de toute la ligne ; section "Sorties non
+                   réintroduire un `Button` autour de toute la ligne ; "Statistiques avancées"
+                   (spec "track-geek-metrics", it21, retour terrain : "mode petit côté geek pour
+                   ceux qui veulent savoir comment s'est passé le trajet") — `DisclosureGroup`
+                   repliée par défaut dans TrackFullSheetView (fiche volontairement minimale par
+                   défaut, ces stats restent un approfondissement opt-in), calculée par
+                   `TrackMetricsCalculator` (Rendering/, voir plus bas) ; section "Sorties non
                    enregistrées" (it19, spec "unsaved-ride-recovery", `UnsavedRideStore` propre
                    à cette vue — voir Recording/ ci-dessus pour le détail) affichée au-dessus
                    des traces normales quand non vide, rechargée à chaque apparition
@@ -218,6 +223,13 @@ GPXlibre/
                    décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,
                    voir TODO.md et Ride/CLAUDE.md — symboles ponctuels, jamais un dégradé
                    continu) ;
+                   TrackMetricsCalculator (it21, spec "track-geek-metrics") : durée/vitesse
+                   moyenne globale ET "en mouvement" (exclut les arrêts, seuil
+                   `movingSpeedThresholdKmh`)/vitesse max (plafonnée `maxPlausibleSpeedKmh`,
+                   rejette les sauts GPS)/dénivelé +/−/altitude min-max/pente max (segments
+                   ≥ `minSegmentMetersForGrade` uniquement, même précaution que SlopeAnalyzer) —
+                   `nil` si la trace n'a pas d'horodatage RÉEL exploitable (`GPXPoint.time`,
+                   import externe sans temps), jamais un calcul de vitesse silencieusement faux ;
                    TrackThumbnailGeometry/TrackThumbnailView (it11) — miniature Canvas pure,
                    ORPHELINE depuis it17 (plus de point d'entrée UI, remplacée par
                    TrackFicheMapView dans TrackSettingsView) mais fichier intact, même patron

@@ -49,6 +49,25 @@ struct TrackFullSheetView: View {
                     }
                 }
 
+                // Spec "track-geek-metrics" (it21, retour terrain : "ça peut rester dans l'app
+                // en mode petit côté geek pour ceux qui veulent savoir comment s'est passé le
+                // trajet") — replié par défaut (même patron que l'encart "tiles-zoom-explainer",
+                // it17) : la fiche reste volontairement minimale par défaut (voir doc du type
+                // ci-dessus), ces stats sont un approfondissement OPT-IN, pas un ajout au bloc
+                // principal déjà affiché plus haut.
+                if let metrics = TrackMetricsCalculator.compute(for: track.points) {
+                    DisclosureGroup("Statistiques avancées") {
+                        geekMetricsGrid(metrics)
+                            .padding(.top, 8)
+                    }
+                    .font(.subheadline)
+                } else {
+                    Text("Statistiques avancées indisponibles — cette trace n'a pas d'horodatage exploitable (import externe sans temps réel).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
                 Spacer()
 
                 VStack(spacing: 12) {
@@ -111,6 +130,30 @@ struct TrackFullSheetView: View {
                 Text("Cette action est irréversible.")
             }
         }
+    }
+
+    private func geekMetricsGrid(_ metrics: TrackMetrics) -> some View {
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        return LazyVGrid(columns: columns, spacing: 16) {
+            StatItem(title: "Durée totale", value: Self.durationText(metrics.durationSeconds))
+            StatItem(title: "Dont en mouvement", value: Self.durationText(metrics.movingDurationSeconds))
+            StatItem(title: "Vitesse moyenne", value: Self.speedText(metrics.averageSpeedKmh))
+            StatItem(title: "Moyenne en mouvement", value: Self.speedText(metrics.averageMovingSpeedKmh))
+            StatItem(title: "Vitesse max", value: Self.speedText(metrics.maxSpeedKmh))
+            StatItem(title: "Pente max", value: String(format: "%.0f %%", metrics.maxGradePercent))
+            StatItem(title: "Dénivelé −", value: String(format: "%.0f m", metrics.elevationLossMeters))
+            StatItem(title: "Altitude min/max", value: "\(Int(metrics.minElevationMeters.rounded()))–\(Int(metrics.maxElevationMeters.rounded())) m")
+        }
+    }
+
+    private static func durationText(_ seconds: Double) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        guard minutes >= 60 else { return "\(minutes) min" }
+        return "\(minutes / 60) h \(minutes % 60) min"
+    }
+
+    private static func speedText(_ kmh: Double) -> String {
+        String(format: "%.0f km/h", kmh)
     }
 }
 
