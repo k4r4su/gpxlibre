@@ -145,6 +145,29 @@ devenu injoignable en cours de route redéclencherait un appel réseau à CHAQUE
 >= offRouteToleranceSeconds` resterait vrai en continu). Voir `NavAutoRecomputeTests` — testé
 avec un provider qui réussit une fois puis échoue systématiquement, exactement ce scénario.
 
+## Retours terrain post-livraison (mêmes fixes it21, après premier test réel)
+
+- **`search-bar-requires-pull-down`** : la barre de recherche de `NavDestinationSearchView`
+  (`.searchable`) restait masquée tant qu'on ne faisait pas un petit swipe down — quirk connu de
+  SwiftUI, amplifié depuis que cette vue vit comme ONGLET permanent (spec "search-as-tab", it19)
+  plutôt que poussée dans une pile de navigation. Fix : `.searchable(text:placement:
+  .navigationBarDrawer(displayMode: .always), prompt:)` force la barre à rester visible sans
+  geste.
+- **`nav-banner-too-verbose`** : retour "trop d'info, je veux juste la direction et dans combien
+  de mètres, le numéro de sortie si rond-point ; le nom de rue en dessous, pas à la suite" —
+  `NavGuidancePanelView` redécoupée en deux zones cloisonnées par un séparateur vertical : GAUCHE
+  proéminente (icône + distance + badge sortie), DROITE en retrait, texte plus petit (instruction
+  puis nom de rue sur sa PROPRE ligne, jamais accolés).
+- **`nav-goto-mutual-exclusion`** (bug réel trouvé via le retour "je vois pas de diff" en testant
+  le repli sans Valhalla) : `startNav`/`startGoTo` ne s'excluaient jamais mutuellement — changer
+  de destination sans que Valhalla ne soit disponible pouvait démarrer `startGoTo` SANS jamais
+  arrêter un `navRoute` resté actif depuis la sélection précédente, donc l'ancienne bannière
+  riche restait affichée par-dessus/à la place du nouveau guidage simple censé l'avoir
+  remplacée. Fix : `startNav` appelle `stopGoTo()` en tout premier, `startGoTo` appelle
+  `stopNav()` en tout premier — les deux systèmes restent séparés dans leur LOGIQUE (voir plus
+  haut) mais s'excluent bien mutuellement à l'ACTIVATION. Voir `NavGoToMutualExclusionTests`
+  (vérifié au niveau synchrone, avant même la résolution réseau de l'un ou l'autre).
+
 ## Testabilité (providers factices, jamais de vrai réseau)
 
 `RideSessionManager.navRoutingProvider: NavRoutingProvider` (`internal`, même patron que

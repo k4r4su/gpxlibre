@@ -158,7 +158,9 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var goToDistanceRemainingMeters: Double?
     @Published private(set) var isRequestingGoTo = false
     @Published var goToRequestFailed: String?
-    private var goToTask: Task<Void, Never>?
+    /// `internal` uniquement pour la testabilité — même patron que `navRoutingTask`/
+    /// `mapMatchingTask` (permet à un test d'attendre `await session.goToTask?.value`).
+    var goToTask: Task<Void, Never>?
 
     // MARK: - Mode Nav (guidage A→B, recalcul automatique — jamais en Mode Trace)
     //
@@ -1320,7 +1322,18 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     /// Démarre un guidage vers `destination`. Recalcule automatiquement en cas d'écart —
     /// c'est le principe même du Mode Nav, à l'opposé du Mode Trace.
+    ///
+    /// Fix "nav-goto-mutual-exclusion" (it21, retour terrain : "je vois pas de diff" en
+    /// testant le repli sans Valhalla juste après un guidage riche) — `startNav`/`startGoTo`
+    /// ne s'excluaient jamais mutuellement : choisir une NOUVELLE destination pouvait démarrer
+    /// l'un sans jamais arrêter l'autre resté actif depuis la sélection précédente. Les deux
+    /// écrivent des propriétés PARTAGÉES par les mêmes bannières (`RideView.hasDirectionPanel`
+    /// lit `navRoute`, `activeBanner` lit `goToGuidance` indépendamment) — sans ce nettoyage,
+    /// une ancienne bannière riche pouvait rester affichée par-dessus/à la place d'un nouveau
+    /// guidage simple censé l'avoir remplacée. `stopGoTo()` ici est sans effet si aucun guidage
+    /// simple n'était actif (tout est déjà `nil`).
     func startNav(to destination: CLLocationCoordinate2D, label: String) {
+        stopGoTo()
         navDestinationCoordinate = destination
         navDestinationLabel = label
         currentManeuverIndex = 0
@@ -1362,6 +1375,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// pistes dès que possible"). Si le réseau/OSRM échoue pour N'IMPORTE quel profil, repli
     /// honnête en ligne directe (jamais de faux semblant d'itinéraire).
     func startGoTo(to destination: CLLocationCoordinate2D, label: String, profile: GoToProfile) {
+        // Fix "nav-goto-mutual-exclusion" (it21) — voir startNav ci-dessus, même raison
+        // symétrique : sans lui, un guidage riche resté actif depuis une sélection précédente
+        // pouvait continuer d'afficher SA bannière par-dessus ce nouveau guidage simple.
+        stopNav()
         goToTask?.cancel()
         goToRequestFailed = nil
 
