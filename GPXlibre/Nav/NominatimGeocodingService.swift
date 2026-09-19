@@ -79,7 +79,21 @@ actor NominatimGeocodingService {
     /// (`"country"`/`"state"`/`"city"`) pour biaiser les résultats côté serveur vers ce type de
     /// lieu — `nil` (défaut, appelants existants inchangés) laisse Nominatim trier librement,
     /// comme avant cette itération.
-    func search(query: String, featureType: String? = nil) async throws -> [GeocodingResult] {
+    ///
+    /// `nearCoordinate` (spec "poi-search-nominatim", it22, retour terrain : "ajouter la
+    /// recherche par nom de commerce/service — pharmacie, supermarché, médecin") — Nominatim
+    /// gère déjà ces requêtes génériques ("special phrases", ex. "pharmacie" → tag OSM
+    /// `amenity=pharmacy`) via `/search`, mais SANS ancrage géographique une requête aussi
+    /// générique renvoie des résultats dispersés dans le monde entier, inutilisables en
+    /// pratique. `viewbox` (boîte englobante, PAS un simple point : Nominatim n'a pas de
+    /// paramètre "rayon" natif) BIAISE la recherche vers cette zone SANS l'exclure (`bounded=0`,
+    /// défaut Nominatim — volontairement PAS `bounded=1` : une vraie adresse lointaine bien
+    /// formée, ex. "12 Rue de la Paix, Paris" cherchée alors que le rider est ailleurs, doit
+    /// continuer à ressortir, juste pas prioritaire ; seule une requête générique SANS nom de
+    /// lieu, type "pharmacie", tire un vrai bénéfice du biais). Repli honnête sur aucun biais si
+    /// la position n'est pas encore connue (comportement identique à avant cette itération),
+    /// jamais un crash/une erreur pour ça.
+    func search(query: String, featureType: String? = nil, nearCoordinate: CLLocationCoordinate2D? = nil) async throws -> [GeocodingResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
@@ -93,6 +107,14 @@ actor NominatimGeocodingService {
         ]
         if let featureType {
             queryItems.append(URLQueryItem(name: "featureType", value: featureType))
+        }
+        if let nearCoordinate {
+            let delta = NavConstants.nominatimProximityBiasDegrees
+            let viewbox = [
+                nearCoordinate.longitude - delta, nearCoordinate.latitude + delta,
+                nearCoordinate.longitude + delta, nearCoordinate.latitude - delta,
+            ].map { String($0) }.joined(separator: ",")
+            queryItems.append(URLQueryItem(name: "viewbox", value: viewbox))
         }
         components.queryItems = queryItems
         guard let url = components.url else { throw GeocodingError.noResults }

@@ -9,6 +9,10 @@ struct NavDestinationSearchView: View {
 
     @EnvironmentObject private var favorites: NavFavoritesStore
     @EnvironmentObject private var searchHistory: NavSearchHistoryStore
+    /// Spec "poi-search-nominatim" (it22) — position actuelle utilisée pour biaiser une
+    /// recherche générique ("pharmacie", "supermarché") vers les résultats proches, voir
+    /// `NominatimGeocodingService.search(nearCoordinate:)`.
+    @EnvironmentObject private var session: RideSessionManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
@@ -142,7 +146,7 @@ struct NavDestinationSearchView: View {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             do {
-                let found = try await NominatimGeocodingService.shared.search(query: trimmed)
+                let found = try await NominatimGeocodingService.shared.search(query: trimmed, nearCoordinate: session.currentLocation?.coordinate)
                 guard !Task.isCancelled else { return }
                 results = found
             } catch {

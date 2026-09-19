@@ -8,6 +8,14 @@ enum NavConstants {
     static let nominatimMinIntervalSeconds: Double = 1.0
     static let nominatimResultLimit = 6
 
+    /// Spec "poi-search-nominatim" (it22) — demi-largeur (degrés) de la boîte `viewbox` centrée
+    /// sur la position connue pour biaiser une recherche générique ("pharmacie",
+    /// "supermarché") vers les résultats proches. ~0.3° ≈ 33 km de rayon aux latitudes
+    /// européennes (111 km/degré de latitude) — assez large pour une zone urbaine + périphérie,
+    /// assez restreint pour rester pertinent ("effort raisonnable, pas un remplacement de
+    /// Google/Apple Maps").
+    static let nominatimProximityBiasDegrees: Double = 0.3
+
     // MARK: - Routage (OSRM public, profil "driving" = moto route)
 
     static let osrmProfile = "driving"

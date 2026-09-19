@@ -168,6 +168,30 @@ avec un provider qui réussit une fois puis échoue systématiquement, exactemen
   haut) mais s'excluent bien mutuellement à l'ACTIVATION. Voir `NavGoToMutualExclusionTests`
   (vérifié au niveau synchrone, avant même la résolution réseau de l'un ou l'autre).
 
+## Recherche de lieux/POI génériques (spec "poi-search-nominatim", it22)
+
+Constat : seule la recherche d'ADRESSE fonctionnait vraiment (une requête générique type
+"pharmacie" sans nom de lieu renvoyait des résultats dispersés dans le monde entier —
+Nominatim gère bien les "special phrases" côté `/search` sans configuration supplémentaire,
+mais a besoin d'un ancrage géographique pour être utile sur un terme générique).
+
+`NominatimGeocodingService.search(query:featureType:nearCoordinate:)` — nouveau paramètre
+`nearCoordinate: CLLocationCoordinate2D?`, ajoute `viewbox` (boîte englobante ±
+`NavConstants.nominatimProximityBiasDegrees`, 0.3°≈33 km) autour de la position connue.
+Délibérément **PAS** `bounded=1` (qui rejetterait tout résultat hors de la boîte) — seulement
+un BIAIS (`bounded=0`, défaut Nominatim) : une vraie adresse lointaine bien formée continue de
+ressortir (juste moins prioritaire), seule une requête générique SANS nom de lieu profite
+vraiment du biais. `NavDestinationSearchView` passe `session.currentLocation?.coordinate` (nil
+tant qu'aucun fix GPS, repli honnête sur une recherche non biaisée, comportement identique à
+avant cette itération).
+
+Hors périmètre explicite de la fiche (noté pour référence future) : pas d'auto-hébergement
+Photon/Overpass — "effort raisonnable, pas un remplacement de Google/Apple Maps", piste à
+reprendre si le NAS dédié se concrétise. Pas de test réseau réel (mock/fixture attendus par la
+fiche) : cette fonctionnalité ajoute seulement un paramètre de requête à un service déjà non
+testé directement pour la même raison que `NavFavoritesStore` (voir it19) — écrit dans le vrai
+réseau/Documents sans seam d'injection, cohérent avec ce précédent déjà établi.
+
 ## Testabilité (providers factices, jamais de vrai réseau)
 
 `RideSessionManager.navRoutingProvider: NavRoutingProvider` (`internal`, même patron que
