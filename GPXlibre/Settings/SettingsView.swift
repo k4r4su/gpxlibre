@@ -100,12 +100,13 @@ struct SettingsView: View {
                     // styles affichent les labels à l'envers ou statiques quand on tourne la
                     // carte") — diagnostiqué : ce n'est PAS un bug de rotation (vérifié, le
                     // patch cap-en-haut s'applique de façon identique aux 3 palettes
-                    // vectorielles), c'est Relief seul, en RASTER (image pré-rendue, aucune
-                    // rotation de texte possible par nature) qui ne suit jamais la rotation,
-                    // contrairement aux 3 autres thèmes (vectoriels). Documenté ici plutôt que
-                    // "corrigé" — rien à corriger dans le mécanisme de rotation lui-même.
-                    if settings.mapThemePreset == .relief {
-                        Text("Relief est une carte pré-dessinée (raster) : les noms de rue ne pivotent pas avec la boussole en cap-en-haut, contrairement aux 3 autres thèmes.")
+                    // vectorielles), ce sont les thèmes RASTER (image pré-rendue, aucune
+                    // rotation de texte possible par nature) qui ne suivent jamais la rotation,
+                    // contrairement aux thèmes vectoriels. Documenté ici plutôt que "corrigé" —
+                    // rien à corriger dans le mécanisme de rotation lui-même. Satellite
+                    // (Sentinel-2, it22) est raster au même titre que Relief — même limitation.
+                    if settings.mapThemePreset == .relief || settings.mapThemePreset == .satellite {
+                        Text("\(settings.mapThemePreset.label) est une carte pré-dessinée (raster) : les noms de rue ne pivotent pas avec la boussole en cap-en-haut, contrairement aux thèmes vectoriels.")
                     }
                 }
 

@@ -706,7 +706,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             // par la boucle de position ou de zoom.
             let hillshadeAnchorLayer: MLNStyleLayer? = {
                 switch currentMapSource {
-                case .raster(.osmStandard): return rasterLayer
+                // Satellite (it22) traité comme OSM standard : contrairement à OpenTopoMap,
+                // l'imagerie Sentinel-2 n'a PAS d'ombrage de relief intégré — le hillshade GPU
+                // reste pertinent par-dessus (même principe qu'un mode "Satellite + relief"
+                // classique chez les autres fournisseurs de cartes).
+                case .raster(.osmStandard), .raster(.satellite): return rasterLayer
                 case .raster(.openTopoMap): return nil
                 case .vectorHosted, .vectorLocal: return style.layer(withIdentifier: MapEngineConstants.vectorBackgroundLayerIdentifier)
                 }

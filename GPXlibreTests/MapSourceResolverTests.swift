@@ -57,6 +57,18 @@ final class MapSourceResolverTests: XCTestCase {
         XCTAssertEqual(selection, .raster(.openTopoMap))
     }
 
+    /// Spec "satellite-sentinel2" (it22) : Satellite (comme Relief) force le raster même avec
+    /// réseau joignable — pas de variante vectorielle possible pour une source satellite.
+    func testSatelliteThemeForcesRasterEvenWithNetworkReachable() {
+        let selection = MapSourceResolver.resolve(
+            activeVectorPackageFileURL: nil,
+            isNetworkReachable: true,
+            themePreset: .satellite,
+            fileExists: { _ in false }
+        )
+        XCTAssertEqual(selection, .raster(.satellite))
+    }
+
     /// Spec "map-color-flavors" (it19) : un thème vectoriel (Standard/Contraste élevé/Terreux)
     /// transporte sa palette jusque dans la sélection résolue, hébergé ET local.
     func testColorFlavorThemesCarryTheirFlavorThroughVectorHostedAndLocal() {

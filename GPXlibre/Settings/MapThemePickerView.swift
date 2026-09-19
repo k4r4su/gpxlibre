@@ -76,6 +76,9 @@ private extension MapThemePreset {
         // Terreux : décalage de teinte +10° vers le chaud, saturation réduite, un peu plus clair.
         case .terreux: return [Color(red: 0.88, green: 0.78, blue: 0.58), Color(red: 0.62, green: 0.68, blue: 0.42)]
         case .relief: return [Color(red: 0.58, green: 0.48, blue: 0.34), Color(red: 0.36, green: 0.56, blue: 0.38)]
+        // Satellite : tons terre/végétation vus du ciel (Sentinel-2 cloudless), plus sombre et
+        // saturé que Relief pour se distinguer au premier coup d'œil dans la grille de vignettes.
+        case .satellite: return [Color(red: 0.22, green: 0.30, blue: 0.18), Color(red: 0.14, green: 0.20, blue: 0.30)]
         }
     }
 
@@ -85,13 +88,14 @@ private extension MapThemePreset {
         case .hauteContraste: return "sun.max.fill"
         case .terreux: return "leaf.fill"
         case .relief: return "mountain.2.fill"
+        case .satellite: return "globe.europe.africa.fill"
         }
     }
 
     var swatchIconColor: Color {
         switch self {
         case .standard, .hauteContraste, .terreux: return .black.opacity(0.55)
-        case .relief: return .white
+        case .relief, .satellite: return .white
         }
     }
 }

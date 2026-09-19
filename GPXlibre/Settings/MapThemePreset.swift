@@ -10,6 +10,9 @@ import Foundation
 /// ne les distinguait), celles-ci produisent un rendu visuellement distinct.
 enum MapThemePreset: String, CaseIterable, Identifiable, Codable {
     case standard, hauteContraste, terreux, relief
+    /// Spec "satellite-sentinel2" (it22) — raster Sentinel-2 cloudless (EOX), voir
+    /// `TileSource.satellite` pour le détail de la source/licence.
+    case satellite
 
     var id: String { rawValue }
 
@@ -19,17 +22,18 @@ enum MapThemePreset: String, CaseIterable, Identifiable, Codable {
         case .hauteContraste: return "Contraste élevé"
         case .terreux: return "Terreux"
         case .relief: return "Relief"
+        case .satellite: return "Satellite"
         }
     }
 
-    /// `nil` pour Relief (raster OpenTopoMap, pas concerné par les palettes de couleur du style
-    /// vectoriel) — voir `MapSourceResolver`/`MapEngineConstants.buildVectorStyleJSON`.
+    /// `nil` pour Relief et Satellite (rasters, pas concernés par les palettes de couleur du
+    /// style vectoriel) — voir `MapSourceResolver`/`MapEngineConstants.buildVectorStyleJSON`.
     var colorFlavor: MapColorFlavor? {
         switch self {
         case .standard: return .standard
         case .hauteContraste: return .hauteContraste
         case .terreux: return .terreux
-        case .relief: return nil
+        case .relief, .satellite: return nil
         }
     }
 }

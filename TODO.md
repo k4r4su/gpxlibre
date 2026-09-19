@@ -396,16 +396,28 @@ propriétaire, hors périmètre de cette itération).
   une liste de réglages aurait été un coût de rendu disproportionné pour un simple choix de
   palette. Remplace le `Picker` texte de Réglages > Carte > Thème, mêmes 4 valeurs
   (`MapThemePreset`), aucun nouveau style ajouté ce tour-ci (voir ci-dessous).
-- **Satellite : backlog documenté, PAS implémenté** (même traitement que la clé TomTom du Bloc
-  Trafic, it13) — aucune source satellite gratuite et réutilisable hors-ligne trouvée :
-  Esri/Google/Bing World Imagery imposent des CGU incompatibles avec un cache PMTiles
-  auto-hébergé façon it11 (redistribution/mise en cache de tuiles satellite hors des quotas
-  gratuits interdite ou payante). Ajouter Satellite sans réseau, ou en violant ces CGU, serait
-  contraire à la philosophie hors-ligne-d'abord de l'app. Piste si le besoin devient réel : une
-  clé Maxar/Mapbox Satellite payante avec cache local respectant leurs CGU, ou une source
-  ouverte type Sentinel-2 cloudless (EOX, résolution/fraîcheur bien inférieures à du satellite
-  commercial, mais réellement libre de droits) — aucune des deux tentée ici, décision produit à
-  prendre en amont (coût/qualité), pas une implémentation technique bloquée.
+- **Satellite : IMPLÉMENTÉ (spec "satellite-sentinel2", it22)** — remplace le backlog documenté
+  en it18-bis (Esri/Google/Bing World Imagery restent incompatibles avec un cache PMTiles
+  auto-hébergé, CGU inchangées). Choix explicite du propriétaire entre les deux pistes déjà
+  identifiées : Sentinel-2 cloudless (EOX, gratuit) plutôt qu'une clé Maxar/Mapbox Satellite
+  payante (aurait nécessité que le propriétaire crée lui-même un compte/une clé — non
+  automatisable). Nouveau `TileSource.satellite` (`GPXlibre/Offline/TileSource.swift`) : gabarit
+  d'URL `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg`
+  (ordre de jetons z/y/x, PAS z/x/y — vérifié directement dans la `WMTSCapabilities.xml`
+  officielle du service, jamais deviné/recopié d'un résumé tiers), plafonné au zoom 16 (au-delà,
+  suréchantillonnage pur de la résolution native ~10 m/pixel, pas la peine de mettre en cache).
+  Licence **CC BY-NC-SA 4.0** (vérifiée dans la même capabilities XML — un résumé web trouvé en
+  amont indiquait à tort une simple CC-BY 4.0 pour une vintage antérieure ; la clause
+  NonCommercial est sans incidence pour GPXlibre, gratuit et sans abonnement par construction).
+  Contrepartie assumée et présentée au propriétaire avant implémentation : résolution nettement
+  inférieure à un satellite commercial (mosaïque annuelle, ~10 m/pixel, pas d'imagerie récente)
+  — utile pour se repérer, pas pour distinguer un sentier étroit. Point de vigilance EOX
+  documenté (pas un blocage) : la "Fair Use Notice" du service réserve son niveau gratuit à un
+  usage raisonnable, pas à une app largement diffusée avec un vrai trafic de production — cohérent
+  avec l'échelle actuelle (perso/hobby) de GPXlibre, à revisiter si l'audience grandit
+  significativement. Nouveau thème `MapThemePreset.satellite` (raster, `colorFlavor: nil`, même
+  traitement que Relief dans `MapSourceResolver` et pour la limitation "labels ne pivotent pas
+  en cap-en-haut", `SettingsView`), nouvelle vignette dans `MapThemePickerView`.
 - **"Rando" (nouveau style vectoriel outdoor)** : proposé au propriétaire (réutilise les MÊMES
   tuiles OpenMapTiles déjà hébergées/téléchargées, donc zéro risque hors-ligne — juste un
   nouvel habillage JSON, chemins/pistes plus visibles, teintes terrain), mais PAS implémenté —

@@ -4,6 +4,35 @@ Chargé automatiquement quand une session travaille sous `GPXlibre/Offline/`. Le
 du contexte projet (philosophie, règles absolues, conventions) reste dans le CLAUDE.md
 racine — ce fichier ne documente que ce qui est spécifique à ce dossier.
 
+## Source satellite Sentinel-2 cloudless — ordre d'URL inhabituel (spec "satellite-sentinel2", it22)
+
+`TileSource.satellite` (voir `TileSource.swift`) pointe vers le service WMTS d'EOX IT Services
+GmbH (`tiles.maps.eox.at`), SEULE source satellite trouvée à la fois gratuite et légalement
+réutilisable hors-ligne (Esri/Google/Bing World Imagery interdisent la redistribution/mise en
+cache dans leurs CGU gratuites — backlog documenté depuis it18-bis dans TODO.md, choix final du
+propriétaire entre cette option et une clé Maxar/Mapbox payante non automatisable).
+
+Piège à ne jamais réintroduire : le `ResourceURL` officiel de ce service (vérifié en fetchant
+directement `https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml`, JAMAIS un résumé
+tiers/blog) a l'ordre de chemin **z/y/x**, pas z/x/y comme la quasi-totalité des autres sources
+XYZ de ce projet (OSM standard, OpenTopoMap). Ça ne casse rien mécaniquement — les jetons
+`{z}`/`{x}`/`{y}` sont substitués PAR NOM (jamais par position) aussi bien côté MapLibre que
+côté `TileDownloadQueue` — mais une réécriture inattentive du gabarit d'URL dans l'ordre "habituel"
+produirait des tuiles x/y INTERVERTIES de façon silencieuse (aucune erreur réseau, juste une
+image géographiquement fausse). Toujours revérifier contre la vraie WMTSCapabilities.xml avant
+de toucher à ce gabarit.
+
+Licence **CC BY-NC-SA 4.0** (vérifiée dans la même capabilities XML — un résumé web trouvé en
+amont de l'implémentation indiquait à tort une simple CC-BY 4.0 pour une vintage antérieure du
+service). Clause NonCommercial sans incidence pour GPXlibre (gratuit, sans abonnement). Le
+service documente aussi une "Fair Use Notice" réservant son niveau gratuit à un usage
+raisonnable plutôt qu'à une app à fort trafic de production — cohérent avec l'échelle actuelle
+(perso/hobby) de GPXlibre, point à revisiter seulement si l'audience grandissait significativement.
+
+`maxZoomLevel` plafonné à 16 (le service en sert techniquement jusqu'à 21) : résolution native
+Sentinel-2 ≈ 10 m/pixel, au-delà les tuiles ne sont qu'un suréchantillonnage sans détail
+supplémentaire réel — pas la peine de gaspiller du stockage de cache hors-ligne dessus.
+
 ## Compter avant d'énumérer : bbox de tuiles (fix "region-picker-huge-bbox-crash", it16)
 
 Piège vécu (crash terrain réel, pas théorique) : `RegionPickerMapView` (MLNMapView) démarre

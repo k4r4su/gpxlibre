@@ -114,7 +114,9 @@ TOUTE l'image comme un bloc rigide, aucune rotation par-label n'est possible par
 `viewport`-aligné). "Certains styles tournent, d'autres pas" = Relief (raster, jamais) vs les
 3 flavors vectoriels (toujours, correctement) — pas un bug à corriger dans le code de
 rotation, documenté via un footer dans Réglages > Carte (visible seulement si Relief
-sélectionné) plutôt qu'un correctif inexistant.
+sélectionné) plutôt qu'un correctif inexistant. Satellite (Sentinel-2, it22, voir
+`GPXlibre/Offline/CLAUDE.md`) est raster au même titre que Relief (`colorFlavor: nil`) — même
+règle 0, même limitation de rotation, même footer (condition étendue aux deux thèmes).
 
 **(b) "Les 3 premiers thèmes sont visuellement identiques" — BUG RÉEL, confirmé et corrigé.**
 Root cause trouvée en rejouant le patch à la main sur la VRAIE couleur `background` du style
