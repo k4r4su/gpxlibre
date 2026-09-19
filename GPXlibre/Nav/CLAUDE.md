@@ -206,3 +206,29 @@ Rendu réel de la bannière/l'icône/la bannière secondaire, découpage visuel 
 la carte, guidage vocal entendu en conditions réelles, ergonomie du badge "Sortie N" en rond-point
 — logique couverte par les tests unitaires (`ValhallaManeuverTypeTests`, `NavProgressTests`,
 `NavAutoRecomputeTests`), le rendu visuel réel reste à confirmer par le pilote.
+
+## Piège SwiftUI : un `Rectangle()` nu comme séparateur (fix "nav-panel-fullscreen", it22bis)
+
+Bug terrain confirmé par capture d'écran : le bandeau `NavGuidancePanelView` (guidage "Aller à")
+remplissait TOUT l'écran, carte totalement masquée — reproductible sur N'IMPORTE QUEL thème de
+carte (capture prise sur OpenFreeMap vectoriel, donc AUCUN rapport avec le raster/satellite).
+
+Root cause : le séparateur vertical entre la zone icône/distance et la zone texte était un
+`Rectangle().fill(...).frame(width: 1).padding(.vertical, 4)` — un `Shape` nu n'a AUCUNE taille
+intrinsèque et accepte donc INTÉGRALEMENT la hauteur proposée par son parent. Cette vue vit dans
+`RideView.directionPanelLayer`, lui-même seul enfant "de contenu" d'une VStack dont l'AUTRE seul
+enfant est un `Spacer()` (voir `topStackLayer`) — rien ne borne la hauteur ambiante offerte à ce
+HStack, qui hérite donc de la hauteur PLEIN ÉCRAN du ZStack racine. Le `Rectangle` s'étire pour
+la remplir, et comme un `HStack` prend la hauteur MAX de ses enfants, tout le panneau (fond
+`.ridePanelStyle()` inclus) grandit avec lui.
+
+Fix : `.fixedSize(horizontal: false, vertical: true)` sur le HStack racine de
+`NavGuidancePanelView` — force SwiftUI à calculer sa hauteur RÉELLE depuis son contenu (ignore
+la proposition ambiante), sans toucher à la largeur (le `Spacer()` interne continue de pousser
+le bouton stop à droite normalement). Réflexe à généraliser : tout `Rectangle()`/`Circle()` posé
+comme simple séparateur/décor DANS un panneau flottant Ride doit soit porter une hauteur ET une
+largeur explicites, soit vivre dans un conteneur dont la hauteur est déjà bornée autrement —
+jamais nu dans une hiérarchie qui remonte jusqu'à une VStack fermée par un simple `Spacer()`
+(vérifié : aucun autre `Rectangle()` du projet n'est dans ce cas, voir grep fait avant ce fix —
+tous les autres sont soit des fonds pleine-écran voulus comme tels, soit des `.contentShape(...)`
+qui épousent déjà la taille de leur vue porteuse).

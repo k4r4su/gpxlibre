@@ -31,6 +31,16 @@ struct NavGuidancePanelView: View {
     let onStop: () -> Void
 
     var body: some View {
+        // Fix "nav-panel-fullscreen" (it22bis, retour terrain : "le panneau de direction prend
+        // toute la page, on ne voit même plus la carte") — root cause : le séparateur vertical
+        // ci-dessous est un `Rectangle()` NU (un `Shape`), qui n'a AUCUNE taille intrinsèque et
+        // accepte donc toute la hauteur proposée par le parent. `directionPanelLayer` vit dans
+        // une VStack dont le SEUL autre enfant est un `Spacer()` (voir RideView.topStackLayer) —
+        // rien ne borne la hauteur proposée à ce HStack, qui hérite donc de la hauteur PLEIN
+        // ÉCRAN offerte par le ZStack racine (RideMapLibreView + overlays). `.fixedSize(vertical:
+        // true)` force ce HStack à calculer sa hauteur RÉELLE depuis son contenu (ignore la
+        // proposition ambiante), sans toucher à la largeur (reste flexible, `Spacer()` continue
+        // de pousser le bouton stop à droite normalement).
         HStack(alignment: .center, spacing: 14) {
             // Zone GAUCHE (proéminente) : direction + distance + sortie de rond-point — tout ce
             // qu'un coup d'œil rapide doit capter, rien d'autre.
@@ -90,6 +100,7 @@ struct NavGuidancePanelView: View {
             }
             .longPressTooltip(stopLabel)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(14)
         .ridePanelStyle(tint: .blue, tintOpacity: 0.45)
         .padding(.horizontal, 12)
