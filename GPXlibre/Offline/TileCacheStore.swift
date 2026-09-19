@@ -1,9 +1,11 @@
 import Foundation
 
-/// Cache disque des tuiles raster, structuré `MapTiles/<source>/{z}/{x}/{y}.png` — un
-/// sous-dossier par source (osm/opentopo) pour que le thème Relief et les thèmes OSM
-/// standard ne se marchent jamais dessus. Sert de vérité locale : une tuile déjà présente
-/// n'est jamais re-téléchargée (pas de round-trip réseau).
+/// Cache disque des tuiles raster, structuré `MapTiles/<source>/{z}/{x}/{y}.<ext>` — un
+/// sous-dossier par source (osm/opentopo/satellite) pour que les thèmes raster ne se marchent
+/// jamais dessus. `<ext>` suit `TileSource.tileFileExtension` (".jpg" pour Satellite, EOX sert
+/// du JPEG — fix "satellite-black-map", it22bis : nommer un fichier JPEG ".png" fonctionnait
+/// pour la lecture/écriture locale, mais était trompeur pour tout futur debug). Sert de vérité
+/// locale : une tuile déjà présente n'est jamais re-téléchargée (pas de round-trip réseau).
 final class TileCacheStore {
     static let shared = TileCacheStore()
 
@@ -26,7 +28,7 @@ final class TileCacheStore {
             .appendingPathComponent(tile.source.cacheFolderName, isDirectory: true)
             .appendingPathComponent("\(tile.z)", isDirectory: true)
             .appendingPathComponent("\(tile.x)", isDirectory: true)
-            .appendingPathComponent("\(tile.y).png")
+            .appendingPathComponent("\(tile.y).\(tile.source.tileFileExtension)")
     }
 
     func hasTile(_ tile: TileCoordinate) -> Bool {

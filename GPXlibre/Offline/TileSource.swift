@@ -102,6 +102,16 @@ enum TileSource: String, Codable, CaseIterable {
         }
     }
 
+    /// Extension réelle du format d'image servi — PAS toujours ".png" (fix "satellite-black-map",
+    /// it22bis : EOX sert du JPEG, `TileCacheURLProtocol.parseTile` supposait ".png" en dur et
+    /// échouait silencieusement sur CHAQUE tuile satellite, d'où l'écran totalement noir).
+    var tileFileExtension: String {
+        switch self {
+        case .osmStandard, .openTopoMap: return "png"
+        case .satellite: return "jpg"
+        }
+    }
+
     static func active(for theme: MapThemePreset) -> TileSource {
         switch theme {
         case .relief: return .openTopoMap

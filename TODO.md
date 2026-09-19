@@ -418,6 +418,16 @@ propriétaire, hors périmètre de cette itération).
   significativement. Nouveau thème `MapThemePreset.satellite` (raster, `colorFlavor: nil`, même
   traitement que Relief dans `MapSourceResolver` et pour la limitation "labels ne pivotent pas
   en cap-en-haut", `SettingsView`), nouvelle vignette dans `MapThemePickerView`.
+  **Fix "satellite-black-map" (it22bis, retour terrain immédiat : "la carte sentinel affiche une
+  carte complètement noire")** : `TileCacheURLProtocol.parseTile` supposait un ordre de chemin
+  FIXE `.../{z}/{x}/{y}.png` (position + extension ".png" codées en dur) — valable pour OSM/
+  OpenTopoMap, mais silencieusement FAUX pour EOX (ordre z/y/x, extension ".jpg") :
+  `Int("16.jpg")` échoue, donc CHAQUE tuile satellite était rejetée par l'interception disque
+  AVANT même d'atteindre le réseau, d'où l'écran totalement noir. Corrigé par un parsing par
+  regex dérivé DIRECTEMENT du gabarit d'URL de chaque source (jamais une position/extension
+  supposée) — voir `GPXlibre/Offline/CLAUDE.md`. `TileSource.tileFileExtension` (nouveau) fait
+  aussi que le cache disque nomme désormais les fichiers JPEG `.jpg` (au lieu de `.png` trompeur,
+  cosmétique mais corrigé au passage).
 - **"Rando" (nouveau style vectoriel outdoor)** : proposé au propriétaire (réutilise les MÊMES
   tuiles OpenMapTiles déjà hébergées/téléchargées, donc zéro risque hors-ligne — juste un
   nouvel habillage JSON, chemins/pistes plus visibles, teintes terrain), mais PAS implémenté —

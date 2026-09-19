@@ -29,7 +29,7 @@ final class TileCacheURLProtocol: URLProtocol {
         }
 
         if let cached = TileCacheStore.shared.read(tile) {
-            respond(with: cached, url: url)
+            respond(with: cached, url: url, tile: tile)
             return
         }
 
@@ -65,28 +65,60 @@ final class TileCacheURLProtocol: URLProtocol {
         activeTask = nil
     }
 
-    private func respond(with data: Data, url: URL) {
+    private func respond(with data: Data, url: URL, tile: TileCoordinate) {
+        let mimeType = tile.source.tileFileExtension == "jpg" ? "image/jpeg" : "image/png"
         let response = HTTPURLResponse(
             url: url,
             statusCode: 200,
             httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": "image/png", "Content-Length": "\(data.count)"]
-        ) ?? URLResponse(url: url, mimeType: "image/png", expectedContentLength: data.count, textEncodingName: nil)
+            headerFields: ["Content-Type": mimeType, "Content-Length": "\(data.count)"]
+        ) ?? URLResponse(url: url, mimeType: mimeType, expectedContentLength: data.count, textEncodingName: nil)
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    /// URL attendue : https://<host>/{z}/{x}/{y}.png — le host détermine la source (osm ou
-    /// opentopo), donc le sous-dossier de cache dans lequel la tuile est rangée/lue.
-    private static func parseTile(from url: URL) -> TileCoordinate? {
+    /// Fix "satellite-black-map" (it22bis) : l'ancienne version supposait un ORDRE FIXE
+    /// `.../{z}/{x}/{y}.png` (position + extension codées en dur) — valable pour OSM/OpenTopoMap,
+    /// mais silencieusement FAUX pour la source satellite (EOX : ordre z/y/x, extension .jpg),
+    /// qui échouait donc sur CHAQUE tuile (`Int("16.jpg")` retourne `nil`), d'où l'écran
+    /// totalement noir signalé en retour terrain. Nouvelle approche : dérive un motif regex
+    /// directement du gabarit d'URL DE LA SOURCE (jamais une position/extension supposée),
+    /// donc valable quel que soit l'ordre des jetons ou le format d'image.
+    ///
+    /// `internal` (pas `private`) UNIQUEMENT pour la testabilité — même patron que
+    /// `navRoutingTask`/`mapMatchingProvider` ailleurs dans le projet.
+    static func parseTile(from url: URL) -> TileCoordinate? {
         guard let host = url.host, let source = TileSource.matching(host: host) else { return nil }
-        let components = url.pathComponents.filter { $0 != "/" }
-        guard components.count >= 3,
-              let z = Int(components[components.count - 3]),
-              let x = Int(components[components.count - 2]),
-              let y = Int(components[components.count - 1].replacingOccurrences(of: ".png", with: ""))
+        guard let template = source.tileURLTemplates.first(where: { $0.contains(host) }) ?? source.tileURLTemplates.first,
+              let templatePath = URLComponents(string: template)?.path,
+              let (z, x, y) = extractZXY(fromPath: url.path, matchingTemplatePath: templatePath)
         else { return nil }
         return TileCoordinate(z: z, x: x, y: y, source: source)
+    }
+
+    /// Construit un regex à partir du CHEMIN du gabarit (jamais l'URL complète, pour rester
+    /// indifférent au sous-domaine a/b/c d'OpenTopoMap) en remplaçant `{z}`/`{x}`/`{y}` par des
+    /// groupes nommés, quel que soit leur ordre ou l'extension qui suit.
+    private static func extractZXY(fromPath path: String, matchingTemplatePath templatePath: String) -> (z: Int, x: Int, y: Int)? {
+        var placeholderPattern = templatePath
+            .replacingOccurrences(of: "{z}", with: "@Z@")
+            .replacingOccurrences(of: "{x}", with: "@X@")
+            .replacingOccurrences(of: "{y}", with: "@Y@")
+        placeholderPattern = NSRegularExpression.escapedPattern(for: placeholderPattern)
+        placeholderPattern = placeholderPattern
+            .replacingOccurrences(of: "@Z@", with: "(?<z>\\d+)")
+            .replacingOccurrences(of: "@X@", with: "(?<x>\\d+)")
+            .replacingOccurrences(of: "@Y@", with: "(?<y>\\d+)")
+        guard let regex = try? NSRegularExpression(pattern: "^" + placeholderPattern + "$") else { return nil }
+        let fullRange = NSRange(path.startIndex..., in: path)
+        guard let match = regex.firstMatch(in: path, range: fullRange) else { return nil }
+        func value(named name: String) -> Int? {
+            let range = match.range(withName: name)
+            guard range.location != NSNotFound, let swiftRange = Range(range, in: path) else { return nil }
+            return Int(path[swiftRange])
+        }
+        guard let z = value(named: "z"), let x = value(named: "x"), let y = value(named: "y") else { return nil }
+        return (z, x, y)
     }
 }

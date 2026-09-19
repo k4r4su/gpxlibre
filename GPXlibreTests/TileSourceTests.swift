@@ -59,4 +59,35 @@ final class TileSourceTests: XCTestCase {
         XCTAssertEqual(Set(names).count, names.count, "Chaque source doit avoir son propre sous-dossier de cache")
         XCTAssertEqual(TileSource.satellite.cacheFolderName, "satellite")
     }
+
+    /// Fix "satellite-black-map" (it22bis, retour terrain : "la carte sentinel affiche une
+    /// carte complètement noire") — `TileCacheURLProtocol.parseTile` supposait un ordre fixe
+    /// z/x/y ET l'extension ".png" codée en dur : `Int("16.jpg")` échoue, donc CHAQUE tuile
+    /// satellite était rejetée avant même d'atteindre le réseau. Ce test verrouille le vrai
+    /// bout-en-bout (URL réelle générée par MapLibre → tuile reconstituée) pour les 3 sources.
+    func testParseTileRoundTripsForAllSourcesIncludingSatellite() {
+        for source in TileSource.allCases {
+            guard let template = source.tileURLTemplates.first else {
+                return XCTFail("Aucun gabarit pour \(source)")
+            }
+            let urlString = template
+                .replacingOccurrences(of: "{z}", with: "9")
+                .replacingOccurrences(of: "{x}", with: "265")
+                .replacingOccurrences(of: "{y}", with: "178")
+            guard let url = URL(string: urlString) else {
+                return XCTFail("URL invalide pour \(source) : \(urlString)")
+            }
+            let tile = TileCacheURLProtocol.parseTile(from: url)
+            XCTAssertEqual(tile?.z, 9, "\(source)")
+            XCTAssertEqual(tile?.x, 265, "\(source)")
+            XCTAssertEqual(tile?.y, 178, "\(source)")
+            XCTAssertEqual(tile?.source, source, "\(source)")
+        }
+    }
+
+    func testTileFileExtensionMatchesActualImageFormatServed() {
+        XCTAssertEqual(TileSource.osmStandard.tileFileExtension, "png")
+        XCTAssertEqual(TileSource.openTopoMap.tileFileExtension, "png")
+        XCTAssertEqual(TileSource.satellite.tileFileExtension, "jpg")
+    }
 }
