@@ -108,6 +108,36 @@ final class ColorFlavorPatcherTests: XCTestCase {
         XCTAssertLessThanOrEqual(reparsed.l, 1.0)
     }
 
+    /// Fix "map-flavors-clamp-to-white" (it22, retour terrain : "les 3 premiers thèmes sont
+    /// visuellement identiques") — root cause diagnostiquée à la main sur la VRAIE couleur
+    /// `background` du style embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%), qui domine la surface
+    /// visible à la plupart des zooms) : l'étirement de contraste de "Contraste élevé"
+    /// (`0.5 + (0.957-0.5)×1.4 = 1.14`) dépassait 100 % et se faisait ÉCRÊTER en blanc PUR — à
+    /// l=100 %, teinte ET saturation deviennent optiquement invisibles quelle que soit leur
+    /// valeur, donc indiscernable de "Standard" malgré un calcul par ailleurs correct.
+    func testNearWhiteBackgroundColorIsNeverClampedToPureWhiteUnderHauteContraste() {
+        let transformed = ColorFlavorPatcher.transformedColorString("#f8f4f0", flavor: .hauteContraste)!
+        let reparsed = ColorFlavorPatcher.parseColor(transformed)!
+
+        XCTAssertLessThan(reparsed.l, 1.0, "un écrêtage à 100% de luminosité rend teinte/saturation invisibles, peu importe leur valeur")
+        XCTAssertGreaterThan(reparsed.s, 0.3, "la saturation doit rester perceptible, pas noyée par l'écrêtage à blanc")
+    }
+
+    /// Cœur du retour terrain : la couleur DOMINANTE du fond de carte ne doit plus produire un
+    /// résultat identique (ou visuellement indiscernable) entre les 3 thèmes.
+    func testTheThreeFlavorsProduceDistinguishableResultsForTheDominantBackgroundColor() {
+        let background = "#f8f4f0"
+        let standard = ColorFlavorPatcher.parseColor(background)!
+        let hauteContraste = ColorFlavorPatcher.parseColor(ColorFlavorPatcher.transformedColorString(background, flavor: .hauteContraste)!)!
+        let terreux = ColorFlavorPatcher.parseColor(ColorFlavorPatcher.transformedColorString(background, flavor: .terreux)!)!
+
+        // "Visuellement identique" pour une couleur quasi-neutre veut surtout dire : même
+        // luminosité ET même saturation quasi nulle. On vérifie qu'au moins un des deux diffère
+        // significativement pour chaque paire, pas juste un delta non-nul microscopique.
+        XCTAssertGreaterThan(abs(hauteContraste.l - standard.l) + abs(hauteContraste.s - standard.s), 0.1, "Contraste élevé doit être perceptiblement différent de Standard")
+        XCTAssertGreaterThan(abs(terreux.l - standard.l) + abs(terreux.s - standard.s) + abs(terreux.h - standard.h) / 360, 0.05, "Terreux doit être perceptiblement différent de Standard")
+    }
+
     // MARK: - Layer traversal
 
     func testAppliesOnlyToPaintNeverToLayout() {

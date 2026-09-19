@@ -40,6 +40,9 @@ GPXlibre/
                    RejoinGuidanceBannerView (it18, colonne latérale, voir Ride/CLAUDE.md),
                    RidePanelStyle (styles partagés), RideConstants (constantes Ride hors
                    roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
+                   GuidanceTarget (it22, spec "manual-point-guidance-exclusivity" : état calculé
+                   trace/point-manuel/aucun, "un seul guidage actif à la fois" — voir
+                   Ride/CLAUDE.md),
                    ValhallaRoutingService/ValhallaKeychainStore (it19, spec "valhalla-client-
                    toggle" : backend de routage alternatif optionnel — voir Ride/CLAUDE.md),
                    RoutingProvider (it20, spec "valhalla-live-routing" : protocole commun OSRM/

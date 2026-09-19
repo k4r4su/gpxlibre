@@ -39,6 +39,20 @@ enum ColorFlavorPatcher {
     /// reconnu comme une couleur (ex. un nom de police, une clé d'expression comme
     /// "interpolate"/"zoom", un nom de source d'icône) — l'appelant garde alors la valeur telle
     /// quelle, jamais une modification à l'aveugle.
+    /// Fix "map-flavors-clamp-to-white" (it22, retour terrain : "les 3 premiers thèmes sont
+    /// visuellement identiques") — diagnostiqué en rejouant le patch à la main sur la vraie
+    /// couleur `background` du style embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%) — la couleur
+    /// qui domine la surface visible à la plupart des zooms) : `0.5 + (0.957 - 0.5) × 1.4` (le
+    /// facteur de contraste de "Contraste élevé") vaut `1.1398`, ÉCRÊTÉ à 100 % de luminosité —
+    /// à l=100%, hue ET saturation deviennent OPTIQUEMENT invisibles (blanc pur), quel que soit
+    /// leur valeur numérique. La quasi-totalité des couleurs de fond de carte (arrière-plan,
+    /// terrain, zones neutres) est déjà proche du blanc — l'étirement de contraste les écrase
+    /// donc systématiquement, effaçant la teinte/saturation qui aurait dû les distinguer.
+    /// Corrigé en clampant la luminosité finale dans une plage SÛRE (`safeLightnessRange`,
+    /// jamais 0 % ni 100 % pile) plutôt que `0...1` — la teinte/saturation restent toujours
+    /// perceptibles, même pour une couleur de départ déjà proche d'un extrême.
+    static let safeLightnessRange: ClosedRange<Double> = 0.05...0.92
+
     static func transformedColorString(_ string: String, flavor: MapColorFlavor) -> String? {
         guard let color = parseColor(string) else { return nil }
         var hue = (color.h + flavor.hueShiftDegrees).truncatingRemainder(dividingBy: 360)
@@ -49,7 +63,7 @@ enum ColorFlavorPatcher {
         // MapColorFlavor.saturationBoost.
         let saturation = min(max(color.s * flavor.saturationMultiplier + flavor.saturationBoost, 0), 1)
         let contrasted = 0.5 + (color.l - 0.5) * flavor.contrastFactor
-        let lightness = min(max(contrasted + flavor.lightnessDelta, 0), 1)
+        let lightness = min(max(contrasted + flavor.lightnessDelta, Self.safeLightnessRange.lowerBound), Self.safeLightnessRange.upperBound)
         return "hsla(\(formatted(hue)), \(formatted(saturation * 100))%, \(formatted(lightness * 100))%, \(formatted(color.a, decimals: 3)))"
     }
 

@@ -97,6 +97,49 @@ testable via `MapEngineConstants.patchedSymbolLayerForCapUp(_:)` (internal, voir
 (chevrons de direction, calque ajouté par code après le chargement du style, intentionnellement
 non concerné par ce patch : il DOIT suivre la trace, pas rester upright à l'écran).
 
+## Cohérence des styles/thèmes (spec "map-style-rotation-consistency" /
+## "map-flavor-differentiation", it22)
+
+Deux constats terrain distincts, diagnostiqués séparément AVANT tout correctif (demande
+explicite du prompt) — pas supposés.
+
+**(a) Rotation des labels "incohérente selon le style"** — investigation complète : le patch
+`patchedSymbolLayerForCapUp` s'applique de façon STRICTEMENT IDENTIQUE aux 3 palettes
+vectorielles (Standard/Contraste élevé/Terreux, même style JSON unique, même patch, aucune
+branche conditionnelle par flavor) — vérifié, pas de bug de rotation dans le mécanisme
+lui-même. La VRAIE cause : Relief force TOUJOURS le raster (règle 0 de `MapSourceResolver`,
+voir plus haut) — un raster est une image PRÉ-RENDUE, la rotation cap-en-haut fait tourner
+TOUTE l'image comme un bloc rigide, aucune rotation par-label n'est possible par nature
+(contrairement au vectoriel, où chaque label est un symbole indépendant qu'on peut garder
+`viewport`-aligné). "Certains styles tournent, d'autres pas" = Relief (raster, jamais) vs les
+3 flavors vectoriels (toujours, correctement) — pas un bug à corriger dans le code de
+rotation, documenté via un footer dans Réglages > Carte (visible seulement si Relief
+sélectionné) plutôt qu'un correctif inexistant.
+
+**(b) "Les 3 premiers thèmes sont visuellement identiques" — BUG RÉEL, confirmé et corrigé.**
+Root cause trouvée en rejouant le patch à la main sur la VRAIE couleur `background` du style
+embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%) — domine la surface visible à la plupart des
+zooms) : l'étirement de contraste de "Contraste élevé" (`0.5 + (0.957-0.5)×1.4 = 1.14`)
+DÉPASSAIT 100 % et se faisait ÉCRÊTER en BLANC PUR (`min(x, 1)`) — à l=100 %, teinte ET
+saturation deviennent optiquement invisibles quelle que soit leur valeur numérique, donc
+indiscernable de "Standard" malgré un calcul par ailleurs mathématiquement correct. La quasi-
+totalité des couleurs dominantes d'un fond de carte clair (arrière-plan, terrain) est déjà
+proche du blanc — l'ancien clamp `0...1` les écrasait donc systématiquement.
+
+Fix : `ColorFlavorPatcher.safeLightnessRange` (0.05...0.92, remplace le clamp `0...1` final)
+— la luminosité ne peut plus jamais atteindre un extrême PUR, donc teinte/saturation restent
+TOUJOURS perceptibles, même pour une couleur de départ déjà proche du blanc ou du noir. Validé
+par calcul à la main sur `#f8f4f0` sous les 3 flavors (voir `ColorFlavorPatcherTests.
+testTheThreeFlavorsProduceDistinguishableResultsForTheDominantBackgroundColor`) — "Terreux"
+reste une différence VOLONTAIREMENT modeste (teinte chaude légère, esprit carte papier, pas
+une refonte de palette), mais désormais RÉELLE plutôt qu'anéantie par le clamp.
+
+Paramètres de `MapColorFlavor` eux-mêmes INCHANGÉS (hueShift/saturationMultiplier/
+saturationBoost/contrastFactor/lightnessDelta) — le bug était dans la fonction de clamp, pas
+dans les valeurs de réglage choisies en it19/it19-bis. Toujours "un point de départ, pas un
+résultat validé à l'œil" (pas de device physique dans cet environnement) pour la magnitude
+exacte de différenciation perçue en conditions réelles.
+
 ## Chevrons : densité adaptative au zoom (fix "chevrons-zoom-adaptive", it17, Bloc 3)
 
 Bug corrigé : les chevrons disparaissaient totalement en dessous d'un zoom donné —

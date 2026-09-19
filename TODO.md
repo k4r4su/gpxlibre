@@ -1,5 +1,47 @@
 # TODO
 
+## Itération 22 (exclusivité de guidage / icône de reprise dynamique / bouton stop / recherche POI / cohérence des styles)
+
+Fiche de développement complète, 6 points — tous livrés. Dépendance confirmée : les points 1-3
+s'appuient sur le branchement Valhalla réel (it20), déjà en place.
+
+- **`feat:"manual-point-guidance-exclusivity"`** (points 1, 3, 4) : voir Ride/CLAUDE.md,
+  sections dédiées. `GuidanceTarget` calculé (jamais un second état stocké), `startNav`/
+  `startGoTo` mettent en pause la reprise de trace (`cancelResume()`), la colonne latérale se
+  retire proprement (gardée par `guidanceTarget == .trace`, pas juste "figée"), bouton stop
+  ajouté à `NavGuidancePanelView` ("Revenir à la trace" si une trace est active), icône de
+  `RejoinGuidanceBannerView` désormais tournée selon le vrai bearing. Bug manqué en it21
+  corrigé au passage : `RideView.commitGoTo` (tap long sur la carte) avait le même
+  `modeStore.mode == .nav` mort que `DestinationSearchTabView` (déjà fixé en it21), jamais
+  corrigé sur ce second point d'entrée — le guidage riche n'était donc jamais atteignable via
+  tap long, seulement via la recherche "Aller à".
+- **Point 2 (flèches turn-by-turn vers le point manuel)** : aucun nouveau composant — la
+  réutilisation demandée de `NavGuidancePanelView` était DÉJÀ effective une fois le bug
+  `commitGoTo` corrigé (elle s'affiche dès que `session.navRoute != nil`, quelle que soit
+  l'origine du guidage riche). Rien à construire, juste rendre le point d'entrée atteignable.
+- **`feat:"poi-search-nominatim"`** (point 5) : voir Nav/CLAUDE.md. Biais `viewbox` (PAS
+  `bounded=1`, volontairement) autour de la position connue pour les requêtes génériques
+  ("pharmacie", "supermarché") — une adresse lointaine bien formée continue de fonctionner.
+- **`fix:"map-flavor-differentiation"`** (point 6) : voir Map/CLAUDE.md, section dédiée.
+  Diagnostic mené AVANT tout correctif (demande explicite), deux causes DISTINCTES trouvées :
+  (a) rotation "incohérente" = Relief (raster, jamais de rotation possible par nature) vs les
+  3 flavors vectoriels (toujours corrects) — pas un bug de code, documenté via un footer
+  Réglages plutôt que "corrigé" ; (b) "3 thèmes identiques" = VRAI bug, le clamp de luminosité
+  `0...1` laissait "Contraste élevé" s'écrêter en BLANC PUR sur les couleurs de fond déjà
+  claires (majorité de la surface visible), effaçant toute teinte/saturation — corrigé par un
+  clamp `safeLightnessRange` (0.05...0.92) qui garde toujours une marge.
+- Tests (15 nouveaux ce tour-ci, 219 au total, 0 échec, 1 skip préexistant) :
+  `GuidanceTargetTests` (transition trace→point manuel→trace, jamais resumeGuidance ET
+  navRoute simultanément dans un sens comme dans l'autre), `RejoinBearingTests` (5 cas :
+  tout droit, gauche, droite, cap non nul, demi-tour), `ColorFlavorPatcherTests` (2 nouveaux :
+  plus jamais clampé à blanc pur, les 3 flavors distinguables sur la couleur dominante réelle
+  du style).
+- **Non vérifié visuellement/en conditions réelles** (pas de device physique ni de serveur
+  Valhalla réel dans cet environnement) : disparition effective de la colonne latérale au tap
+  d'un point manuel, rotation réelle de l'icône de reprise, bouton stop en conditions gantées/
+  plein soleil, pertinence des résultats "pharmacie"/"supermarché" en zone urbaine réelle,
+  différenciation réellement perçue des 3 thèmes de carte après le fix de clamp.
+
 ## Retours terrain it21 (premier vrai test du guidage classique + demande de métriques)
 
 Le propriétaire a testé la livraison it21 en conditions réelles ("je peux l'utiliser comme un
