@@ -230,6 +230,29 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// guidage riche ou retombe sur le guidage simple existant (`startGoTo`, pointillés + ETA).
     var isRichNavAvailable: Bool { currentValhallaConfiguration != nil }
 
+    /// Spec "manual-point-guidance-exclusivity" (it22) — voir `GuidanceTarget` : dérivé de
+    /// l'état canonique déjà existant, jamais un second état à resynchroniser. `.manualPoint`
+    /// dès qu'un guidage riche (`startNav`) OU simple (`startGoTo`) est actif, peu importe la
+    /// source (tap long sur la carte, recherche "Aller à") — `.trace` uniquement quand aucun des
+    /// deux n'est actif ET qu'une trace est chargée ; `.none` sinon (Ride sans trace ni
+    /// destination, ex. juste l'enregistrement GPS en cours).
+    var guidanceTarget: GuidanceTarget {
+        if let coordinate = navDestinationCoordinate { return .manualPoint(coordinate) }
+        if let coordinate = goToGuidance?.destinationCoordinate { return .manualPoint(coordinate) }
+        if track != nil { return .trace }
+        return .none
+    }
+
+    /// Fix "manual-point-guidance-exclusivity" (it22) — voir `startNav`/`startGoTo` (appellent
+    /// `cancelResume()` pour mettre en pause la reprise de trace dès qu'une destination manuelle
+    /// démarre) : symétrique, "taper à nouveau sur la trace, ou un bouton dédié, réactive le
+    /// guidage trace et annule la destination manuelle". N'efface QUE le guidage manuel —
+    /// jamais `track`/l'affichage de la trace (invariant it10, non concerné).
+    func returnToTraceGuidance() {
+        stopNav()
+        stopGoTo()
+    }
+
     private let manager = CLLocationManager()
     /// Expose uniquement `distanceFilter` (pas `manager` en entier) pour la testabilité —
     /// régression "speed-freeze-low-speed" (it19) : un distanceFilter > 0 affamait les fixs
@@ -679,18 +702,26 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         // Fix "nav-classic-rebuild" (it21) : ne dépend plus de `modeStore.mode` (toujours
         // `.trace` en usage réel, RideModeSegmentedControl masqué depuis it12/13 — la branche
         // `.nav` d'origine, `updateNavProgress`, n'était donc JAMAIS exécutée, quel que soit le
-        // guidage classique lancé via `startNav`). Bascule désormais sur `navDestinationCoordinate`
-        // (présent dès `startNav`, effacé par `stopNav`) : les deux branches restent MUTUELLEMENT
+        // guidage classique lancé via `startNav`).
+        //
+        // Fix "manual-point-guidance-exclusivity" (it22, "un seul guidage actif à la fois") —
+        // élargi de `navDestinationCoordinate != nil` (ne couvrait que le guidage RICHE,
+        // `startNav`) à `guidanceTarget != .trace` : un guidage SIMPLE (`startGoTo`, profil
+        // Piste/Mixte, ou Valhalla indisponible) laissait auparavant le roadbook/la reprise de
+        // trace tourner EN PARALLÈLE — exactement le bug remonté ("taper un point manuel doit
+        // mettre en pause le guidage de trace"). Les deux branches restent MUTUELLEMENT
         // EXCLUSIVES (pas un simple ajout côte à côte) parce qu'elles écrivent les MÊMES
         // propriétés partagées (`distanceRemainingMeters`/`percentComplete`/
-        // `estimatedArrivalDate`, lues par RideStatsPanel quel que soit le mode) — les faire
-        // tourner toutes les deux en même temps ferait gagner arbitrairement celle exécutée en
-        // dernier. `GoToGuidance` (updateGoToGuidance, juste après) reste totalement
-        // indépendant de ce choix : propriétés dédiées (`goToDistanceRemainingMeters`), jamais
-        // partagées, donc déjà correctement "parallèle" sans ce problème.
-        if navDestinationCoordinate != nil {
-            updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
-        } else {
+        // `estimatedArrivalDate`, lues par RideStatsPanel) — les faire tourner toutes les deux en
+        // même temps ferait gagner arbitrairement celle exécutée en dernier. `GoToGuidance`
+        // (updateGoToGuidance, juste après) reste appelée dans tous les cas : propriétés dédiées
+        // (`goToDistanceRemainingMeters`), jamais partagées, donc pas concernée par ce choix.
+        switch guidanceTarget {
+        case .manualPoint, .none:
+            if navDestinationCoordinate != nil {
+                updateNavProgress(from: location, etaSpeedKmh: etaSpeedKmh)
+            }
+        case .trace:
             // La projection (distance perpendiculaire + position curviligne) sert à la fois au
             // hors-trace/détour ET au resync roadbook — calculée une seule fois par fix.
             let projection = updateBlockedPathTracking(from: location)
@@ -1334,6 +1365,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// simple n'était actif (tout est déjà `nil`).
     func startNav(to destination: CLLocationCoordinate2D, label: String) {
         stopGoTo()
+        // Fix "manual-point-guidance-exclusivity" (it22, "un seul guidage actif à la fois") —
+        // met en pause le guidage de reprise vers la trace (manuel ou automatique) sans jamais
+        // toucher `track`/l'affichage de la trace (invariant it10) : `cancelResume()` efface
+        // seulement `resumeGuidance`. `guidanceTarget` bascule alors naturellement sur
+        // `.manualPoint` (voir sa doc) — le roadbook/la reprise/la colonne latérale associée se
+        // suspendent dans `RideSessionManager.handle(location:)`/`RideView` en conséquence.
+        cancelResume()
         navDestinationCoordinate = destination
         navDestinationLabel = label
         currentManeuverIndex = 0
@@ -1379,6 +1417,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         // symétrique : sans lui, un guidage riche resté actif depuis une sélection précédente
         // pouvait continuer d'afficher SA bannière par-dessus ce nouveau guidage simple.
         stopNav()
+        // Fix "manual-point-guidance-exclusivity" (it22) — voir startNav ci-dessus, même raison.
+        cancelResume()
         goToTask?.cancel()
         goToRequestFailed = nil
 

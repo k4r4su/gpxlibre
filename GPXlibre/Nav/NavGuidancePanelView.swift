@@ -21,6 +21,14 @@ struct NavGuidancePanelView: View {
     let distanceMeters: Double?
     let destinationLabel: String
     let isRecalculating: Bool
+    /// Fix "nav-guidance-stop-button" (it22, retour terrain : "une fois un itinéraire actif via
+    /// Aller à, il faut un bouton visible pour l'arrêter") — jusqu'ici, cette bannière n'avait
+    /// AUCUN contrôle de fermeture propre (seul `GoToStatusPillView`, le guidage SIMPLE, en
+    /// avait un) : une fois `session.navRoute != nil`, rien dans cette vue ne permettait de
+    /// revenir en arrière. Libellé décidé par l'appelant (`RideView`) — "Revenir à la trace" si
+    /// une trace reste active (spec "manual-point-guidance-exclusivity"), sinon "Arrêter".
+    let stopLabel: String
+    let onStop: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -74,6 +82,13 @@ struct NavGuidancePanelView: View {
                 ProgressView()
                     .tint(.white)
             }
+
+            Button(action: onStop) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .longPressTooltip(stopLabel)
         }
         .padding(14)
         .ridePanelStyle(tint: .blue, tintOpacity: 0.45)

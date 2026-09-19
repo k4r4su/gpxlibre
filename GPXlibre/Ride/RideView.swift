@@ -288,7 +288,18 @@ struct RideView: View {
                     maneuver: session.currentManeuver,
                     distanceMeters: session.distanceToCurrentManeuverMeters,
                     destinationLabel: session.navRoute?.destinationLabel ?? "",
-                    isRecalculating: session.isRecalculatingRoute
+                    isRecalculating: session.isRecalculatingRoute,
+                    // Fix "manual-point-guidance-exclusivity"/"nav-guidance-stop-button" (it22) :
+                    // "Revenir à la trace" si une trace reste chargée (réactive son guidage,
+                    // annule la destination manuelle) — sinon simple arrêt du guidage riche.
+                    stopLabel: library.activeTrack != nil ? "Revenir à la trace" : "Arrêter le guidage",
+                    onStop: {
+                        if library.activeTrack != nil {
+                            session.returnToTraceGuidance()
+                        } else {
+                            session.stopNav()
+                        }
+                    }
                 )
                 // Spec "nav-classic-rebuild" (P1) : bannière secondaire "puis..." — visible
                 // UNIQUEMENT si Valhalla signale un enchaînement rapproché (verbal_multi_cue)
@@ -418,27 +429,36 @@ struct RideView: View {
                 //    Bloc 5) — plus informative qu'un simple chip une fois qu'un itinéraire de
                 //    reprise a été calculé ; 2. chip hors-trace compact (Bloc 1) ; 3. bannière
                 //    virage à venir sur trace (it12).
-                if RideConstants.rejoindreGuidanceBannerEnabled,
-                   let resume = session.resumeGuidance, resume.isAutomatic,
-                   let distance = session.resumeGuidanceLiveDistanceMeters {
-                    RejoinGuidanceBannerView(distanceMeters: distance)
+                //
+                // Fix "manual-point-guidance-exclusivity" (it22) : toute la colonne se retire
+                // dès qu'un guidage manuel (`GuidanceTarget.manualPoint`) est actif — sans ce
+                // garde explicite, `session.currentInflection`/`isOffTrackChipVisible` etc.
+                // resteraient FIGÉS sur leur dernière valeur d'avant la pause (voir
+                // RideSessionManager.handle(location:), le calcul lui-même s'arrête, mais rien
+                // ne remet ces propriétés à `nil`/`false`) plutôt que disparaître proprement.
+                if session.guidanceTarget == .trace {
+                    if RideConstants.rejoindreGuidanceBannerEnabled,
+                       let resume = session.resumeGuidance, resume.isAutomatic,
+                       let distance = session.resumeGuidanceLiveDistanceMeters {
+                        RejoinGuidanceBannerView(distanceMeters: distance, relativeBearingDegrees: resumeRelativeBearingDegrees(to: resume.pinCoordinate))
+                            .transition(.ridePanel)
+                    } else if isOffTrackChipVisible, let offTrackInfo = offTrackPanelInfo {
+                        OffTrackChipView(
+                            relativeBearingDegrees: offTrackInfo.relativeBearingDegrees,
+                            distanceMeters: offTrackInfo.distanceMeters,
+                            pausedSinceDate: session.offTrackPausedSinceDate
+                        )
                         .transition(.ridePanel)
-                } else if isOffTrackChipVisible, let offTrackInfo = offTrackPanelInfo {
-                    OffTrackChipView(
-                        relativeBearingDegrees: offTrackInfo.relativeBearingDegrees,
-                        distanceMeters: offTrackInfo.distanceMeters,
-                        pausedSinceDate: session.offTrackPausedSinceDate
-                    )
-                    .transition(.ridePanel)
-                } else if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
-                    LateralCapBannerView(
-                        direction: inflection.direction,
-                        tier: inflection.tier,
-                        distanceMeters: distance,
-                        sequenceIndex: inflection.sequenceIndex,
-                        totalCount: session.inflectionPoints.count
-                    )
-                    .transition(.ridePanel)
+                    } else if isLateralBannerVisible, let inflection = session.currentInflection, let distance = session.distanceToCurrentInflectionMeters {
+                        LateralCapBannerView(
+                            direction: inflection.direction,
+                            tier: inflection.tier,
+                            distanceMeters: distance,
+                            sequenceIndex: inflection.sequenceIndex,
+                            totalCount: session.inflectionPoints.count
+                        )
+                        .transition(.ridePanel)
+                    }
                 }
                 RideGlovedZoomControls(onZoomIn: { session.zoomIn() }, onZoomOut: { session.zoomOut() })
                 // Spec "guidance-toggle-stop-pause-play" (it15, Bloc 3) : bouton unique par
@@ -693,14 +713,21 @@ struct RideView: View {
     }
 
     /// "Itinéraire ici" en Mode Nav démarre directement le guidage principal (voix +
-    /// tour-par-tour, c'est exactement le rôle du Mode Nav) ; partout ailleurs (Mode Trace,
-    /// ou profils piste/mixte y compris en Nav) c'est un guidage parallèle "Aller à"
-    /// qui ne touche jamais la trace chargée.
+    /// Fix "nav-classic-rebuild" (it21) manqué sur CE call site précis (corrigé ici en it22,
+    /// retour terrain sur l'exclusivité de guidage) : `modeStore.mode == .nav` n'est JAMAIS vrai
+    /// en usage réel (RideModeSegmentedControl masqué depuis it12/13) — ce point d'entrée
+    /// (tap long sur la carte) ne déclenchait donc jamais le guidage riche, même avec Valhalla
+    /// configuré et le profil "Itinéraire" choisi. Même critère que `DestinationSearchTabView`
+    /// depuis it21 : profil route + Valhalla disponible → guidage classique complet (réutilise
+    /// NavGuidancePanelView, spec it22 "reuse-nav-banner-for-manual-point") ; sinon repli sur le
+    /// guidage simple existant. `startNav`/`startGoTo` mettent chacun en pause la reprise de
+    /// trace (`cancelResume()`, spec "manual-point-guidance-exclusivity") — un point manuel
+    /// défini pendant un Ride en Trace devient donc automatiquement le seul guidage actif.
     private func commitGoTo(profile: GoToProfile) {
         guard let coordinate = pendingGoToCoordinate else { return }
         let label = pendingGoToLabel
         pendingGoToCoordinate = nil
-        if modeStore.mode == .nav, profile == .route {
+        if profile == .route, session.isRichNavAvailable {
             session.startNav(to: coordinate, label: label)
         } else {
             session.startGoTo(to: coordinate, label: label, profile: profile)
@@ -840,6 +867,13 @@ struct RideView: View {
               projection.distanceToTrackMeters <= toleranceMeters,
               let pin = TrackProjector.coordinate(in: track.points, cumulativeDistances: cumulative, atCumulativeDistance: projection.cumulativeDistanceMeters)
         else { return }
+        // Fix "manual-point-guidance-exclusivity" (it22, "taper à nouveau sur la trace...
+        // réactive le guidage trace et annule la destination manuelle") — sans effet si aucun
+        // guidage manuel n'était actif (`returnToTraceGuidance()` est un no-op dans ce cas,
+        // `stopNav`/`stopGoTo` sur un état déjà vide).
+        if session.guidanceTarget != .trace {
+            session.returnToTraceGuidance()
+        }
         session.requestResume(pinCoordinate: pin, pinCumulativeDistanceMeters: projection.cumulativeDistanceMeters)
     }
 

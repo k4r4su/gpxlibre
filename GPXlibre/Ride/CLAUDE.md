@@ -158,6 +158,64 @@ par `.environment(...)` (voir `slopeWarningsEnabled`/`slopeWarningThresholdPerce
 `EnvironmentValues`), même contrainte `MapProvider` (init à signature fixe) que le marqueur
 replay debug ci-dessous.
 
+## Exclusivité mutuelle des guidages (spec "manual-point-guidance-exclusivity", it22)
+
+Constat : taper un point manuel sur la carte pendant un Ride en Trace (ou choisir une
+destination via "Aller à") ne mettait auparavant JAMAIS en pause le guidage de trace
+(roadbook + reprise) — les deux tournaient en parallèle, contradictoire avec "un seul guidage
+actif à la fois".
+
+`GuidanceTarget` (Ride/GuidanceTarget.swift, `.trace`/`.manualPoint(CLLocationCoordinate2D)`/
+`.none`) — délibérément un type CALCULÉ (`RideSessionManager.guidanceTarget`), jamais un
+second état stocké à resynchroniser : dérivé de `navDestinationCoordinate`/`goToGuidance`/
+`track`, déjà les sources de vérité existantes. DISTINCT de l'état de trace unique
+(`LibraryStore.activeTrackID`/`displayedTrackIDs`, invariant it10) — la trace reste AFFICHÉE
+même quand `guidanceTarget == .manualPoint`, seul son GUIDAGE se met en pause.
+
+- `startNav`/`startGoTo` appellent désormais `cancelResume()` (en plus de leur exclusion
+  mutuelle réciproque déjà en place depuis it21, `stopGoTo()`/`stopNav()`) — met en pause la
+  reprise de trace (manuelle ou automatique) sans jamais toucher `track`.
+- `RideSessionManager.handle(location:)` : le `switch guidanceTarget` (remplace l'ancien
+  `if navDestinationCoordinate != nil` d'it21, qui ne couvrait QUE le guidage riche) suspend
+  tout le pipeline trace (`updateRoadbookProgress`/`updateAutoRecompute`/`updateRoadbookBanner`/
+  `updateRideStats`) dès que `guidanceTarget != .trace` — un guidage SIMPLE (`startGoTo`,
+  profil Piste/Mixte, ou Valhalla indisponible) est désormais couvert aussi, pas seulement le
+  riche.
+- `RideView.bottomControlsColumn` : toute la colonne latérale (RejoinGuidanceBannerView/
+  OffTrackChipView/LateralCapBannerView) est gardée par `session.guidanceTarget == .trace` —
+  sans ce garde explicite, ces vues resteraient sur leur dernière valeur FIGÉE (le calcul
+  s'arrête, mais rien ne force `nil`/`false`) plutôt que de disparaître proprement.
+- `RideView.handleTrackTap` (tap direct sur la trace) appelle `session.returnToTraceGuidance()`
+  avant `requestResume(...)` si un guidage manuel était actif — "taper à nouveau sur la trace...
+  réactive le guidage trace et annule la destination manuelle".
+- `RideSessionManager.returnToTraceGuidance()` — `stopNav()` + `stopGoTo()`, le bouton "Revenir
+  à la trace"/"Arrêter le guidage" de `NavGuidancePanelView` (voir plus bas) l'appelle aussi.
+- **Bug manqué en it21, corrigé ici** : `RideView.commitGoTo(profile:)` (tap LONG sur la carte,
+  confirmationDialog Route/Piste/Mixte) utilisait encore `modeStore.mode == .nav` — le même
+  check mort déjà corrigé dans `DestinationSearchTabView` en it21 (spec "nav-classic-rebuild"),
+  mais oublié sur CE second call site. Un point manuel avec le profil "Itinéraire" et Valhalla
+  configuré ne déclenchait donc jamais le guidage riche via tap long, seulement via la
+  recherche "Aller à". Même fix : `profile == .route && session.isRichNavAvailable`.
+
+## Bannière de guidage "Aller à" : bouton d'arrêt (spec "nav-guidance-stop-button", it22)
+
+`NavGuidancePanelView` n'avait AUCUN contrôle de fermeture propre une fois `session.navRoute
+!= nil` (seul `GoToStatusPillView`, le guidage SIMPLE, avait un `xmark.circle.fill`) — ajouté
+un bouton identique, `onStop`/`stopLabel` fournis par l'appelant (`RideView.directionPanelLayer`) :
+"Revenir à la trace" (→ `returnToTraceGuidance()`) si `library.activeTrack != nil`, "Arrêter
+le guidage" (→ `stopNav()`) sinon.
+
+## Icône de reprise de trace dynamique (spec "rejoin-icon-dynamic-bearing", it22)
+
+`RejoinGuidanceBannerView` (bannière indigo, guidage AUTOMATIQUE de reprise) avait une icône
+STATIQUE (`arrow.triangle.merge`, jamais tournée) — retour terrain : "elle doit devenir
+dynamique et refléter la vraie direction à prendre". Fix : `relativeBearingDegrees: Double?`
++ `.rotationEffect(...)`, EXACTEMENT le même patron que `OffTrackChipView` (rotation continue
+d'un seul symbole, pas un jeu d'icônes discret) — calculé côté `RideView` via
+`resumeRelativeBearingDegrees(to: resume.pinCoordinate)`, déjà existant (utilisé par
+`ResumeGuidanceCardView`), aucun nouveau calcul de bearing nécessaire. `nil` → icône fixe non
+tournée (repli honnête, jamais de crash).
+
 ## Toggle orientation cap-en-haut/nord-en-haut (`leftMiddleLayer`, RideView.swift)
 
 Fix "orientation-toggle-nav-only-unreachable" (it19, retour terrain : "dans l'onglet Ride,

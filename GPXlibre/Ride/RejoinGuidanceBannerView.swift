@@ -11,6 +11,14 @@ import SwiftUI
 /// intermédiaire du tracé de liaison (simplification assumée, voir TODO.md).
 struct RejoinGuidanceBannerView: View {
     let distanceMeters: Double
+    /// Fix "rejoin-icon-dynamic-bearing" (it22, retour terrain : "l'icône a un statique, elle
+    /// doit devenir dynamique et refléter la vraie direction à prendre") — cap relatif (0° =
+    /// droit devant l'écran, cohérent avec la caméra cap-en-haut) vers le point de jonction,
+    /// même calcul/patron que `OffTrackChipView.relativeBearingDegrees` (rotation continue d'un
+    /// seul symbole, pas un jeu d'icônes discret gauche/droite/tout-droit — cohérent avec le
+    /// reste de l'app). `nil` tant qu'aucune position n'est disponible (repli sur l'icône fixe
+    /// non tournée, jamais un crash).
+    let relativeBearingDegrees: Double?
 
     private static let width: CGFloat = 92
 
@@ -19,6 +27,7 @@ struct RejoinGuidanceBannerView: View {
             Image(systemName: "arrow.triangle.merge")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(.white)
+                .rotationEffect(.degrees(relativeBearingDegrees ?? 0))
             Text("Rejoindre\nla trace")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
