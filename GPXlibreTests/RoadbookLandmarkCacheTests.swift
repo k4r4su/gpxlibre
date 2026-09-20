@@ -21,6 +21,8 @@ final class RoadbookLandmarkCacheTests: XCTestCase {
     }
 
     private let coordinate = CLLocationCoordinate2D(latitude: 45.18800, longitude: 5.72400)
+    private let roundabout = RoadbookLandmarkInfo(category: .roundabout, label: "Rond-point")
+    private let church = RoadbookLandmarkInfo(category: .church, label: "Église")
 
     /// Distinction cœur du fix : un point jamais interrogé (`.notCached`) est DIFFÉRENT d'un
     /// point interrogé sans résultat (`.cached(nil)`) — sans cette distinction, un point sans
@@ -29,25 +31,25 @@ final class RoadbookLandmarkCacheTests: XCTestCase {
         XCTAssertEqual(cache.lookup(for: coordinate), .notCached)
     }
 
-    func testStoringAFoundLabelIsRetrievable() {
-        cache.store(label: "Rond-point", for: coordinate)
-        XCTAssertEqual(cache.lookup(for: coordinate), .cached("Rond-point"))
+    func testStoringAFoundLandmarkIsRetrievable() {
+        cache.store(info: roundabout, for: coordinate)
+        XCTAssertEqual(cache.lookup(for: coordinate), .cached(roundabout))
     }
 
     func testStoringANegativeResultIsRetrievableAsCachedNil() {
-        cache.store(label: nil, for: coordinate)
+        cache.store(info: nil, for: coordinate)
         XCTAssertEqual(cache.lookup(for: coordinate), .cached(nil))
     }
 
     func testPersistsAcrossInstancesUsingTheSameDirectory() {
-        cache.store(label: "Église", for: coordinate)
+        cache.store(info: church, for: coordinate)
         let reloaded = RoadbookLandmarkCache(directoryOverride: tempDirectory)
-        XCTAssertEqual(reloaded.lookup(for: coordinate), .cached("Église"))
+        XCTAssertEqual(reloaded.lookup(for: coordinate), .cached(church))
     }
 
     func testDifferentCoordinatesAreIsolated() {
         let other = CLLocationCoordinate2D(latitude: 46.0, longitude: 6.0)
-        cache.store(label: "Rond-point", for: coordinate)
+        cache.store(info: roundabout, for: coordinate)
         XCTAssertEqual(cache.lookup(for: other), .notCached)
     }
 }

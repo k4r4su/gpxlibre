@@ -14,7 +14,7 @@ actor RoadbookLandmarkService {
 
     private var lastRequestDate: Date?
 
-    func nearbyLandmark(at coordinate: CLLocationCoordinate2D) async -> String? {
+    func nearbyLandmark(at coordinate: CLLocationCoordinate2D) async -> RoadbookLandmarkInfo? {
         await respectRateLimit()
 
         let radius = Int(RoadBookConstants.landmarkSearchRadiusMeters)
@@ -56,7 +56,7 @@ actor RoadbookLandmarkService {
             let (data, _) = try await URLSession.shared.data(for: request)
             let decoded = try JSONDecoder().decode(OverpassResponse.self, from: data)
             let tagsList = decoded.elements.compactMap(\.tags)
-            return RoadbookLandmark.bestDescription(for: tagsList)
+            return RoadbookLandmark.bestLandmark(for: tagsList)
         } catch {
             return nil
         }

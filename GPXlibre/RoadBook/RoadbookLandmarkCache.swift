@@ -8,23 +8,23 @@ import CoreLocation
 /// de seuils roadbook (qui peut changer QUELLES coordonnées deviennent des manœuvres) n'invalide
 /// jamais un résultat déjà acquis pour un point donné.
 ///
-/// `CachedEntry.label == nil` est un résultat NÉGATIF mis en cache (déjà interrogé, rien trouvé
+/// `CachedEntry.info == nil` est un résultat NÉGATIF mis en cache (déjà interrogé, rien trouvé
 /// à proximité) — distingué d'une absence d'entrée (jamais encore interrogé) via
 /// `lookup(for:)`, qui renvoie `RoadbookLandmarkLookup.notCached` dans ce dernier cas. Sans
 /// cette distinction, un point sans repère serait réinterrogé à chaque ouverture de l'écran.
 enum RoadbookLandmarkLookup: Equatable {
     case notCached
-    case cached(String?)
+    case cached(RoadbookLandmarkInfo?)
 }
 
 private struct CachedEntry: Codable {
     let key: String
-    let label: String?
+    let info: RoadbookLandmarkInfo?
 }
 
 @MainActor
 final class RoadbookLandmarkCache {
-    private var entries: [String: String?] = [:]
+    private var entries: [String: RoadbookLandmarkInfo?] = [:]
 
     private let fileManager = FileManager.default
     private let directoryOverride: URL?
@@ -56,8 +56,8 @@ final class RoadbookLandmarkCache {
         return .cached(value)
     }
 
-    func store(label: String?, for coordinate: CLLocationCoordinate2D) {
-        entries[Self.key(for: coordinate)] = label
+    func store(info: RoadbookLandmarkInfo?, for coordinate: CLLocationCoordinate2D) {
+        entries[Self.key(for: coordinate)] = info
         saveIndex()
     }
 
@@ -68,11 +68,11 @@ final class RoadbookLandmarkCache {
     private func loadIndex() {
         guard let data = try? Data(contentsOf: indexFileURL),
               let decoded = try? JSONDecoder().decode([CachedEntry].self, from: data) else { return }
-        entries = Dictionary(uniqueKeysWithValues: decoded.map { ($0.key, $0.label) })
+        entries = Dictionary(uniqueKeysWithValues: decoded.map { ($0.key, $0.info) })
     }
 
     private func saveIndex() {
-        let encoded = entries.map { CachedEntry(key: $0.key, label: $0.value) }
+        let encoded = entries.map { CachedEntry(key: $0.key, info: $0.value) }
         guard let data = try? JSONEncoder().encode(encoded) else { return }
         try? data.write(to: indexFileURL)
     }

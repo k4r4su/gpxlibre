@@ -1,10 +1,55 @@
 import Foundation
 
-/// Choisit la description la plus PERTINENTE pour un pilote moto parmi les tags OSM trouvés à
-/// proximité d'un point de manœuvre (spec "roadbook-mode" it23quater, retour terrain : "si on
-/// tourne à une église, un rond-point, etc., est-ce possible d'avoir des infos pertinentes
-/// depuis la map"). Logique PURE — aucun accès réseau ici, voir `RoadbookLandmarkService` pour
-/// la récupération des tags eux-mêmes (Overpass API).
+/// Catégorie d'un repère OSM détecté à proximité d'un point de manœuvre (spec "roadbook-mode",
+/// it23sexies, retour terrain : "à côté de la flèche il y ait des pictogrammes [emoji] afin
+/// d'augmenter l'aide au niveau du prochain virage") — chaque catégorie porte son PROPRE emoji,
+/// affiché en grand à côté du pictogramme de direction (voir `RoadBookTabView`/
+/// `RoadbookFocusedView`), le texte (`RoadbookLandmarkInfo.label`) restant disponible en
+/// complément (table écran, colonne Note du PDF).
+enum RoadbookLandmarkCategory: String, Codable, Equatable {
+    // Palier 1 : sécurité route.
+    case unpavedRoad, levelCrossing, bridge, ford
+    // Palier 2 : repères visuels forts.
+    case roundabout, church, powerLine, trafficSignals, giveWay, fuel, railway
+    // Palier 3 : repères visuels faibles.
+    case tree, house
+    // Palier 4 : repli générique.
+    case genericName
+
+    /// Emoji Unicode natif — rendu direct dans `Text` (SwiftUI) ET `NSString.draw` (PDF/UIKit),
+    /// aucun asset image à maintenir, aucune dépendance à SF Symbols pour ce besoin précis
+    /// (l'utilisateur demande explicitement "niveau emoji on a ce qu'il faut").
+    var emoji: String {
+        switch self {
+        case .unpavedRoad: return "🚧"
+        case .levelCrossing: return "🚂"
+        case .bridge: return "🌉"
+        case .ford: return "💧"
+        case .roundabout: return "🔄"
+        case .church: return "⛪"
+        case .powerLine: return "⚡"
+        case .trafficSignals: return "🚦"
+        case .giveWay: return "🛑"
+        case .fuel: return "⛽"
+        case .railway: return "🚆"
+        case .tree: return "🌳"
+        case .house: return "🏠"
+        case .genericName: return "📍"
+        }
+    }
+}
+
+/// Résultat complet d'une recherche de repère — catégorie (pour l'emoji) + libellé texte (pour
+/// l'affichage détaillé table/PDF). `Codable` pour le cache disque (`RoadbookLandmarkCache`).
+struct RoadbookLandmarkInfo: Codable, Equatable {
+    let category: RoadbookLandmarkCategory
+    let label: String
+}
+
+/// Choisit le repère le plus PERTINENT pour un pilote moto parmi les tags OSM trouvés à
+/// proximité d'un point de manœuvre (spec "roadbook-mode" it23quater/it23sexies). Logique
+/// PURE — aucun accès réseau ici, voir `RoadbookLandmarkService` pour la récupération des tags
+/// eux-mêmes (Overpass API).
 ///
 /// Ordre de priorité délibéré, en 4 paliers : (1) singularités de la ROUTE elle-même
 /// (revêtement qui change, passage à niveau, pont) — information de SÉCURITÉ/pilotage, pas un
@@ -20,45 +65,47 @@ enum RoadbookLandmark {
     private static let unpavedSurfaces: Set<String> = ["unpaved", "gravel", "dirt", "ground", "sand", "grass", "mud"]
     /// Au-delà de ce nombre de bâtiments trouvés dans le même rayon, on est en zone habitée
     /// dense — "Maison" cesserait d'être un repère distinctif, voir palier 3.
-    private static let maxBuildingCountForIsolatedHouse = 2
+    static let maxBuildingCountForIsolatedHouse = 2
 
     /// `tagsList` : les jeux de tags de CHAQUE élément OSM trouvé à proximité (peut être vide),
     /// dans l'ordre de distance croissante au point recherché (le plus proche en premier) —
     /// voir `RoadbookLandmarkService`, qui trie déjà ainsi avant d'appeler cette fonction.
-    static func bestDescription(for tagsList: [[String: String]]) -> String? {
+    static func bestLandmark(for tagsList: [[String: String]]) -> RoadbookLandmarkInfo? {
         for tags in tagsList {
             if let surface = tags["surface"], unpavedSurfaces.contains(surface) {
-                return "Route non goudronnée"
+                return RoadbookLandmarkInfo(category: .unpavedRoad, label: "Route non goudronnée")
             }
-            if tags["railway"] == "level_crossing" { return "Passage à niveau" }
-            if tags["bridge"] == "yes" { return "Pont" }
-            if tags["ford"] == "yes" { return "Gué" }
+            if tags["railway"] == "level_crossing" { return RoadbookLandmarkInfo(category: .levelCrossing, label: "Passage à niveau") }
+            if tags["bridge"] == "yes" { return RoadbookLandmarkInfo(category: .bridge, label: "Pont") }
+            if tags["ford"] == "yes" { return RoadbookLandmarkInfo(category: .ford, label: "Gué") }
         }
         for tags in tagsList {
-            if tags["junction"] == "roundabout" { return "Rond-point" }
+            if tags["junction"] == "roundabout" { return RoadbookLandmarkInfo(category: .roundabout, label: "Rond-point") }
             if tags["amenity"] == "place_of_worship" || tags["religion"] != nil {
-                return tags["name"].map { "Église \($0)" } ?? "Église"
+                return RoadbookLandmarkInfo(category: .church, label: tags["name"].map { "Église \($0)" } ?? "Église")
             }
-            if tags["power"] == "line" || tags["power"] == "tower" { return "Ligne électrique" }
-            if tags["highway"] == "traffic_signals" { return "Feux tricolores" }
-            if tags["highway"] == "give_way" || tags["highway"] == "stop" { return "Cédez-le-passage / Stop" }
-            if tags["amenity"] == "fuel" { return tags["name"].map { "Station \($0)" } ?? "Station essence" }
-            if tags["railway"] == "rail" { return "Voie ferrée" }
+            if tags["power"] == "line" || tags["power"] == "tower" { return RoadbookLandmarkInfo(category: .powerLine, label: "Ligne électrique") }
+            if tags["highway"] == "traffic_signals" { return RoadbookLandmarkInfo(category: .trafficSignals, label: "Feux tricolores") }
+            if tags["highway"] == "give_way" || tags["highway"] == "stop" { return RoadbookLandmarkInfo(category: .giveWay, label: "Cédez-le-passage / Stop") }
+            if tags["amenity"] == "fuel" { return RoadbookLandmarkInfo(category: .fuel, label: tags["name"].map { "Station \($0)" } ?? "Station essence") }
+            if tags["railway"] == "rail" { return RoadbookLandmarkInfo(category: .railway, label: "Voie ferrée") }
         }
         // Palier 3 : arbre remarquable (toujours pertinent, un arbre isolé cartographié dans
         // OSM l'est déjà par nature) puis maison isolée (seulement si peu de bâtiments autour —
         // voir maxBuildingCountForIsolatedHouse).
         for tags in tagsList {
-            if tags["natural"] == "tree" { return tags["name"].map { "Arbre (\($0))" } ?? "Arbre remarquable" }
+            if tags["natural"] == "tree" {
+                return RoadbookLandmarkInfo(category: .tree, label: tags["name"].map { "Arbre (\($0))" } ?? "Arbre remarquable")
+            }
         }
         let buildingCount = tagsList.filter { $0["building"] != nil }.count
         if buildingCount > 0, buildingCount <= maxBuildingCountForIsolatedHouse,
            let firstBuilding = tagsList.first(where: { $0["building"] != nil }) {
-            return firstBuilding["name"].map { "Maison \($0)" } ?? "Maison isolée"
+            return RoadbookLandmarkInfo(category: .house, label: firstBuilding["name"].map { "Maison \($0)" } ?? "Maison isolée")
         }
         // Repli : un nom générique (village, lieu-dit, commerce) reste plus utile que rien.
         for tags in tagsList {
-            if let name = tags["name"], !name.isEmpty { return name }
+            if let name = tags["name"], !name.isEmpty { return RoadbookLandmarkInfo(category: .genericName, label: name) }
         }
         return nil
     }

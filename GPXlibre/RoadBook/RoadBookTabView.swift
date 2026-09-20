@@ -20,7 +20,7 @@ struct RoadBookTabView: View {
     /// trouvé à proximité, valeur non-nil = repère trouvé. Rempli progressivement par
     /// `loadLandmarksIfNeeded()` (voir `.task(id:)` ci-dessous) — best-effort, ne bloque JAMAIS
     /// l'affichage des manœuvres elles-mêmes.
-    @State private var landmarks: [UUID: String?] = [:]
+    @State private var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
     @State private var landmarkCache = RoadbookLandmarkCache()
 
     private var selectedTrack: GPXTrack? {
@@ -135,13 +135,13 @@ struct RoadBookTabView: View {
             guard !Task.isCancelled else { return }
             guard landmarks[maneuver.id] == nil else { continue }
             switch landmarkCache.lookup(for: maneuver.checkpoint.coordinate) {
-            case .cached(let label):
-                landmarks[maneuver.id] = label
+            case .cached(let info):
+                landmarks[maneuver.id] = info
             case .notCached:
-                let label = await RoadbookLandmarkService.shared.nearbyLandmark(at: maneuver.checkpoint.coordinate)
+                let info = await RoadbookLandmarkService.shared.nearbyLandmark(at: maneuver.checkpoint.coordinate)
                 guard !Task.isCancelled else { return }
-                landmarkCache.store(label: label, for: maneuver.checkpoint.coordinate)
-                landmarks[maneuver.id] = label
+                landmarkCache.store(info: info, for: maneuver.checkpoint.coordinate)
+                landmarks[maneuver.id] = info
             }
         }
     }
@@ -257,7 +257,7 @@ private struct RoadbookTableView: View {
     let unit: DistanceUnit
     let currentIndex: Int?
     let liveDistanceRemainingMeters: Double?
-    let landmarks: [UUID: String?]
+    let landmarks: [UUID: RoadbookLandmarkInfo?]
 
     private static let ruleColor = Color.primary.opacity(0.15)
     // Fractions de la largeur totale — le bloc "info" absorbe le reste, jamais une largeur
@@ -339,7 +339,7 @@ private struct RoadbookTableRow: View {
     /// `nil` = pas encore résolu OU résolu sans résultat — les deux cas produisent le même
     /// affichage (rien), la distinction ne sert qu'à `RoadBookTabView.loadLandmarksIfNeeded`
     /// pour éviter de réinterroger un point déjà négatif.
-    let landmark: String?
+    let landmark: RoadbookLandmarkInfo?
     let distanceColumnWidth: CGFloat
     let headingColumnWidth: CGFloat
     let infoColumnWidth: CGFloat
@@ -373,10 +373,20 @@ private struct RoadbookTableRow: View {
             verticalRule
 
             VStack(spacing: 3) {
-                Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(isCurrent ? Color.accentColor : .primary)
-                    .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+                // Pictogramme emoji du repère À CÔTÉ de la flèche (retour terrain it23sexies :
+                // "à côté de la flèche il y ait des pictogrammes afin d'augmenter l'aide") —
+                // HStack plutôt qu'un badge superposé, plus lisible dans une colonne déjà
+                // étroite.
+                HStack(spacing: 4) {
+                    Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(isCurrent ? Color.accentColor : .primary)
+                        .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+                    if let landmark {
+                        Text(landmark.category.emoji)
+                            .font(.system(size: 20))
+                    }
+                }
                 Text("\(Int(maneuver.headingDegrees.rounded()))°")
                     .font(.caption2.bold().monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -389,7 +399,7 @@ private struct RoadbookTableRow: View {
                 Text(maneuver.checkpoint.tier.label)
                     .font(.subheadline.bold())
                 if let landmark {
-                    Text(landmark)
+                    Text(landmark.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

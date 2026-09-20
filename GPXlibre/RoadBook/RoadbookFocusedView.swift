@@ -16,7 +16,7 @@ struct RoadbookFocusedView: View {
     let hasLocationFix: Bool
     /// Repères OSM à proximité (spec "roadbook-mode", it23quater) — voir `RoadBookTabView`,
     /// clé absente = pas encore résolu, valeur `nil` = résolu sans résultat.
-    let landmarks: [UUID: String?]
+    let landmarks: [UUID: RoadbookLandmarkInfo?]
 
     /// Les 2 manœuvres qui suivent celle actuellement mise en avant — distance recalculée
     /// DEPUIS LA POSITION ACTUELLE (pas depuis la manœuvre courante), pour rester une vraie
@@ -75,14 +75,23 @@ private struct RoadbookBigManeuverCard: View {
     let maneuver: RoadbookManeuver
     let distanceRemainingMeters: Double
     let unit: DistanceUnit
-    let landmark: String?
+    let landmark: RoadbookLandmarkInfo?
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                .font(.system(size: 120, weight: .bold))
-                .foregroundStyle(Color.accentColor)
-                .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+            // Pictogramme emoji du repère À CÔTÉ de la flèche (retour terrain it23sexies :
+            // "à côté de la flèche il y ait des pictogrammes afin d'augmenter l'aide au niveau
+            // du prochain virage") — HStack pour rester bien lisible même en très grande taille.
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
+                    .font(.system(size: 120, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                    .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+                if let landmark {
+                    Text(landmark.category.emoji)
+                        .font(.system(size: 64))
+                }
+            }
             Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -95,7 +104,7 @@ private struct RoadbookBigManeuverCard: View {
                 .font(.title3.bold())
                 .foregroundStyle(.secondary)
             if let landmark {
-                Label(landmark, systemImage: "mappin.and.ellipse")
+                Text(landmark.label)
                     .font(.subheadline.bold())
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
@@ -112,7 +121,7 @@ private struct RoadbookUpcomingRow: View {
     /// "+2"/"+3" — position relative à la manœuvre en cours, jamais l'index absolu dans la
     /// trace (ce que voit le pilote, c'est "dans 2 manœuvres", pas "la 7e de la liste").
     let rank: Int
-    let landmark: String?
+    let landmark: RoadbookLandmarkInfo?
 
     var body: some View {
         HStack(spacing: 16) {
@@ -121,18 +130,24 @@ private struct RoadbookUpcomingRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
 
-            Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.primary)
-                .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
-                .frame(width: 40)
+            HStack(spacing: 4) {
+                Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+                if let landmark {
+                    Text(landmark.category.emoji)
+                        .font(.system(size: 22))
+                }
+            }
+            .frame(width: 60)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(maneuver.checkpoint.tier.label)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 if let landmark {
-                    Text(landmark)
+                    Text(landmark.label)
                         .font(.caption2)
                         .foregroundStyle(.orange)
                         .lineLimit(1)

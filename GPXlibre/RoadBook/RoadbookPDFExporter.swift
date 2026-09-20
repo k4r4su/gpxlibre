@@ -61,7 +61,7 @@ enum RoadbookPDFExporter {
         return ColumnLayout(partial: rects["partial"] ?? .zero, cumulative: rects["cumulative"], heading: rects["heading"] ?? .zero, note: rects["note"])
     }
 
-    static func generate(trackName: String, maneuvers: [RoadbookManeuver], options: RoadbookPDFOptions, landmarks: [UUID: String?] = [:]) -> Data {
+    static func generate(trackName: String, maneuvers: [RoadbookManeuver], options: RoadbookPDFOptions, landmarks: [UUID: RoadbookLandmarkInfo?] = [:]) -> Data {
         let pageSize = options.orientation == .portrait
             ? CGSize(width: RoadBookConstants.pdfPageWidthPoints, height: RoadBookConstants.pdfPageHeightPoints)
             : CGSize(width: RoadBookConstants.pdfPageHeightPoints, height: RoadBookConstants.pdfPageWidthPoints)
@@ -169,7 +169,7 @@ enum RoadbookPDFExporter {
         path.stroke()
     }
 
-    private static func drawRow(_ maneuver: RoadbookManeuver, layout: ColumnLayout, options: RoadbookPDFOptions, landmark: String? = nil) {
+    private static func drawRow(_ maneuver: RoadbookManeuver, layout: ColumnLayout, options: RoadbookPDFOptions, landmark: RoadbookLandmarkInfo? = nil) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: options.fontSize.points),
             .foregroundColor: UIColor.black,
@@ -189,6 +189,13 @@ enum RoadbookPDFExporter {
         case .pictogram:
             drawPictogram(for: maneuver.checkpoint, in: layout.heading)
         }
+        // Emoji du repère À CÔTÉ du pictogramme de cap (retour terrain it23sexies), quel que
+        // soit le style de cap choisi — un emoji Unicode se dessine comme un caractère normal
+        // via NSString.draw, aucun rendu spécial requis.
+        if let landmark {
+            let emojiAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: options.fontSize.points + 4)]
+            draw(landmark.category.emoji, in: CGRect(x: layout.heading.minX, y: layout.heading.maxY - layout.heading.height * 0.32, width: layout.heading.width, height: layout.heading.height * 0.32), attributes: emojiAttributes, alignment: .center)
+        }
 
         if let note = layout.note {
             if let landmark {
@@ -198,7 +205,7 @@ enum RoadbookPDFExporter {
                     .font: UIFont.italicSystemFont(ofSize: max(options.fontSize.points - 1, 6)),
                     .foregroundColor: UIColor.darkGray,
                 ]
-                (landmark as NSString).draw(
+                (landmark.label as NSString).draw(
                     in: CGRect(x: note.minX + 4, y: note.minY + 2, width: note.width - 8, height: note.height * 0.4),
                     withAttributes: landmarkAttributes
                 )

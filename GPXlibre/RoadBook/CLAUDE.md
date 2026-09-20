@@ -4,6 +4,32 @@ Chargé automatiquement quand une session travaille sous `GPXlibre/RoadBook/`. L
 contexte projet (philosophie, règles absolues, conventions) reste dans le CLAUDE.md racine —
 ce fichier ne documente que ce qui est spécifique à ce dossier.
 
+## Repères en pictogrammes emoji (spec "roadbook-mode", it23sexies)
+
+Retour terrain : "pour ces points je ne vois rien. J'aimerais que dans l'espace, à côté de la
+flèche il y ait des pictogrammes (je pense que niveau emoji on a ce qu'il faut) afin
+d'augmenter l'aide au niveau du prochain virage."
+
+`RoadbookLandmark.bestDescription(for:) -> String?` (it23quater) est devenu
+`bestLandmark(for:) -> RoadbookLandmarkInfo?` — retourne désormais une STRUCTURE
+(`RoadbookLandmarkCategory` + `label`) plutôt qu'une simple chaîne, pour que l'UI puisse choisir
+un emoji SANS reparser le texte. `RoadbookLandmarkCategory.emoji` est la seule source de vérité
+du pictogramme (🚧 route non goudronnée, 🚂 passage à niveau, 🌉 pont, 💧 gué, 🔄 rond-point,
+⛪ église, ⚡ ligne électrique, 🚦 feux, 🛑 cédez-le-passage/stop, ⛽ station, 🚆 voie ferrée,
+🌳 arbre, 🏠 maison isolée, 📍 repli générique) — un emoji Unicode se dessine directement dans
+un `Text` SwiftUI ET via `NSString.draw` côté PDF, aucun asset image à maintenir.
+
+Affiché À CÔTÉ du pictogramme de direction (jamais à la place, jamais seulement en dessous en
+petit texte comme la version it23quater — retour terrain explicite : le texte seul n'était pas
+assez visible) dans les 3 surfaces : `RoadbookTableRow` (HStack flèche+emoji dans la colonne
+Cap), `RoadbookBigManeuverCard`/`RoadbookUpcomingRow` (idem, vue focus GPS), et
+`RoadbookPDFExporter.drawRow` (emoji dessiné sous le pictogramme/cap de la colonne Heading,
+quel que soit le style choisi — pictogramme OU degrés). `RoadbookLandmarkCache`/
+`RoadbookLandmarkService` inchangés dans leur fonctionnement, juste leur type de valeur stockée/
+retournée (`RoadbookLandmarkInfo?` au lieu de `String?`) — un ancien fichier de cache disque
+(format `String?`) ne décode plus et est silencieusement ignoré au premier lancement après cette
+mise à jour (repli existant déjà prévu, `try?` sur le decode), le cache se reconstruit tout seul.
+
 ## Mini-carte déplaçable + zoom réglable (spec "roadbook-mode", it23quinquies)
 
 Retour terrain : "zoomé beaucoup plus... qu'on voit les 400 mètres de chaque côté, peut-être

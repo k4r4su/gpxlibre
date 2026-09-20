@@ -8,7 +8,7 @@ struct RoadbookExportOptionsView: View {
     let trackName: String
     let maneuvers: [RoadbookManeuver]
     @Binding var options: RoadbookPDFOptions
-    var landmarks: [UUID: String?] = [:]
+    var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
 
     @Environment(\.dismiss) private var dismiss
     @State private var exportedPDFURL: URL?

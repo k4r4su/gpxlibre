@@ -19,7 +19,7 @@ enum RoadBookConstants {
     /// qu'on voit les 400 mètres de chaque côté, peut-être même 300") — 700 m de portée totale
     /// (~350 m de chaque côté du point central), RÉGLABLE par l'utilisateur (`RideSettingsStore.
     /// roadbookMiniMapSpanMeters`, cette constante n'est plus que la valeur par défaut).
-    static let miniMapSpanMetersDefault: Double = 700
+    static let miniMapSpanMetersDefault: Double = 400
     static let miniMapSpanMetersRange: ClosedRange<Double> = 200...1500
     static let miniMapSpanMetersStep: Double = 100
 

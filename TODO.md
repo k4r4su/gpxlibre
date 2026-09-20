@@ -1,5 +1,20 @@
 # TODO
 
+## Itération 23sexies (repères en pictogrammes emoji + zoom mini-carte encore resserré)
+
+Retour terrain double : "zoom serré je pense que tu peux mettre 200m de chaque côté, c'est
+mieux" (réglage à la volée et déplaçable confirmés OK) + "pour ces points je ne vois rien.
+J'aimerais que dans l'espace, à côté de la flèche il y ait des pictogrammes (niveau emoji) afin
+d'augmenter l'aide au niveau du prochain virage."
+
+- **`fix:"roadbook-minimap-tighter-zoom"`** : portée par défaut de la mini-carte 700 m → 400 m
+  (200 m de chaque côté).
+- **`feat:"roadbook-landmark-emoji-pictograms"`** : `RoadbookLandmark.bestDescription` (String?)
+  devient `bestLandmark` (`RoadbookLandmarkInfo?` = catégorie + libellé) — `RoadbookLandmarkCategory.
+  emoji` fournit un pictogramme Unicode par catégorie (🚧🚂🌉💧🔄⛪⚡🚦🛑⛽🚆🌳🏠📍), affiché À CÔTÉ
+  du pictogramme de direction (jamais seulement en petit texte en dessous, retour terrain : "je
+  ne vois rien") dans les 3 surfaces (table écran, focus GPS, export PDF). Voir RoadBook/CLAUDE.md.
+
 ## Itération 23quinquies (mini-carte : zoom réglable + fenêtre déplaçable)
 
 "Zoomé beaucoup plus... 400 mètres de chaque côté, peut-être même 300, ou fait que ce paramètre
