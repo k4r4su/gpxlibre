@@ -21,7 +21,9 @@ avec recalcul a été ajouté malgré le "hors périmètre MVP" d'origine) : `sp
 ```
 GPXlibre/
   App/            AppNavigationState (onglet actif), GPXlibreApp (racine, injecte tous
-                   les @StateObject en @EnvironmentObject)
+                   les @StateObject en @EnvironmentObject), SplashScreenView (it22bis, spec
+                   "splash-screen" : logo + nom + version + barre de progression temporisée,
+                   affiché systématiquement au lancement — voir section dédiée ci-dessous)
   Config/         NavigationConstants.swift (it14) — constantes du roadbook rebuilt from
                    scratch UNIQUEMENT (fenêtre, paliers d'angle, flash, debug replay), demandé
                    explicitement à cet emplacement plutôt que RideConstants.swift. Ajouté à
@@ -356,6 +358,24 @@ la règle à appliquer partout où une bbox arbitraire pilote une énumération 
    isolé, position fixe, jamais un sibling dans une VStack qui grandit avec son contenu (voir
    la règle documentée en tête de `RideOverlayLayout.swift`, fix "overlay-never-pushes").
    Préférer réutiliser le mécanisme de bannière déjà isolé plutôt qu'inventer une zone.
+
+## Écran de démarrage et numéro de version (spec "splash-screen", it22bis)
+
+`SplashScreenView` (`GPXlibre/App/`) : logo (`SplashLogo`, imageset dans `Assets.xcassets`,
+copie de l'icône app `icon.png` — pas une référence directe à `AppIcon.appiconset`, qui n'est
+pas fiablement chargeable via `Image(_:)`) + nom "GPXlibre" + version + barre de progression
+temporisée (~1.4 s, purement visuelle — l'app n'a rien à charger de façon asynchrone au
+démarrage). Affiché SYSTÉMATIQUEMENT à chaque lancement (dans `GPXlibreApp.body`, PAS dans
+`RootView`), contrairement à `OnboardingView` qui ne s'affiche qu'une fois.
+
+**Convention de version explicite du propriétaire, à respecter à CHAQUE itération tant que l'app
+reste en phase de test** : `MARKETING_VERSION` (`project.yml`) suit le numéro d'itération,
+`0.0.<n>` — `0.0.21` pour l'itération 21, `0.0.22` pour l'itération 22, etc. **Penser à
+l'incrémenter à chaque nouvelle itération** (facile à oublier, `project.yml` n'est pas un
+fichier qu'une session modifie souvent). La version affichée sur l'écran de démarrage est LUE
+depuis `CFBundleShortVersionString` (jamais recopiée en dur dans `SplashScreenView.swift`) —
+modifier `project.yml` suffit, aucun autre fichier à toucher pour que l'écran reflète la bonne
+version.
 
 ## Conventions de commit
 

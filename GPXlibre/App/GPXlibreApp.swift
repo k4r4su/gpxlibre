@@ -2,6 +2,11 @@ import SwiftUI
 
 @main
 struct GPXlibreApp: App {
+    /// Spec "splash-screen" — affiché systématiquement au lancement (voir SplashScreenView),
+    /// jamais persisté (contrairement à `hasSeenOnboarding` : ce n'est pas un didacticiel à
+    /// n'afficher qu'une fois, mais un écran de démarrage classique).
+    @State private var isSplashActive = true
+
     @StateObject private var library = LibraryStore()
     @StateObject private var settings: RideSettingsStore
     @StateObject private var networkMonitor = NetworkMonitor()
@@ -32,28 +37,39 @@ struct GPXlibreApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(library)
-                .environmentObject(settings)
-                .environmentObject(rideSession)
-                .environmentObject(navigationState)
-                .environmentObject(networkMonitor)
-                .environmentObject(downloadedRegions)
-                .environmentObject(waypointStore)
-                .environmentObject(rideModeStore)
-                .environmentObject(navFavorites)
-                .environmentObject(navSearchHistory)
-                .environmentObject(sharedBlockages)
-                .environmentObject(trackRideSettings)
-                .environmentObject(vectorPackages)
-                .onOpenURL { url in
-                    library.importTrack(from: url)
+            ZStack {
+                RootView()
+                    .environmentObject(library)
+                    .environmentObject(settings)
+                    .environmentObject(rideSession)
+                    .environmentObject(navigationState)
+                    .environmentObject(networkMonitor)
+                    .environmentObject(downloadedRegions)
+                    .environmentObject(waypointStore)
+                    .environmentObject(rideModeStore)
+                    .environmentObject(navFavorites)
+                    .environmentObject(navSearchHistory)
+                    .environmentObject(sharedBlockages)
+                    .environmentObject(trackRideSettings)
+                    .environmentObject(vectorPackages)
+                    .onOpenURL { url in
+                        library.importTrack(from: url)
+                    }
+                    .fullScreenCover(isPresented: onboardingBinding) {
+                        OnboardingView(isPresented: onboardingBinding)
+                            .environmentObject(library)
+                            .environmentObject(settings)
+                    }
+
+                if isSplashActive {
+                    SplashScreenView {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            isSplashActive = false
+                        }
+                    }
+                    .transition(.opacity)
                 }
-                .fullScreenCover(isPresented: onboardingBinding) {
-                    OnboardingView(isPresented: onboardingBinding)
-                        .environmentObject(library)
-                        .environmentObject(settings)
-                }
+            }
         }
     }
 
