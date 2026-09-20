@@ -1,5 +1,20 @@
 # TODO
 
+## Itération 23ter (retour terrain sur l'UI du mode Assisté GPS)
+
+"Le road book est pas mal" — mais le mode Assisté GPS doit mettre en avant la manœuvre en cours
+plutôt qu'une simple ligne dans une liste, et la mini-carte doit être un aperçu de proximité
+(pas la trace entière) posé en coin, pas une bande pleine largeur.
+
+- **`refactor:"roadbook-focused-next-turn"`** : nouvelle `RoadbookFocusedView` (mode Assisté GPS
+  uniquement) — manœuvre en cours en très grand (pictogramme 120pt + distance 64pt, occupe tout
+  l'espace restant, largement plus de la moitié de l'écran en pratique), les 2 manœuvres
+  suivantes en dessous en plus petit avec leur distance recalculée depuis la position actuelle.
+  Mini-carte repositionnée en overlay coin bas-droit (15% de hauteur d'écran max), centrée en
+  continu sur la position live à portée FIXE 2 km (`RoadbookMiniMapView.spanMeters`) plutôt que
+  sur l'emprise de la trace entière. Le mode Roadbook classique garde la table complète
+  (`RoadbookTableView`) inchangée — voir RoadBook/CLAUDE.md pour le détail.
+
 ## Itération 23bis (retours terrain immédiats sur it23)
 
 Trois retours terrain distincts après livraison d'it23, chacun diagnostiqué avant correctif.

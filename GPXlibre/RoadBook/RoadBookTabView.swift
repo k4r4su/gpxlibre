@@ -123,21 +123,9 @@ struct RoadBookTabView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .padding()
-
-            Text(settings.roadbookReadingMode.description)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
-            if settings.roadbookMiniMapEnabled {
-                RoadbookMiniMapView(track: track, currentLocation: settings.roadbookReadingMode == .gpsAssisted ? locationManager.currentLocation?.coordinate : nil)
-                    .frame(height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-            }
+            .padding(.horizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
 
             if maneuvers.isEmpty {
                 RoadBookEmptyState(
@@ -145,12 +133,39 @@ struct RoadBookTabView: View {
                     systemImage: "arrow.up",
                     message: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace."
                 )
+            } else if settings.roadbookReadingMode == .gpsAssisted {
+                // Fix "roadbook-focused-next-turn" (it23ter, retour terrain : "il faudrait
+                // clairement afficher le prochain virage, au moins la moitié de l'écran... la
+                // map doit être un aperçu, 15% de l'écran max") — mode Assisté GPS uniquement,
+                // "prochain virage" n'a de sens qu'avec une position réelle à comparer. Le mode
+                // Classique garde la table complète ci-dessous (aucune notion de "position
+                // actuelle" à mettre en avant dans ce mode).
+                GeometryReader { geometry in
+                    ZStack(alignment: .bottomTrailing) {
+                        RoadbookFocusedView(
+                            maneuvers: maneuvers,
+                            currentIndex: liveProgress?.index,
+                            distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
+                            unit: settings.roadbookPDFOptions.distanceUnit,
+                            hasLocationFix: locationManager.currentLocation != nil
+                        )
+
+                        if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
+                            RoadbookMiniMapView(track: track, currentLocation: coordinate, spanMeters: RoadBookConstants.miniMapSpanMeters)
+                                .frame(width: geometry.size.width * 0.36, height: geometry.size.height * 0.15)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.5), lineWidth: 1.5))
+                                .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
+                                .padding(14)
+                        }
+                    }
+                }
             } else {
                 RoadbookTableView(
                     maneuvers: maneuvers,
                     unit: settings.roadbookPDFOptions.distanceUnit,
-                    currentIndex: liveProgress?.index,
-                    liveDistanceRemainingMeters: liveProgress?.distanceRemainingMeters
+                    currentIndex: nil,
+                    liveDistanceRemainingMeters: nil
                 )
             }
         }

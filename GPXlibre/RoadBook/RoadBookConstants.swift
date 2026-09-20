@@ -13,6 +13,12 @@ enum RoadBookConstants {
     /// filet de lecture, pas un second moteur de guidage.
     static let liveManeuverReachedRadiusMeters: Double = 40
 
+    /// Portée de la mini-carte en mode Assisté GPS (spec "roadbook-focused-next-turn", it23ter,
+    /// retour terrain : "la map peut être zoomée pour afficher 2 km carré autour du point
+    /// actuel... un aperçu pour voir qu'on est bien sur la trace") — PAS la trace complète,
+    /// juste de quoi confirmer visuellement qu'on est au bon endroit localement.
+    static let miniMapSpanMeters: Double = 2000
+
     // MARK: - Export PDF
 
     /// A4 à 72 dpi (unité native PDFKit/UIGraphicsPDFRenderer, indépendante de l'orientation —

@@ -7,9 +7,18 @@ import MapKit
 /// (Settings/), mais fichier séparé plutôt que d'élargir sa signature : `CameraPreviewMapView`
 /// est déjà partagée par 3 écrans Réglages avec un contrat fixe, et ce mini-map a un besoin
 /// légèrement différent (position live optionnelle en mode Assisté GPS).
+///
+/// Fix "roadbook-focused-next-turn" (it23ter, retour terrain : "la map peut être zoomée pour
+/// afficher 2 km carré autour du point actuel... un aperçu pour voir qu'on est bien sur la
+/// trace ou non, pas la trace complète") — quand une position live est disponible, la caméra
+/// reste centrée dessus à une portée FIXE (`spanMeters`, voir `RoadBookConstants.
+/// miniMapSpanMeters`), recalculée à chaque mise à jour de position. Sans position (trace
+/// affichée sans GPS), repli sur l'ancien comportement : cadrer la trace entière une fois au
+/// montage — mieux que rien tant qu'aucune position n'est connue.
 struct RoadbookMiniMapView: UIViewRepresentable {
     let track: GPXTrack
     let currentLocation: CLLocationCoordinate2D?
+    var spanMeters: Double = RoadBookConstants.miniMapSpanMeters
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -24,7 +33,9 @@ struct RoadbookMiniMapView: UIViewRepresentable {
             let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
             mapView.addOverlay(polyline)
         }
-        if let region = regionCoveringTrack(track) {
+        if let currentLocation {
+            mapView.setRegion(region(centeredOn: currentLocation), animated: false)
+        } else if let region = regionCoveringTrack(track) {
             mapView.setRegion(region, animated: false)
         }
         return mapView
@@ -38,7 +49,17 @@ struct RoadbookMiniMapView: UIViewRepresentable {
             annotation.coordinate = currentLocation
             annotation.title = annotationID
             mapView.addAnnotation(annotation)
+            mapView.setRegion(region(centeredOn: currentLocation), animated: true)
         }
+    }
+
+    /// Approximation équirectangulaire (même formule que `CameraPreviewMapView`/
+    /// `TileCoordinate.boundingBox`) — suffisante pour un simple ressenti visuel de zoom, pas
+    /// besoin d'une projection exacte pour un aperçu de 2 km.
+    private func region(centeredOn coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        let latDelta = spanMeters / 111_320
+        let lonDelta = latDelta / max(cos(coordinate.latitude * .pi / 180), 0.2)
+        return MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta))
     }
 
     private func regionCoveringTrack(_ track: GPXTrack) -> MKCoordinateRegion? {

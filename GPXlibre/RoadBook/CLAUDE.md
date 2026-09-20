@@ -41,6 +41,37 @@ future si le besoin se confirme.
   (`@StateObject`, même patron que `FavoriteAddressesView`/`RegionDownloadView` — "instance
   locale, pas d'injection globale") — jamais le GPS de `RideSessionManager`.
 
+## Vue "focus" prochain virage + mini-carte en coin (retour terrain it23ter)
+
+Nouveau retour après it23bis ("le road book est pas mal") : "il faudrait clairement afficher le
+prochain virage qui prenne au moins la moitié de l'écran... la map doit être un aperçu, 2 km
+autour du point actuel, en bas dans un coin, 15% de l'écran max".
+
+Concerne UNIQUEMENT le mode Assisté GPS — "prochain virage" et "point actuel" n'ont de sens
+qu'avec une position réelle à comparer, le mode Classique garde `RoadbookTableView` (table
+complète) inchangé, aucune notion de "manœuvre en cours" à mettre en avant dans ce mode-là.
+
+- `RoadbookFocusedView` (nouveau fichier) : la manœuvre EN COURS (`RoadbookBigManeuverCard`,
+  pictogramme 120pt + distance 64pt) occupe TOUT l'espace restant une fois les 2 lignes
+  suivantes posées (taille intrinsèque, `RoadbookUpcomingRow`) — garantit "au moins la moitié
+  de l'écran" sans calcul de fraction explicite, largement plus en pratique. Les 2 manœuvres
+  suivantes affichent une distance recalculée DEPUIS LA POSITION ACTUELLE (`cumulativeDistanceMeters`
+  de la manœuvre visée moins celle de la manœuvre courante, plus la distance restante live) —
+  jamais `partialDistanceMeters` brut, qui donnerait "distance depuis la manœuvre précédente"
+  au lieu de "dans combien depuis maintenant". Deux états de repli distincts (jamais le même
+  écran vide muet) : pas de position GPS encore acquise vs. trace entièrement parcourue
+  (dernière manœuvre déjà dépassée).
+- `RoadbookMiniMapView` : nouveau paramètre `spanMeters` (`RoadBookConstants.
+  miniMapSpanMeters`, 2000 m) — quand une position live existe, la caméra reste CENTRÉE dessus
+  à cette portée fixe (recalculée à chaque position, `updateUIView`), plus jamais la trace
+  entière. Sans position (repli), garde l'ancien comportement (cadrer la trace une fois au
+  montage) — mieux que rien tant qu'aucun fix n'est connu.
+- Positionnement : overlay `ZStack(alignment: .bottomTrailing)` par-dessus `RoadbookFocusedView`
+  (jamais un élément de layout qui pousserait le reste, même règle "overlay ne pousse jamais"
+  que côté Ride, voir `RideOverlayLayout`), taille `geometry.size.width * 0.36` ×
+  `geometry.size.height * 0.15` — le "15% max" demandé est la hauteur, la largeur suit un ratio
+  visuellement cohérent (pas un carré strict, une carte est plus lisible en rectangle large).
+
 ## UI façon roadbook papier + pictogrammes cohérents (retour terrain it23bis)
 
 Deux corrections après le premier retour terrain sur it23 : "niveau UI c'est pas ça du tout...
