@@ -20,13 +20,11 @@ struct SplashScreenView: View {
     private static let splashDurationSeconds: Double = 1.4
 
     /// Version affichée sous la forme `0.0.<itération>` — convention explicite du propriétaire
-    /// tant que l'app est en phase de test ("0.0.21 (itération 21), 0.0.22 (itération 22)...") :
-    /// lue depuis `CFBundleShortVersionString` (`MARKETING_VERSION` dans project.yml), jamais
-    /// codée en dur ici, pour ne jamais désynchroniser ce texte de la vraie version du build.
-    private var versionText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-        return "Version \(version)"
-    }
+    /// tant que l'app est en phase de test ("0.0.21 (itération 21), 0.0.22 (itération 22)...").
+    /// Lecture factorisée dans `AppVersion` (it23, "splash-version-robustness") — point UNIQUE
+    /// pour que tout futur second affichage de version (écran "À propos", etc.) ne puisse pas
+    /// diverger d'une chaîne codée en dur.
+    private var versionText: String { AppVersion.displayText() }
 
     var body: some View {
         ZStack {
