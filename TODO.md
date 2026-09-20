@@ -1,5 +1,31 @@
 # TODO
 
+## Itération 23bis (retours terrain immédiats sur it23)
+
+Trois retours terrain distincts après livraison d'it23, chacun diagnostiqué avant correctif.
+
+- **`fix:"splash-version-still-1.0"`** — root cause RÉELLE trouvée (le fix "splash-version-
+  robustness" d'it23 n'en était pas un) : XcodeGen insère ses PROPRES valeurs par défaut
+  ("1.0"/"1", en dur) pour `CFBundleShortVersionString`/`CFBundleVersion` quand ces clés sont
+  ABSENTES de `info.properties` dans `project.yml` — `MARKETING_VERSION`/
+  `CURRENT_PROJECT_VERSION` (`settings.base`) n'étaient donc JAMAIS lus, quelle que soit leur
+  valeur. Corrigé en référençant explicitement `$(MARKETING_VERSION)`/
+  `$(CURRENT_PROJECT_VERSION)` dans `info.properties` — vérifié dans le VRAI Info.plist compilé
+  du bundle (`PlistBuddy -c "Print :CFBundleShortVersionString"`), pas juste dans le template
+  généré. `MARKETING_VERSION` passé à "0.0.23" (itération courante).
+- **`fix:"turn-icon-backward-looking"`** — capture d'écran à l'appui : la ligne "Virage fort"
+  (palier `.hard`) affichait `arrow.turn.down.right`, qui pointe vers le BAS avant de crocheter
+  à droite — se lit comme "fais demi-tour" plutôt que "tourne fort", incohérent avec les autres
+  paliers qui pointent vers le HAUT. `RoadbookTier` réécrit : un seul glyphe de base tourné d'un
+  angle standardisé par palier (30°/65°/105°/180°) — répercuté sur les 3 consommateurs
+  (`LateralCapBannerView`, pins carte `RideMapLibreView`, export PDF). Détail complet :
+  `GPXlibre/RoadBook/CLAUDE.md`.
+- **`refactor:"roadbook-table-ui"`** — "niveau UI c'est pas ça du tout... copie ce qui se fait
+  en affichage roadbook" (référence choisie : roadbook papier de rallye classique). L'ancien
+  `List` SwiftUI générique remplacé par `RoadbookTableView` : vraie table dense en colonnes
+  (N°/Cap/Partiel/Cumulé), mêmes colonnes/terminologie que l'export PDF, largeurs
+  proportionnelles à l'écran (jamais fixes, pour ne pas laisser de vide sur un téléphone large).
+
 ## Itération 23 (Mode Road Book + export PDF imprimable)
 
 Fiche de développement complète, 3 points — tous livrés.

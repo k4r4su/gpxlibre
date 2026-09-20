@@ -146,18 +146,12 @@ struct RoadBookTabView: View {
                     message: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace."
                 )
             } else {
-                List {
-                    ForEach(Array(maneuvers.enumerated()), id: \.element.id) { index, maneuver in
-                        RoadbookManeuverRow(
-                            maneuver: maneuver,
-                            index: index,
-                            unit: settings.roadbookPDFOptions.distanceUnit,
-                            isCurrent: liveProgress?.index == index,
-                            liveDistanceRemainingMeters: liveProgress?.index == index ? liveProgress?.distanceRemainingMeters : nil
-                        )
-                    }
-                }
-                .listStyle(.plain)
+                RoadbookTableView(
+                    maneuvers: maneuvers,
+                    unit: settings.roadbookPDFOptions.distanceUnit,
+                    currentIndex: liveProgress?.index,
+                    liveDistanceRemainingMeters: liveProgress?.distanceRemainingMeters
+                )
             }
         }
     }
@@ -201,47 +195,140 @@ struct RoadBookTabView: View {
     }
 }
 
-private struct RoadbookManeuverRow: View {
+/// Table dense en colonnes façon roadbook papier de rallye (spec "roadbook-mode", it23bis,
+/// retour terrain : "niveau UI c'est pas ça du tout... regarde ce qui se fait en affichage
+/// roadbook, et copie la même chose" — référence choisie explicitement par le propriétaire :
+/// "roadbook papier de rallye classique"). Mêmes colonnes que l'export PDF (N°/Cap/Partiel/
+/// Total), grille avec traits fins verticaux ET horizontaux — jamais un `List` SwiftUI standard
+/// (ses insets/fonds par défaut cassent justement l'effet "tableau imprimé" recherché).
+private struct RoadbookTableView: View {
+    let maneuvers: [RoadbookManeuver]
+    let unit: DistanceUnit
+    let currentIndex: Int?
+    let liveDistanceRemainingMeters: Double?
+
+    private static let ruleColor = Color.primary.opacity(0.15)
+    // Fractions de la largeur totale — les 2 colonnes de distance se partagent le reste à
+    // parts égales, jamais une largeur fixe qui laisserait un grand vide à droite sur un écran
+    // de téléphone (contrairement à un vrai roadbook papier, étroit par nature).
+    private static let numberColumnFraction: CGFloat = 0.13
+    private static let headingColumnFraction: CGFloat = 0.22
+
+    var body: some View {
+        GeometryReader { geometry in
+            let numberWidth = geometry.size.width * Self.numberColumnFraction
+            let headingWidth = geometry.size.width * Self.headingColumnFraction
+            let distanceWidth = (geometry.size.width - numberWidth - headingWidth) / 2
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerRow(numberWidth: numberWidth, headingWidth: headingWidth, distanceWidth: distanceWidth)
+                        Divider().background(Self.ruleColor)
+                        ForEach(Array(maneuvers.enumerated()), id: \.element.id) { index, maneuver in
+                            RoadbookTableRow(
+                                maneuver: maneuver,
+                                index: index,
+                                unit: unit,
+                                isCurrent: currentIndex == index,
+                                liveDistanceRemainingMeters: currentIndex == index ? liveDistanceRemainingMeters : nil,
+                                numberColumnWidth: numberWidth,
+                                headingColumnWidth: headingWidth,
+                                distanceColumnWidth: distanceWidth,
+                                ruleColor: Self.ruleColor
+                            )
+                            .id(index)
+                            Divider().background(Self.ruleColor)
+                        }
+                    }
+                }
+                // Fait défiler automatiquement jusqu'à la manœuvre courante en mode Assisté
+                // GPS — un roadbook papier n'a pas besoin de ça (tout est déjà sous les yeux),
+                // mais sur un écran qui peut dépasser la hauteur visible, c'est le filet de
+                // sécurité attendu.
+                .onChange(of: currentIndex) { newIndex in
+                    guard let newIndex else { return }
+                    withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
+                }
+            }
+        }
+    }
+
+    private func headerRow(numberWidth: CGFloat, headingWidth: CGFloat, distanceWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            columnHeader("N°", width: numberWidth)
+            verticalRule
+            columnHeader("Cap", width: headingWidth)
+            verticalRule
+            columnHeader("Partiel", width: distanceWidth)
+            verticalRule
+            columnHeader("Cumulé", width: distanceWidth)
+        }
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.04))
+    }
+
+    private func columnHeader(_ title: String, width: CGFloat) -> some View {
+        Text(title)
+            .font(.caption2.bold())
+            .foregroundStyle(.secondary)
+            .frame(width: width)
+    }
+
+    private var verticalRule: some View {
+        Rectangle().fill(Self.ruleColor).frame(width: 1)
+    }
+}
+
+private struct RoadbookTableRow: View {
     let maneuver: RoadbookManeuver
     let index: Int
     let unit: DistanceUnit
     let isCurrent: Bool
     let liveDistanceRemainingMeters: Double?
+    let numberColumnWidth: CGFloat
+    let headingColumnWidth: CGFloat
+    let distanceColumnWidth: CGFloat
+    let ruleColor: Color
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 0) {
             Text("\(index + 1)")
-                .font(.caption.monospacedDigit())
+                .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: 24, alignment: .trailing)
+                .frame(width: numberColumnWidth)
+
+            verticalRule
 
             Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(isCurrent ? Color.accentColor : .primary)
-                .frame(width: 30)
+                .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+                .frame(width: headingColumnWidth)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(maneuver.checkpoint.tier.label)
-                    .font(.subheadline.bold())
-                if let liveDistanceRemainingMeters {
-                    Text("Dans \(unit.displayString(fromMeters: liveDistanceRemainingMeters))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Partiel \(unit.displayString(fromMeters: maneuver.partialDistanceMeters))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            verticalRule
 
-            Spacer()
+            // Partiel : la distance restante LIVE remplace la distance partielle fixe pour la
+            // manœuvre courante en mode Assisté GPS (même donnée, présentation différente selon
+            // le mode — jamais une deuxième valeur stockée séparément, voir RoadbookLiveProgress).
+            Text(unit.displayString(fromMeters: liveDistanceRemainingMeters ?? maneuver.partialDistanceMeters))
+                .font(.subheadline.monospacedDigit().bold())
+                .foregroundStyle(isCurrent ? Color.accentColor : .primary)
+                .frame(width: distanceColumnWidth)
+
+            verticalRule
 
             Text(unit.displayString(fromMeters: maneuver.cumulativeDistanceMeters))
-                .font(.caption.monospacedDigit())
+                .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .frame(width: distanceColumnWidth)
         }
-        .padding(.vertical, 4)
-        .listRowBackground(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+        .padding(.vertical, 10)
+        .background(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+    }
+
+    private var verticalRule: some View {
+        Rectangle().fill(ruleColor).frame(width: 1)
     }
 }
 
