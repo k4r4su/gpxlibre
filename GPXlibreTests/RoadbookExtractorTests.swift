@@ -73,6 +73,21 @@ final class RoadbookExtractorTests: XCTestCase {
         XCTAssertGreaterThan(maneuvers[0].cumulativeDistanceMeters, 0)
     }
 
+    /// Spec "roadbook-mode" it23quater : le cap doit refléter le segment SORTANT (juste après
+    /// le point de manœuvre RÉEL choisi par l'algorithme existant), jamais une valeur supposée
+    /// à l'aveugle — `RoadbookAnalyzer` peut retenir un `sourcePointIndex` légèrement avant ou
+    /// après le coin géométrique exact selon la fenêtre de détection (comportement PRÉ-EXISTANT,
+    /// pas de sa responsabilité ici) ; ce test verrouille le CONTRAT de `headingDegrees` :
+    /// toujours le bearing exact entre ce point et le suivant, quel que soit l'index retenu.
+    func testHeadingDegreesMatchesTheBearingOfTheSegmentRightAfterTheSourcePoint() {
+        let track = staircaseTrack(legs: 2)
+        let maneuvers = extract(track)
+        XCTAssertEqual(maneuvers.count, 1)
+        let pointIndex = maneuvers[0].checkpoint.sourcePointIndex
+        let expectedHeading = RoadbookAnalyzer.bearing(from: track.points[pointIndex].coordinate, to: track.points[pointIndex + 1].coordinate)
+        XCTAssertEqual(maneuvers[0].headingDegrees, expectedHeading, accuracy: 0.01)
+    }
+
     // MARK: - Distances partielle/cumulée cohérentes (plusieurs manœuvres)
 
     func testPartialAndCumulativeDistancesAreConsistentAcrossMultipleManeuvers() {

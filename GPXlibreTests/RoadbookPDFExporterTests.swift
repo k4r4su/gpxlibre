@@ -15,7 +15,7 @@ final class RoadbookPDFExporterTests: XCTestCase {
             sourcePointIndex: index
         )
         let cumulative = Double(index + 1) * 300
-        return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: 300, cumulativeDistanceMeters: cumulative)
+        return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: 300, cumulativeDistanceMeters: cumulative, headingDegrees: Double(index * 7 % 360))
     }
 
     // MARK: - Trace vide

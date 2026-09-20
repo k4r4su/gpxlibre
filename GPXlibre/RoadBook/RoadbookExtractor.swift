@@ -51,7 +51,26 @@ enum RoadbookExtractor {
                 : previousCumulative
             let partial = max(cumulative - previousCumulative, 0)
             previousCumulative = cumulative
-            return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: partial, cumulativeDistanceMeters: cumulative)
+            return RoadbookManeuver(
+                checkpoint: checkpoint,
+                partialDistanceMeters: partial,
+                cumulativeDistanceMeters: cumulative,
+                headingDegrees: outgoingHeadingDegrees(at: checkpoint.sourcePointIndex, in: track.points)
+            )
         }
+    }
+
+    /// Cap du segment SORTANT (juste après le point de manœuvre) — bearing brut entre ce point
+    /// et le suivant, jamais une moyenne lissée sur une fenêtre (le cap affiché doit refléter la
+    /// direction IMMÉDIATE à prendre en sortant du virage, pas une tendance générale). Replie
+    /// sur le segment ENTRANT si le point de manœuvre est le dernier de la trace (pas de point
+    /// suivant) — cas limite, jamais un crash.
+    private static func outgoingHeadingDegrees(at pointIndex: Int, in points: [GPXPoint]) -> Double {
+        guard points.count > 1 else { return 0 }
+        if points.indices.contains(pointIndex + 1) {
+            return RoadbookAnalyzer.bearing(from: points[pointIndex].coordinate, to: points[pointIndex + 1].coordinate)
+        }
+        let previousIndex = max(pointIndex - 1, 0)
+        return RoadbookAnalyzer.bearing(from: points[previousIndex].coordinate, to: points[pointIndex].coordinate)
     }
 }

@@ -1,5 +1,35 @@
 # TODO
 
+## Itération 23quater (colonnes distance/cap + repères OSM à proximité)
+
+Capture d'un vrai roadbook rallye fournie par le propriétaire : "les deux premières colonnes,
+avec distance section et distance cumulée, puis la direction, avec des indications si possible
+(église, rond-point...) — est-ce que c'est possible d'avoir des infos pertinentes depuis la map
+et récupérer le maximum si possible ?"
+
+- **`feat:"roadbook-heading-degrees"`** : `RoadbookManeuver.headingDegrees` (cap absolu du
+  segment sortant, calculé dans `RoadbookExtractor`) — affiché sous le pictogramme partout
+  (table écran, focus GPS, export PDF). Mode "Degrés" de l'export basé sur ce cap absolu plutôt
+  que l'ancien angle relatif du virage.
+- **`refactor:"roadbook-columns-distance-block"`** : table écran réorganisée en 3 blocs
+  (distances cumulée/partielle empilées, cap+degrés, direction+info) au lieu de 4 colonnes
+  égales — plus proche de la référence rallye montrée.
+- **`feat:"roadbook-osm-landmarks"`** : nouveau `RoadbookLandmarkService` (Overpass API,
+  gratuit, sans clé) + `RoadbookLandmark` (heuristique pure de choix du meilleur tag : route non
+  goudronnée/passage à niveau/pont d'abord, puis église/rond-point/ligne électrique/feux) +
+  `RoadbookLandmarkCache` (cache disque par coordonnée, distingue "jamais interrogé" de
+  "interrogé sans résultat"). Best-effort total : résolution séquentielle en arrière-plan
+  (`RoadBookTabView.loadLandmarksIfNeeded`), n'empêche jamais l'affichage des manœuvres, aucune
+  erreur réseau exposée. Affiché dans les 3 surfaces (table, focus GPS, colonne Note du PDF).
+  Voir RoadBook/CLAUDE.md pour le détail complet.
+
+**Limite connue, honnête** : contrairement à la référence montrée (vrais schémas d'intersection
+dessinés, ex. croisement en croix/rond-point avec la vraie forme du carrefour), les pictogrammes
+restent des flèches simples tournées par palier (voir fix "turn-icon-backward-looking", it23bis)
+— dessiner la VRAIE géométrie de chaque carrefour demanderait d'extraire la forme du réseau
+routier local (nombre de branches, type de jonction) depuis Overpass en plus des tags, hors
+scope de cette itération. Piste pour une itération future si le besoin se confirme.
+
 ## Itération 23ter (retour terrain sur l'UI du mode Assisté GPS)
 
 "Le road book est pas mal" — mais le mode Assisté GPS doit mettre en avant la manœuvre en cours

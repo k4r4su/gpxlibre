@@ -14,6 +14,9 @@ struct RoadbookFocusedView: View {
     /// `currentIndex == nil`, mais méritent un message différent — jamais le même écran vide
     /// muet pour deux situations différentes).
     let hasLocationFix: Bool
+    /// Repères OSM à proximité (spec "roadbook-mode", it23quater) — voir `RoadBookTabView`,
+    /// clé absente = pas encore résolu, valeur `nil` = résolu sans résultat.
+    let landmarks: [UUID: String?]
 
     /// Les 2 manœuvres qui suivent celle actuellement mise en avant — distance recalculée
     /// DEPUIS LA POSITION ACTUELLE (pas depuis la manœuvre courante), pour rester une vraie
@@ -32,7 +35,8 @@ struct RoadbookFocusedView: View {
         VStack(spacing: 0) {
             Group {
                 if let currentIndex, let distanceRemainingMeters, maneuvers.indices.contains(currentIndex) {
-                    RoadbookBigManeuverCard(maneuver: maneuvers[currentIndex], distanceRemainingMeters: distanceRemainingMeters, unit: unit)
+                    let current = maneuvers[currentIndex]
+                    RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
                 } else if !hasLocationFix {
                     RoadbookFocusStatusView(systemImage: "location.slash", message: "En attente d'une position GPS…")
                 } else {
@@ -48,7 +52,13 @@ struct RoadbookFocusedView: View {
                 Divider()
                 VStack(spacing: 0) {
                     ForEach(Array(upcoming.enumerated()), id: \.element.maneuver.id) { offset, entry in
-                        RoadbookUpcomingRow(maneuver: entry.maneuver, distanceFromNowMeters: entry.distanceFromNowMeters, unit: unit, rank: offset + 2)
+                        RoadbookUpcomingRow(
+                            maneuver: entry.maneuver,
+                            distanceFromNowMeters: entry.distanceFromNowMeters,
+                            unit: unit,
+                            rank: offset + 2,
+                            landmark: landmarks[entry.maneuver.id] ?? nil
+                        )
                         if offset < upcoming.count - 1 {
                             Divider().padding(.leading, 16)
                         }
@@ -65,13 +75,17 @@ private struct RoadbookBigManeuverCard: View {
     let maneuver: RoadbookManeuver
     let distanceRemainingMeters: Double
     let unit: DistanceUnit
+    let landmark: String?
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
                 .font(.system(size: 120, weight: .bold))
                 .foregroundStyle(Color.accentColor)
                 .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
+            Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(.secondary)
             Text(unit.displayString(fromMeters: distanceRemainingMeters))
                 .font(.system(size: 64, weight: .heavy, design: .rounded))
                 .monospacedDigit()
@@ -80,6 +94,12 @@ private struct RoadbookBigManeuverCard: View {
             Text(maneuver.checkpoint.tier.label)
                 .font(.title3.bold())
                 .foregroundStyle(.secondary)
+            if let landmark {
+                Label(landmark, systemImage: "mappin.and.ellipse")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(.horizontal, 24)
     }
@@ -92,6 +112,7 @@ private struct RoadbookUpcomingRow: View {
     /// "+2"/"+3" — position relative à la manœuvre en cours, jamais l'index absolu dans la
     /// trace (ce que voit le pilote, c'est "dans 2 manœuvres", pas "la 7e de la liste").
     let rank: Int
+    let landmark: String?
 
     var body: some View {
         HStack(spacing: 16) {
@@ -106,14 +127,27 @@ private struct RoadbookUpcomingRow: View {
                 .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
                 .frame(width: 40)
 
-            Text(maneuver.checkpoint.tier.label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(maneuver.checkpoint.tier.label)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if let landmark {
+                    Text(landmark)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
-            Text(unit.displayString(fromMeters: distanceFromNowMeters))
-                .font(.headline.monospacedDigit())
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(unit.displayString(fromMeters: distanceFromNowMeters))
+                    .font(.headline.monospacedDigit())
+                Text("\(Int(maneuver.headingDegrees.rounded()))°")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)

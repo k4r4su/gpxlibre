@@ -19,6 +19,29 @@ enum RoadBookConstants {
     /// juste de quoi confirmer visuellement qu'on est au bon endroit localement.
     static let miniMapSpanMeters: Double = 2000
 
+    // MARK: - Enrichissement par repères OSM (spec "roadbook-mode", it23quater)
+
+    /// Overpass API (OSM public, gratuit, aucune clé — même philosophie que Nominatim déjà
+    /// utilisé ailleurs dans l'app) : seul service permettant d'interroger des tags OSM
+    /// arbitraires (église, rond-point, revêtement...) autour d'un point — Nominatim (déjà
+    /// utilisé pour la recherche d'adresse) ne fait que du géocodage inverse d'adresse, pas une
+    /// recherche de tags à proximité.
+    static let overpassBaseURLString = "https://overpass-api.de/api/interpreter"
+    /// Rayon de recherche autour de chaque point de manœuvre — assez large pour capter un
+    /// repère visible depuis la route (église en léger retrait, rond-point dont le centre n'est
+    /// pas exactement sur le point détecté), assez restreint pour rester PERTINENT au virage
+    /// lui-même (pas un repère à 200 m qui n'a rien à voir avec CE virage précis).
+    static let landmarkSearchRadiusMeters: Double = 40
+    static let landmarkRequestTimeoutSeconds: Double = 8
+    /// ToS Overpass (instance publique partagée) : pas de limite stricte documentée comme
+    /// Nominatim (1 req/s), mais même discipline appliquée par précaution et pour éviter de
+    /// saturer un service gratuit partagé avec de nombreuses manœuvres à interroger d'un coup.
+    static let landmarkMinRequestIntervalSeconds: Double = 1.0
+    /// Nombre max d'éléments OSM renvoyés par requête — assez large pour que le décompte de
+    /// bâtiments à proximité (voir `RoadbookLandmark`, détection "maison isolée") reste fiable
+    /// même si d'autres tags (commerces, etc.) matchent aussi au même endroit.
+    static let landmarkResultLimit = 30
+
     // MARK: - Export PDF
 
     /// A4 à 72 dpi (unité native PDFKit/UIGraphicsPDFRenderer, indépendante de l'orientation —

@@ -16,7 +16,7 @@ final class RoadbookLiveProgressTests: XCTestCase {
             sequenceIndex: 1,
             sourcePointIndex: 0
         )
-        return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: cumulativeDistanceMeters, cumulativeDistanceMeters: cumulativeDistanceMeters)
+        return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: cumulativeDistanceMeters, cumulativeDistanceMeters: cumulativeDistanceMeters, headingDegrees: 0)
     }
 
     func testReturnsFirstManeuverBeforeAnyProgress() {

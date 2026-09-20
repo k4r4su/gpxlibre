@@ -4,6 +4,55 @@ Chargé automatiquement quand une session travaille sous `GPXlibre/RoadBook/`. L
 contexte projet (philosophie, règles absolues, conventions) reste dans le CLAUDE.md racine —
 ce fichier ne documente que ce qui est spécifique à ce dossier.
 
+## Cap en degrés + repères OSM à proximité (spec "roadbook-mode", it23quater)
+
+Retour terrain avec capture d'un vrai roadbook rallye : "les deux premières colonnes, distance
+section et distance cumulée, puis la direction, avec des indications si possible (église,
+rond-point...) — est-ce possible d'avoir des infos pertinentes depuis la map ?"
+
+**Cap absolu** (`RoadbookManeuver.headingDegrees`) : bearing du segment SORTANT (juste après le
+point de manœuvre), calculé dans `RoadbookExtractor.outgoingHeadingDegrees` — PAS stocké sur
+`Checkpoint` lui-même (type partagé avec Ride/`RideMapLibreView`, éviter d'y ajouter un champ
+dont ces autres consommateurs n'ont pas besoin). Affiché sous le pictogramme (écran ET PDF, mode
+"Degrés" de l'export désormais basé sur ce cap absolu plutôt que sur l'angle RELATIF du virage —
+question différente : "quel cap suivre ensuite" plutôt que "de combien tourne-t-on").
+
+**Repères OSM** (`RoadbookLandmark`/`RoadbookLandmarkService`/`RoadbookLandmarkCache`) —
+enrichissement BEST-EFFORT, jamais bloquant :
+- `RoadbookLandmarkService` interroge Overpass API (OSM public, gratuit, même philosophie que
+  `NominatimGeocodingService` déjà utilisé pour la recherche d'adresse — mais Nominatim ne fait
+  QUE du géocodage inverse d'adresse, pas une recherche de tags arbitraires à proximité, d'où un
+  service Overpass dédié) dans un rayon de `RoadBookConstants.landmarkSearchRadiusMeters` (40 m)
+  autour de chaque point de manœuvre. `RoadbookLandmark.bestDescription` (fonction PURE, testée
+  sans réseau) choisit le tag le plus pertinent, en 4 paliers : (1) singularités de ROUTE
+  (revêtement non goudronné, passage à niveau, pont — information de sécurité/pilotage) ;
+  (2) repères visuels FORTS et sans ambiguïté (église, rond-point, ligne électrique, feux) ;
+  (3) repères visuels FAIBLES mais utiles pour se diriger à vue (retour terrain : "rajouter des
+  maisons, des arbres, des points clés qui permettent de se diriger") — un arbre remarquable
+  (`natural=tree`, toujours pertinent, cartographié individuellement dans OSM par nature) ou une
+  maison ISOLÉE (`building`, seulement si `RoadbookLandmark.maxBuildingCountForIsolatedHouse`
+  bâtiments ou moins trouvés dans le même rayon — au-delà, zone habitée dense, "Maison"
+  cesserait d'être un repère distinctif et deviendrait du bruit à chaque virage) ; (4) repli sur
+  un nom générique. `RoadBookConstants.landmarkResultLimit` (30) borne le nombre d'éléments
+  renvoyés par la requête Overpass elle-même — assez large pour que ce décompte reste fiable
+  même si d'autres tags matchent aussi au même endroit.
+  Un tag SANS intérêt à aucun palier (`landuse=residential` seul...) n'est jamais retenu.
+- `RoadbookLandmarkCache` : cache disque clé PAR COORDONNÉE (arrondie 5 décimales), PAS par
+  trace+index comme `RoadbookMapMatchCache` — un repère est une propriété du LIEU, pas de la
+  trace ; un changement de seuils roadbook (qui peut changer QUELLES coordonnées deviennent des
+  manœuvres) n'invalide jamais un résultat déjà acquis. `RoadbookLandmarkLookup.notCached` vs
+  `.cached(nil)` : distingue "jamais interrogé" de "interrogé, rien trouvé" — sans cette
+  distinction, un point sans repère serait réinterrogé à chaque ouverture de l'écran.
+- `RoadBookTabView.loadLandmarksIfNeeded()` (`.task(id: selectedTrack?.id)`, annulé/relancé
+  automatiquement si la trace change) résout les manœuvres SÉQUENTIELLEMENT, jamais en rafale
+  concurrente — bonne conduite vis-à-vis d'un service public gratuit partagé, surtout avec
+  potentiellement plusieurs dizaines de manœuvres à interroger d'un coup. N'empêche JAMAIS
+  l'affichage immédiat des manœuvres elles-mêmes (best-effort, arrive progressivement,
+  `landmarks: [UUID: String?]` — clé absente = pas encore résolu).
+- Consommé par les 3 surfaces d'affichage (écran table, écran focus GPS, export PDF colonne
+  "Note" — remplace la ligne vierge quand un repère est trouvé, la garde en dessous pour une
+  note manuscrite complémentaire).
+
 ## Mode Road Book (spec "roadbook-mode", it23)
 
 Nouvel onglet, feature différenciante ("esprit roadbook papier de rallye, pas une redite du

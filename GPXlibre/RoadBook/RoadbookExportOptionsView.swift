@@ -8,6 +8,7 @@ struct RoadbookExportOptionsView: View {
     let trackName: String
     let maneuvers: [RoadbookManeuver]
     @Binding var options: RoadbookPDFOptions
+    var landmarks: [UUID: String?] = [:]
 
     @Environment(\.dismiss) private var dismiss
     @State private var exportedPDFURL: URL?
@@ -71,7 +72,7 @@ struct RoadbookExportOptionsView: View {
     }
 
     private func generate() {
-        let data = RoadbookPDFExporter.generate(trackName: trackName, maneuvers: maneuvers, options: options)
+        let data = RoadbookPDFExporter.generate(trackName: trackName, maneuvers: maneuvers, options: options, landmarks: landmarks)
         let sanitizedName = trackName
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .joined(separator: "_")

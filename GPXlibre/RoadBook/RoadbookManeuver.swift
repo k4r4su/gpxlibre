@@ -12,6 +12,13 @@ struct RoadbookManeuver: Identifiable, Hashable {
     let partialDistanceMeters: Double
     /// Distance cumulée depuis le départ de la trace.
     let cumulativeDistanceMeters: Double
+    /// Cap absolu (0-360°) du segment de trace juste APRÈS la manœuvre — spec "roadbook-mode"
+    /// it23quater, retour terrain : référence rallye montrée par le propriétaire, chaque ligne
+    /// affiche un cap absolu à suivre après le virage (ex. "304°"), pas seulement une flèche
+    /// relative. Calculé dans `RoadbookExtractor` (bearing du segment sortant), jamais stocké
+    /// dans `Checkpoint` lui-même (type partagé avec Ride/RideMapLibreView, éviter d'y ajouter
+    /// un champ dont ces autres consommateurs n'ont pas besoin).
+    let headingDegrees: Double
 
     var id: UUID { checkpoint.id }
 }

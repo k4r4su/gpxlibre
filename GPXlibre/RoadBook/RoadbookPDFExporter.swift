@@ -61,7 +61,7 @@ enum RoadbookPDFExporter {
         return ColumnLayout(partial: rects["partial"] ?? .zero, cumulative: rects["cumulative"], heading: rects["heading"] ?? .zero, note: rects["note"])
     }
 
-    static func generate(trackName: String, maneuvers: [RoadbookManeuver], options: RoadbookPDFOptions) -> Data {
+    static func generate(trackName: String, maneuvers: [RoadbookManeuver], options: RoadbookPDFOptions, landmarks: [UUID: String?] = [:]) -> Data {
         let pageSize = options.orientation == .portrait
             ? CGSize(width: RoadBookConstants.pdfPageWidthPoints, height: RoadBookConstants.pdfPageHeightPoints)
             : CGSize(width: RoadBookConstants.pdfPageHeightPoints, height: RoadBookConstants.pdfPageWidthPoints)
@@ -106,7 +106,7 @@ enum RoadbookPDFExporter {
                     let rowY = contentRect.minY + rowHeight * CGFloat(rowIndex + 1) // +1 : ligne 0 = titres de colonnes
                     let rowRect = CGRect(x: contentRect.minX, y: rowY, width: contentRect.width, height: rowHeight)
                     let rowLayout = columnLayout(options: options, contentRect: rowRect)
-                    drawRow(maneuver, layout: rowLayout, options: options)
+                    drawRow(maneuver, layout: rowLayout, options: options, landmark: landmarks[maneuver.id] ?? nil)
                 }
             }
         }
@@ -169,7 +169,7 @@ enum RoadbookPDFExporter {
         path.stroke()
     }
 
-    private static func drawRow(_ maneuver: RoadbookManeuver, layout: ColumnLayout, options: RoadbookPDFOptions) {
+    private static func drawRow(_ maneuver: RoadbookManeuver, layout: ColumnLayout, options: RoadbookPDFOptions, landmark: String? = nil) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: options.fontSize.points),
             .foregroundColor: UIColor.black,
@@ -182,18 +182,30 @@ enum RoadbookPDFExporter {
 
         switch options.headingStyle {
         case .degrees:
-            let sign = maneuver.checkpoint.direction == .left ? "-" : ""
-            let degreesText = maneuver.checkpoint.direction == .uTurn
-                ? "180°"
-                : "\(sign)\(Int(maneuver.checkpoint.turnAngleDegrees.rounded()))°"
-            draw(degreesText, in: layout.heading, attributes: attributes, alignment: .center)
+            // Cap ABSOLU du segment sortant (spec it23quater, cohérent avec l'écran) — plus la
+            // rotation RELATIVE du virage (`turnAngleDegrees`), qui répondait à une question
+            // différente ("de combien tourne-t-on ?" plutôt que "quel cap suivre ensuite ?").
+            draw("\(Int(maneuver.headingDegrees.rounded()))°", in: layout.heading, attributes: attributes, alignment: .center)
         case .pictogram:
             drawPictogram(for: maneuver.checkpoint, in: layout.heading)
         }
 
         if let note = layout.note {
-            // Colonne vierge lignée façon roadbook papier — l'utilisateur l'annote à la main
-            // (danger, revêtement, point de vue). Aucune donnée de note n'existe dans l'app.
+            if let landmark {
+                // Repère OSM trouvé à proximité (spec it23quater) — remplace la ligne vierge,
+                // l'utilisateur garde quand même de la place en dessous pour sa propre note.
+                let landmarkAttributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.italicSystemFont(ofSize: max(options.fontSize.points - 1, 6)),
+                    .foregroundColor: UIColor.darkGray,
+                ]
+                (landmark as NSString).draw(
+                    in: CGRect(x: note.minX + 4, y: note.minY + 2, width: note.width - 8, height: note.height * 0.4),
+                    withAttributes: landmarkAttributes
+                )
+            }
+            // Ligne vierge façon roadbook papier — l'utilisateur l'annote à la main (danger,
+            // revêtement, point de vue) ; reste présente même quand un repère est affiché
+            // au-dessus, pour laisser de la place à une note manuscrite complémentaire.
             let path = UIBezierPath()
             path.move(to: CGPoint(x: note.minX + 4, y: note.maxY - 4))
             path.addLine(to: CGPoint(x: note.maxX - 4, y: note.maxY - 4))
