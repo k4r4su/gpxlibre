@@ -70,15 +70,13 @@ private extension MapThemePreset {
     var swatchColors: [Color] {
         switch self {
         case .standard: return [Color(red: 0.96, green: 0.94, blue: 0.88), Color(red: 0.80, green: 0.88, blue: 0.78)]
-        // Contraste élevé : mêmes teintes de base, saturation/contraste poussés (reflète
-        // MapColorFlavor.hauteContraste : saturation ×1.35, contraste ×1.25).
-        case .hauteContraste: return [Color(red: 1.0, green: 0.90, blue: 0.70), Color(red: 0.45, green: 0.85, blue: 0.35)]
-        // Terreux : décalage de teinte +10° vers le chaud, saturation réduite, un peu plus clair.
-        case .terreux: return [Color(red: 0.88, green: 0.78, blue: 0.58), Color(red: 0.62, green: 0.68, blue: 0.42)]
+        // Fix "flavor-still-imperceptible" (it22bis) : recalculées depuis le nouveau modèle
+        // réel de MapColorFlavor.hauteContraste (boost de saturation proportionnel + décalage
+        // de luminosité plat -0.07), pour que la vignette reflète fidèlement le rendu carte.
+        case .hauteContraste: return [Color(red: 0.96, green: 0.90, blue: 0.74), Color(red: 0.67, green: 0.91, blue: 0.61)]
+        // Idem pour Terreux (hueShift +22°, boost de saturation 0.22, luminosité -0.04).
+        case .terreux: return [Color(red: 0.94, green: 0.95, blue: 0.81), Color(red: 0.70, green: 0.88, blue: 0.73)]
         case .relief: return [Color(red: 0.58, green: 0.48, blue: 0.34), Color(red: 0.36, green: 0.56, blue: 0.38)]
-        // Satellite : tons terre/végétation vus du ciel (Sentinel-2 cloudless), plus sombre et
-        // saturé que Relief pour se distinguer au premier coup d'œil dans la grille de vignettes.
-        case .satellite: return [Color(red: 0.22, green: 0.30, blue: 0.18), Color(red: 0.14, green: 0.20, blue: 0.30)]
         }
     }
 
@@ -88,14 +86,13 @@ private extension MapThemePreset {
         case .hauteContraste: return "sun.max.fill"
         case .terreux: return "leaf.fill"
         case .relief: return "mountain.2.fill"
-        case .satellite: return "globe.europe.africa.fill"
         }
     }
 
     var swatchIconColor: Color {
         switch self {
         case .standard, .hauteContraste, .terreux: return .black.opacity(0.55)
-        case .relief, .satellite: return .white
+        case .relief: return .white
         }
     }
 }

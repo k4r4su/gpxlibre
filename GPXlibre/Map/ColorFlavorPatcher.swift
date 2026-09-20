@@ -39,31 +39,48 @@ enum ColorFlavorPatcher {
     /// reconnu comme une couleur (ex. un nom de police, une clé d'expression comme
     /// "interpolate"/"zoom", un nom de source d'icône) — l'appelant garde alors la valeur telle
     /// quelle, jamais une modification à l'aveugle.
-    /// Fix "map-flavors-clamp-to-white" (it22, retour terrain : "les 3 premiers thèmes sont
-    /// visuellement identiques") — diagnostiqué en rejouant le patch à la main sur la vraie
-    /// couleur `background` du style embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%) — la couleur
-    /// qui domine la surface visible à la plupart des zooms) : `0.5 + (0.957 - 0.5) × 1.4` (le
-    /// facteur de contraste de "Contraste élevé") vaut `1.1398`, ÉCRÊTÉ à 100 % de luminosité —
-    /// à l=100%, hue ET saturation deviennent OPTIQUEMENT invisibles (blanc pur), quel que soit
-    /// leur valeur numérique. La quasi-totalité des couleurs de fond de carte (arrière-plan,
-    /// terrain, zones neutres) est déjà proche du blanc — l'étirement de contraste les écrase
-    /// donc systématiquement, effaçant la teinte/saturation qui aurait dû les distinguer.
-    /// Corrigé en clampant la luminosité finale dans une plage SÛRE (`safeLightnessRange`,
-    /// jamais 0 % ni 100 % pile) plutôt que `0...1` — la teinte/saturation restent toujours
-    /// perceptibles, même pour une couleur de départ déjà proche d'un extrême.
-    static let safeLightnessRange: ClosedRange<Double> = 0.05...0.92
+    ///
+    /// Plage de luminosité SÛRE (voir historique dans `MapColorFlavor`) — même à
+    /// `lightnessDelta` cumulé, la teinte/saturation restent toujours perceptibles, jamais
+    /// écrêtées à un blanc/noir pur optiquement invisible. Bornes resserrées à `0.10...0.88`
+    /// (pas juste "jamais 0/100 % pile") : validé par simulation directe sur les couleurs
+    /// réelles du style embarqué — une couleur de fond quasi blanche (`l ≈ 0.96`) a besoin
+    /// d'être VRAIMENT ramenée sous 0.88 pour que le delta perçu dépasse le seuil de perception,
+    /// une plage plus permissive (ex. `0.04...0.96`) laissait passer des cas quasi imperceptibles.
+    static let safeLightnessRange: ClosedRange<Double> = 0.10...0.88
 
     static func transformedColorString(_ string: String, flavor: MapColorFlavor) -> String? {
         guard let color = parseColor(string) else { return nil }
+
+        // Fix "flavor-gray-tint-bug" (it22bis, découvert en simulant le patch sur les vraies
+        // couleurs du style) : un gris PUR (`s == 0`, ex. `#333`/`#666`, texte des labels) n'a
+        // AUCUNE teinte réelle — `parseColor`/`rgbToHSL` lui assignent `h = 0` par pure
+        // convention numérique (aucune direction de teinte n'existe quand max==min). Appliquer
+        // le décalage de teinte + boost de saturation à cette valeur par défaut teintait les
+        // textes/traits neutres d'un rouge/brun parasite (`#666` → RGB ~(106,78,78) au lieu d'un
+        // gris plus sombre) — un texte de nav ne doit JAMAIS changer de TEINTE, seulement de
+        // luminosité. Un gris pur reste donc un gris pur, seule sa luminosité bouge.
+        //
+        // `safeLightnessRange` NE S'APPLIQUE PAS ici (clamp naturel `0...1` uniquement) : cette
+        // plage resserrée protège la teinte/saturation d'une couleur CHROMATIQUE de l'écrêtage
+        // — un gris pur n'a ni l'une ni l'autre à protéger. L'appliquer aurait empêché `#000`
+        // (labels ville/pays) de rester noir pur, ou `#fff` (halo de texte) de rester blanc pur
+        // sous "Contraste élevé"/"Terreux" — une régression de LISIBILITÉ, l'inverse du but.
+        guard color.s > 0 else {
+            let lightness = min(max(color.l + flavor.lightnessDelta, 0), 1)
+            return "hsla(0.0, 0.0%, \(formatted(lightness * 100))%, \(formatted(color.a, decimals: 3)))"
+        }
+
         var hue = (color.h + flavor.hueShiftDegrees).truncatingRemainder(dividingBy: 360)
         if hue < 0 { hue += 360 }
-        // Fix "flavor-parameters-imperceptible" (it19-bis) : terme ADDITIF après le
-        // multiplicateur — un multiplicateur seul n'a aucun effet visible sur une couleur déjà
-        // proche du gris/neutre (majorité de la surface d'un fond de carte clair), voir
-        // MapColorFlavor.saturationBoost.
-        let saturation = min(max(color.s * flavor.saturationMultiplier + flavor.saturationBoost, 0), 1)
-        let contrasted = 0.5 + (color.l - 0.5) * flavor.contrastFactor
-        let lightness = min(max(contrasted + flavor.lightnessDelta, Self.safeLightnessRange.lowerBound), Self.safeLightnessRange.upperBound)
+        // Fix "flavor-still-imperceptible" (it22bis) : comble une FRACTION de l'espace de
+        // saturation RESTANT plutôt qu'un multiplicateur — reste efficace même partant d'une
+        // saturation proche de zéro (voir MapColorFlavor.saturationBoostFraction), et ne peut
+        // jamais dépasser 1 par construction.
+        let saturation = color.s + (1 - color.s) * flavor.saturationBoostFraction
+        // Décalage PLAT (pas un étirement proportionnel autour de 50 %, qui poussait les
+        // couleurs déjà claires droit vers le plafond où elles s'écrêtaient en blanc optique).
+        let lightness = min(max(color.l + flavor.lightnessDelta, Self.safeLightnessRange.lowerBound), Self.safeLightnessRange.upperBound)
         return "hsla(\(formatted(hue)), \(formatted(saturation * 100))%, \(formatted(lightness * 100))%, \(formatted(color.a, decimals: 3)))"
     }
 

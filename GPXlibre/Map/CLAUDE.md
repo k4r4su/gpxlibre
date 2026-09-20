@@ -114,33 +114,39 @@ TOUTE l'image comme un bloc rigide, aucune rotation par-label n'est possible par
 `viewport`-aligné). "Certains styles tournent, d'autres pas" = Relief (raster, jamais) vs les
 3 flavors vectoriels (toujours, correctement) — pas un bug à corriger dans le code de
 rotation, documenté via un footer dans Réglages > Carte (visible seulement si Relief
-sélectionné) plutôt qu'un correctif inexistant. Satellite (Sentinel-2, it22, voir
-`GPXlibre/Offline/CLAUDE.md`) est raster au même titre que Relief (`colorFlavor: nil`) — même
-règle 0, même limitation de rotation, même footer (condition étendue aux deux thèmes).
+sélectionné) plutôt qu'un correctif inexistant.
 
-**(b) "Les 3 premiers thèmes sont visuellement identiques" — BUG RÉEL, confirmé et corrigé.**
-Root cause trouvée en rejouant le patch à la main sur la VRAIE couleur `background` du style
-embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%) — domine la surface visible à la plupart des
-zooms) : l'étirement de contraste de "Contraste élevé" (`0.5 + (0.957-0.5)×1.4 = 1.14`)
-DÉPASSAIT 100 % et se faisait ÉCRÊTER en BLANC PUR (`min(x, 1)`) — à l=100 %, teinte ET
-saturation deviennent optiquement invisibles quelle que soit leur valeur numérique, donc
-indiscernable de "Standard" malgré un calcul par ailleurs mathématiquement correct. La quasi-
-totalité des couleurs dominantes d'un fond de carte clair (arrière-plan, terrain) est déjà
-proche du blanc — l'ancien clamp `0...1` les écrasait donc systématiquement.
+**(b) "Les 3 premiers thèmes sont visuellement identiques" — BUG RÉEL, corrigé DEUX FOIS.**
+Premier correctif (it22) : root cause diagnostiquée à la main sur la VRAIE couleur `background`
+du style embarqué (`#f8f4f0`, HSL(30°, 36.4%, 95.7%) — domine la surface visible à la plupart
+des zooms) — l'étirement de contraste de "Contraste élevé" (`0.5 + (0.957-0.5)×1.4 = 1.14`)
+dépassait 100 % et se faisait écrêter en blanc PUR, où teinte/saturation deviennent optiquement
+invisibles. Fix it22 : `safeLightnessRange` (clamp `0.05...0.92` au lieu de `0...1`).
 
-Fix : `ColorFlavorPatcher.safeLightnessRange` (0.05...0.92, remplace le clamp `0...1` final)
-— la luminosité ne peut plus jamais atteindre un extrême PUR, donc teinte/saturation restent
-TOUJOURS perceptibles, même pour une couleur de départ déjà proche du blanc ou du noir. Validé
-par calcul à la main sur `#f8f4f0` sous les 3 flavors (voir `ColorFlavorPatcherTests.
-testTheThreeFlavorsProduceDistinguishableResultsForTheDominantBackgroundColor`) — "Terreux"
-reste une différence VOLONTAIREMENT modeste (teinte chaude légère, esprit carte papier, pas
-une refonte de palette), mais désormais RÉELLE plutôt qu'anéantie par le clamp.
+**2e retour terrain (it22bis) : "contraste élevés et terreux sont les mêmes que standard" —
+le fix it22 restait insuffisant.** Diagnostiqué cette fois par SIMULATION directe (script
+Python rejouant l'algorithme Swift sur les couleurs réelles du style — fond, parc, forêt, eau,
+bâti) plutôt qu'à la main sur une seule couleur : même avec le clamp à 92 %, le delta RGB réel
+sur le fond de carte restait ~25-30/765 — imperceptible à l'œil (92 % de luminosité reste
+"presque blanc" quelle que soit la saturation en dessous). Root cause plus profonde que le seul
+clamp : un MULTIPLICATEUR de saturation (`s × 1.5 + 0.15`) a un effet quasi nul sur une couleur
+déjà proche du gris (majorité de la surface visible), et un étirement de contraste PROPORTIONNEL
+autour de 50 % pousse justement les couleurs déjà claires vers ce plafond invisible.
 
-Paramètres de `MapColorFlavor` eux-mêmes INCHANGÉS (hueShift/saturationMultiplier/
-saturationBoost/contrastFactor/lightnessDelta) — le bug était dans la fonction de clamp, pas
-dans les valeurs de réglage choisies en it19/it19-bis. Toujours "un point de départ, pas un
-résultat validé à l'œil" (pas de device physique dans cet environnement) pour la magnitude
-exacte de différenciation perçue en conditions réelles.
+Fix it22bis (`MapColorFlavor`/`ColorFlavorPatcher` réécrits) : `saturationMultiplier`/
+`saturationBoost`/`contrastFactor`/`lightnessDelta` (4 paramètres) remplacés par 2 paramètres
+plus robustes — `saturationBoostFraction` comble une FRACTION de l'espace de saturation
+RESTANT (`s' = s + (1-s) × fraction`, fort même partant de zéro, jamais > 1 par construction) ;
+`lightnessDelta` est désormais un décalage PLAT (pas un étirement autour de 50 %) — une couleur
+claire est repoussée d'une quantité FIXE, jamais vers le plafond où elle s'écrêterait. Nouvelles
+valeurs choisies par la même simulation (delta RGB visé : 40-160/765 sur les couleurs
+dominantes réelles, ni imperceptible ni "néon"). Bug adjacent corrigé au passage, découvert par
+la même simulation : un gris PUR (`s == 0`, ex. texte `#333`/`#666`) recevait une teinte
+rouge/brun parasite (hue par défaut `0` du parseur pour tout gris) — un gris reste désormais
+un gris, seule sa luminosité bouge. Voir `ColorFlavorPatcherTests` (tests sur les couleurs
+réelles du style, pas des couleurs de test arbitraires) — magnitude perçue en conditions
+réelles toujours à confirmer par le pilote (pas de device physique dans cet environnement),
+mais le delta RGB mesuré est désormais 3 à 5× plus grand qu'avant ce fix.
 
 ## Chevrons : densité adaptative au zoom (fix "chevrons-zoom-adaptive", it17, Bloc 3)
 

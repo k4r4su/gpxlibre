@@ -15,6 +15,32 @@ import Foundation
 /// des calques (symbol-placement, rotation-alignment), donc n'a AUCUN effet sur le mécanisme de
 /// rotation des labels cap-en-haut (contrainte non négociable du prompt) — celui-ci opère sur
 /// `layout`, ce fichier ne touche que `paint`.
+///
+/// Fix "flavor-still-imperceptible" (it22bis, 2e retour terrain après le fix "map-flavors-
+/// clamp-to-white" d'it22 : "contraste élevés et terreux sont les mêmes que standard") —
+/// diagnostiqué par SIMULATION directe sur les vraies couleurs dominantes du style embarqué
+/// (fond `#f8f4f0`, forêt/parc/eau/bâti — voir `docs/tuile-sources.md`... non, voir le calcul
+/// ci-dessous) plutôt que par un nouveau réglage à l'aveugle : même avec le clamp `0.05...0.92`
+/// d'it22, le delta RGB réel sur la couleur de fond (la plus visible, elle domine l'écran à la
+/// plupart des zooms) restait de l'ordre de 25-30 sur 765 — imperceptible à l'œil, exactement le
+/// symptôme remonté. Root cause du calcul PRÉCÉDENT (`saturationMultiplier`/`contrastFactor`,
+/// retirés ici) : un multiplicateur de saturation est quasi sans effet sur une couleur déjà
+/// proche du gris (majorité de la surface d'un fond de carte clair), ET un étirement de
+/// contraste autour de 50 % pousse une couleur déjà claire vers 100 % de luminosité, où elle se
+/// fait immédiatement écrêter (teinte/saturation optiquement invisibles à l=100 %) même avec un
+/// clamp à 92 % — 92 % de luminosité reste visuellement "presque blanc" quelle que soit la
+/// saturation en dessous.
+///
+/// Remplacé par un modèle plus simple et plus robuste, à 2 paramètres par flavor :
+/// `saturationBoostFraction` comble une FRACTION de l'espace de saturation RESTANT
+/// (`s' = s + (1-s) × fraction`) — contrairement à un multiplicateur, l'effet reste fort même
+/// partant de zéro (`0 + 1 × 0.45 = 0.45`), ET ne peut jamais dépasser 1 par construction (pas
+/// besoin d'un clamp séparé qui écrêterait silencieusement). `lightnessDelta` est un décalage
+/// PLAT (pas un étirement autour de 50 %) : un fond très clair reste clairement plus sombre que
+/// l'original d'une quantité FIXE, jamais renvoyé vers le plafond 100 % où il deviendrait
+/// invisible. Valeurs choisies par simulation directe sur les couleurs réelles du style
+/// (fond/parc/forêt/herbe/eau/bâti) pour un delta RGB perceptible (40-160 sur 765) sans sur-
+/// saturer les teintes déjà vives en couleur néon.
 enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
     case standard
     case hauteContraste
@@ -38,70 +64,50 @@ enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
         }
     }
 
-    /// Décalage de teinte (degrés, cercle chromatique 0-360) appliqué à CHAQUE couleur du style.
+    /// Décalage de teinte (degrés, cercle chromatique 0-360) appliqué à chaque couleur
+    /// CHROMATIQUE du style (jamais aux gris purs, voir `ColorFlavorPatcher` : une couleur sans
+    /// saturation n'a pas de teinte réelle à décaler).
     var hueShiftDegrees: Double {
         switch self {
         case .standard: return 0
         case .hauteContraste: return 0
-        case .terreux: return 14
+        // Décalage franc vers le chaud (orange/brun) — "Terreux" doit se voir, pas juste se
+        // deviner (retour terrain it22bis).
+        case .terreux: return 22
         }
     }
 
-    /// Multiplicateur de saturation (clampé après application avec `saturationBoost`, jamais
-    /// négatif). Fix "flavor-parameters-imperceptible" (retour terrain, it19-bis :
-    /// "standard et les autres se ressemblent") — diagnostiqué en rejouant le patch sur le VRAI
-    /// style embarqué (111 calques) : le calcul était correct (confirmé, ex. landcover_wood
-    /// 61%→82% de saturation), mais un simple MULTIPLICATEUR n'a quasiment aucun effet sur les
-    /// teintes DÉJÀ peu saturées (fond de carte, zones neutres — la majorité de la surface
-    /// visible à l'écran) : 1.35 × une saturation proche de 0 reste proche de 0. Voir
-    /// `saturationBoost` ci-dessous, qui corrige ce problème par un terme ADDITIF.
-    var saturationMultiplier: Double {
-        switch self {
-        case .standard: return 1.0
-        case .hauteContraste: return 1.5
-        case .terreux: return 0.9
-        }
-    }
-
-    /// Terme ADDITIF de saturation (après multiplication, avant clamp) — garantit un effet
-    /// visible même sur une couleur de départ quasi grise/neutre, où un multiplicateur seul
-    /// n'a aucune prise. C'est ce terme qui rend "Terreux" visible sur un fond de carte clair
-    /// (teinte chaude qui apparaît enfin) et "Contraste élevé" franchement plus vif partout,
-    /// pas seulement sur les couleurs déjà saturées.
-    var saturationBoost: Double {
+    /// Fraction de l'espace de saturation RESTANT comblée : `s' = s + (1 - s) × fraction`.
+    /// Contrairement à un multiplicateur (voir historique ci-dessus), reste efficace même sur
+    /// une couleur de départ proche du gris — c'est exactement le cas dominant sur un fond de
+    /// carte clair. Valeurs choisies par simulation directe sur les couleurs réelles du style
+    /// (fond/parc/forêt/eau/bâti) pour un delta RGB perceptible partout, y compris sur les
+    /// couleurs les moins favorables (bâti, quasi gris) — voir `ColorFlavorPatcherTests.
+    /// testRealDominantStyleColorsProduceAPerceptibleDeltaUnderBothFlavors`.
+    var saturationBoostFraction: Double {
         switch self {
         case .standard: return 0
-        case .hauteContraste: return 0.15
-        case .terreux: return 0.06
+        case .hauteContraste: return 0.45
+        case .terreux: return 0.30
         }
     }
 
-    /// Facteur de CONTRASTE appliqué à la luminosité par un étirement autour de 50 %
-    /// (`l' = 0.5 + (l - 0.5) × facteur`) — > 1 accentue l'écart clair/sombre déjà présent,
-    /// contrairement à un simple décalage additif qui ne ferait que translater toutes les
-    /// valeurs sans les écarter davantage.
-    var contrastFactor: Double {
-        switch self {
-        case .standard: return 1.0
-        case .hauteContraste: return 1.4
-        case .terreux: return 1.0
-        }
-    }
-
-    /// Décalage de luminosité additif (appliqué APRÈS le contraste) — "terreux" légèrement plus
-    /// clair/chaud, esprit carte papier.
+    /// Décalage de luminosité PLAT (jamais un étirement proportionnel autour de 50 %, qui
+    /// poussait les couleurs déjà claires — la majorité d'un fond de carte clair — droit vers le
+    /// plafond où teinte/saturation deviennent invisibles). Négatif pour les deux flavors non
+    /// standard : un peu plus sombre/riche partout, lisible au soleil (Contraste élevé) ou esprit
+    /// carte papier (Terreux), jamais renvoyé vers un blanc pur qui annulerait l'effet.
     var lightnessDelta: Double {
         switch self {
         case .standard: return 0
-        case .hauteContraste: return 0
-        case .terreux: return 0.04
+        case .hauteContraste: return -0.07
+        case .terreux: return -0.05
         }
     }
 
     /// `true` si ce flavor ne change rien (évite tout parcours/ré-encodage JSON inutile pour
     /// "Standard", et sert de garde générique si un futur flavor était ajouté à l'identique).
     var isIdentity: Bool {
-        hueShiftDegrees == 0 && saturationMultiplier == 1 && saturationBoost == 0
-            && contrastFactor == 1 && lightnessDelta == 0
+        hueShiftDegrees == 0 && saturationBoostFraction == 0 && lightnessDelta == 0
     }
 }
