@@ -3,7 +3,9 @@ import Foundation
 enum AppTab: Hashable {
     // Spec "search-as-tab" (it19) : `search` ajouté ENTRE `ride` et `library` — reflète l'ordre
     // demandé dans le tab bar (Ride/Loupe/Biblio/Réglages), voir RootView.swift.
-    case ride, search, library, settings
+    // Spec "roadbook-mode" (it23) : `roadBook` ajouté ENTRE `search` et `library` — nouvel
+    // onglet dédié, totalement découplé de l'état de Ride actif (voir RoadBook/CLAUDE.md).
+    case ride, search, roadBook, library, settings
 }
 
 /// Permet à n'importe quelle vue (ex : "Utiliser pour le Ride" dans le détail d'une trace)

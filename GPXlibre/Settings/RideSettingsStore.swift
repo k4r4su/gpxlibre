@@ -44,6 +44,9 @@ final class RideSettingsStore: ObservableObject {
         static let valhallaEndpointURLString = "settings.valhallaEndpointURLString"
         static let recordingDensityPreset = "settings.recordingDensityPreset"
         static let unsavedRideRetentionLimit = "settings.unsavedRideRetentionLimit"
+        static let roadbookReadingMode = "settings.roadbookReadingMode"
+        static let roadbookMiniMapEnabled = "settings.roadbookMiniMapEnabled"
+        static let roadbookPDFOptions = "settings.roadbookPDFOptionsJSON"
     }
 
     private let defaults: UserDefaults
@@ -154,6 +157,29 @@ final class RideSettingsStore: ObservableObject {
     }
     @Published var roadbookUTurnThresholdDegrees: Double {
         didSet { defaults.set(roadbookUTurnThresholdDegrees, forKey: Keys.roadbookUTurnThresholdDegrees) }
+    }
+
+    // MARK: - Road Book (spec "roadbook-mode", it23) — onglet dédié, DÉCOUPLÉ de l'état de
+    // Ride actif (voir RoadBook/CLAUDE.md). Réutilise les seuils/fenêtre roadbook ci-dessus
+    // (aucun nouveau réglage de DÉTECTION, demande explicite de la fiche) — seuls le mode de
+    // lecture, la mini-carte et les options d'export PDF sont propres à cet onglet.
+
+    @Published var roadbookReadingMode: RoadbookReadingMode {
+        didSet { defaults.set(roadbookReadingMode.rawValue, forKey: Keys.roadbookReadingMode) }
+    }
+    @Published var roadbookMiniMapEnabled: Bool {
+        didSet { defaults.set(roadbookMiniMapEnabled, forKey: Keys.roadbookMiniMapEnabled) }
+    }
+    /// Persisté en JSON (`Codable`, une seule clé) plutôt qu'un champ UserDefaults par option —
+    /// `RoadbookPDFOptions` n'a de sens qu'ensemble (les 7 champs sont toujours lus/écrits
+    /// groupés par `RoadbookExportOptionsView`), contrairement aux réglages roadbook ci-dessus
+    /// qui ont chacun un usage indépendant ailleurs dans le code.
+    @Published var roadbookPDFOptions: RoadbookPDFOptions {
+        didSet {
+            if let data = try? JSONEncoder().encode(roadbookPDFOptions) {
+                defaults.set(data, forKey: Keys.roadbookPDFOptions)
+            }
+        }
     }
 
     // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
@@ -351,5 +377,18 @@ final class RideSettingsStore: ObservableObject {
         let storedRetentionLimit = defaults.integer(forKey: Keys.unsavedRideRetentionLimit)
         unsavedRideRetentionLimit = RideConstants.unsavedRideRetentionLimitOptions.contains(storedRetentionLimit)
             ? storedRetentionLimit : RideConstants.unsavedRideRetentionLimitDefault
+
+        if let rawMode = defaults.string(forKey: Keys.roadbookReadingMode), let mode = RoadbookReadingMode(rawValue: rawMode) {
+            roadbookReadingMode = mode
+        } else {
+            roadbookReadingMode = .gpsAssisted
+        }
+        roadbookMiniMapEnabled = defaults.object(forKey: Keys.roadbookMiniMapEnabled) == nil
+            ? true : defaults.bool(forKey: Keys.roadbookMiniMapEnabled)
+        if let data = defaults.data(forKey: Keys.roadbookPDFOptions), let decoded = try? JSONDecoder().decode(RoadbookPDFOptions.self, from: data) {
+            roadbookPDFOptions = decoded
+        } else {
+            roadbookPDFOptions = RoadbookPDFOptions()
+        }
     }
 }

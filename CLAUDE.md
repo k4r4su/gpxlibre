@@ -223,6 +223,12 @@ GPXlibre/
                    TrackThumbnailView), TrackMapView (simplifié it14 ; reste utilisé par
                    TrackDetailView UNIQUEMENT depuis it17, ne plus l'appeler depuis
                    TrackSettingsView), RootView (TabView)
+  RoadBook/       Onglet Road Book (it23, spec "roadbook-mode") — lecture d'une trace en liste
+                   de directions pures, esprit roadbook papier de rallye, TOTALEMENT DÉCOUPLÉ de
+                   RideSessionManager/l'invariant trace unique it10 (voir RoadBook/CLAUDE.md).
+                   RoadbookExtractor (réutilise RoadbookAnalyzer/TrackProjector, aucune nouvelle
+                   détection), RoadbookPDFExporter (export PDF natif UIGraphicsPDFRenderer,
+                   même source de données que l'écran).
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    SlopeAnalyzer (it19 : détection NATIVE de pente forte le long d'une trace —
                    décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,

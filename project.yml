@@ -44,6 +44,9 @@ targets:
       - path: GPXlibre/Waypoints
       - path: GPXlibre/Recording
       - path: GPXlibre/Nav
+      - path: GPXlibre/RoadBook
+        excludes:
+          - CLAUDE.md
       - path: GPXlibre/Rendering
       - path: GPXlibre/Settings
         excludes:

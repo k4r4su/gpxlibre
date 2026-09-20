@@ -16,6 +16,13 @@ struct RootView: View {
                 .tabItem { Label("Aller à", systemImage: "magnifyingglass") }
                 .tag(AppTab.search)
 
+            // Spec "roadbook-mode" (it23) : nouvel onglet, lecture d'une trace en liste de
+            // directions pures — totalement découplé de l'état de Ride actif, voir
+            // RoadBook/CLAUDE.md.
+            RoadBookTabView()
+                .tabItem { Label("Road Book", systemImage: "list.bullet.rectangle.portrait") }
+                .tag(AppTab.roadBook)
+
             LibraryView()
                 .tabItem { Label("Biblio", systemImage: "map") }
                 .tag(AppTab.library)

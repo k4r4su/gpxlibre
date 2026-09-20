@@ -1,5 +1,49 @@
 # TODO
 
+## Itération 23 (Mode Road Book + export PDF imprimable)
+
+Fiche de développement complète, 3 points — tous livrés.
+
+- **`feat:"roadbook-mode"`** (point 1) : nouvel onglet Road Book (`RoadBookTabView`), TOTALEMENT
+  découplé de l'état de Ride actif (voir RoadBook/CLAUDE.md pour le détail de la garantie
+  d'invariant). `RoadbookExtractor` réutilise `RoadbookAnalyzer.buildRoadbookEvents` (paliers
+  30/45/90/135°, it14) et `TrackProjector.cumulativeDistances` SANS nouvelle logique de
+  détection. Deux modes de lecture (`RoadbookReadingMode`) : Assisté GPS (countdown live via
+  `RoadbookLiveProgress`, fonction pure, GPS local à l'écran — jamais `RideSessionManager`) et
+  Roadbook classique (distances fixes précalculées). Mini-carte optionnelle
+  (`RoadbookMiniMapView`, MapKit léger, même esprit que `CameraPreviewMapView`).
+- **`feat:"roadbook-pdf-export"`** (point 2) : `RoadbookPDFExporter` génère un PDF A4 façon
+  roadbook papier de rallye (colonnes distance partielle/cumulée/cap/note) via
+  `UIGraphicsPDFRenderer` natif, aucun service externe — lit la MÊME liste de manœuvres que
+  l'écran (une seule source de vérité). Panneau d'options avant export
+  (`RoadbookExportOptionsView`) : portrait/paysage, densité, colonnes affichées, unité km/mi
+  (`DistanceUnit`, nouveau — scopé au Road Book, ne touche pas l'affichage des distances
+  ailleurs dans l'app), taille de police, cap en pictogramme (flèche vectorielle teintée
+  orange/rouge, clin d'œil au logo) ou en degrés. Partage via `ShareLink` (même patron que
+  l'export GPX de l'it19). Bug attrapé par les tests AVANT tout usage réel : `columnLayout`
+  laissait un blanc à droite de page quand la colonne "note" était masquée (l'espace récupéré
+  n'était redistribué nulle part) — corrigé, voir RoadBook/CLAUDE.md.
+- **`fix:"splash-version-robustness"`** (point 3) : audit fait, aucun second endroit hardcodé
+  trouvé (seul le splash affichait une version, déjà lue dynamiquement). Factorisé dans
+  `AppVersion.swift` (point d'accès unique, testable) pour qu'un futur écran "À propos" ne
+  puisse pas diverger en recopiant `CFBundleShortVersionString` à la main.
+
+**Checklist manuelle restant à faire par le pilote** (pas de device physique côté IA, voir
+CLAUDE.md racine section "Device de référence") :
+- [ ] Lire un Road Book en conditions réelles sur une trace connue, comparer aux vraies
+      distances/virages (mode Assisté GPS ET mode Classique).
+- [ ] Exporter un PDF, l'ouvrir sur un autre appareil/imprimante, vérifier la lisibilité en A4
+      réel (pas juste à l'écran) — polices petite/moyenne/grande, portrait ET paysage.
+- [ ] Vérifier chaque combinaison d'options de mise en forme à l'œil (pas de colonne coupée, pas
+      de texte qui déborde) — la suite automatique (`RoadbookPDFExporterTests.
+      testGenerateNeverCrashesForAnyOptionCombination`) garantit l'absence de crash, PAS la
+      qualité visuelle réelle du rendu.
+- [ ] Vérifier partout où la version s'affiche dans l'app qu'elle correspond bien à `0.0.22`
+      (ou au numéro courant) après un vrai rebuild propre (pas un cache Xcode périmé).
+- [ ] Tester le Road Book/l'export PDF sur l'iPhone 6s de test secondaire, une fois son
+      deployment target confirmé (voir contrainte connue : iOS 16.0 minimum du projet vs
+      plafond iOS 15 du 6s — non résolu, mentionné pour mémoire).
+
 ## Itération 22 (exclusivité de guidage / icône de reprise dynamique / bouton stop / recherche POI / cohérence des styles)
 
 Fiche de développement complète, 6 points — tous livrés. Dépendance confirmée : les points 1-3
