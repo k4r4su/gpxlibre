@@ -173,7 +173,7 @@ struct RoadBookTabView: View {
                 // Classique garde la table complète ci-dessous (aucune notion de "position
                 // actuelle" à mettre en avant dans ce mode).
                 GeometryReader { geometry in
-                    ZStack(alignment: .bottomTrailing) {
+                    ZStack {
                         RoadbookFocusedView(
                             maneuvers: maneuvers,
                             currentIndex: liveProgress?.index,
@@ -184,12 +184,14 @@ struct RoadBookTabView: View {
                         )
 
                         if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
-                            RoadbookMiniMapView(track: track, currentLocation: coordinate, spanMeters: RoadBookConstants.miniMapSpanMeters)
-                                .frame(width: geometry.size.width * 0.36, height: geometry.size.height * 0.15)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.5), lineWidth: 1.5))
-                                .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
-                                .padding(14)
+                            RoadbookDraggableMiniMap(
+                                track: track,
+                                currentLocation: coordinate,
+                                containerSize: geometry.size,
+                                spanMeters: $settings.roadbookMiniMapSpanMeters,
+                                positionXFraction: $settings.roadbookMiniMapPositionXFraction,
+                                positionYFraction: $settings.roadbookMiniMapPositionYFraction
+                            )
                         }
                     }
                 }

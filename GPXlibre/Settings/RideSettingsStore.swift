@@ -47,6 +47,9 @@ final class RideSettingsStore: ObservableObject {
         static let roadbookReadingMode = "settings.roadbookReadingMode"
         static let roadbookMiniMapEnabled = "settings.roadbookMiniMapEnabled"
         static let roadbookPDFOptions = "settings.roadbookPDFOptionsJSON"
+        static let roadbookMiniMapSpanMeters = "settings.roadbookMiniMapSpanMeters"
+        static let roadbookMiniMapPositionXFraction = "settings.roadbookMiniMapPositionXFraction"
+        static let roadbookMiniMapPositionYFraction = "settings.roadbookMiniMapPositionYFraction"
     }
 
     private let defaults: UserDefaults
@@ -180,6 +183,21 @@ final class RideSettingsStore: ObservableObject {
                 defaults.set(data, forKey: Keys.roadbookPDFOptions)
             }
         }
+    }
+    /// Portée de la mini-carte (spec "roadbook-mode", it23quinquies, retour terrain : "zoomé
+    /// beaucoup plus... que ce paramètre soit changeable") — réglable via +/- directement sur la
+    /// mini-carte, voir `RoadbookMiniMapView`/`RoadBookTabView`.
+    @Published var roadbookMiniMapSpanMeters: Double {
+        didSet { defaults.set(roadbookMiniMapSpanMeters, forKey: Keys.roadbookMiniMapSpanMeters) }
+    }
+    /// Position de la mini-carte flottante, fraction (0...1) de la zone disponible — mise à jour
+    /// en direct pendant le glisser (spec : "une fenêtre qu'on peut déplacer suivant la
+    /// préférence de l'utilisateur"), persistée pour rester où le pilote l'a laissée.
+    @Published var roadbookMiniMapPositionXFraction: Double {
+        didSet { defaults.set(roadbookMiniMapPositionXFraction, forKey: Keys.roadbookMiniMapPositionXFraction) }
+    }
+    @Published var roadbookMiniMapPositionYFraction: Double {
+        didSet { defaults.set(roadbookMiniMapPositionYFraction, forKey: Keys.roadbookMiniMapPositionYFraction) }
     }
 
     // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
@@ -390,5 +408,14 @@ final class RideSettingsStore: ObservableObject {
         } else {
             roadbookPDFOptions = RoadbookPDFOptions()
         }
+
+        let spanRange = RoadBookConstants.miniMapSpanMetersRange
+        let storedSpan = defaults.object(forKey: Keys.roadbookMiniMapSpanMeters) as? Double
+        roadbookMiniMapSpanMeters = storedSpan.map { min(max($0, spanRange.lowerBound), spanRange.upperBound) }
+            ?? RoadBookConstants.miniMapSpanMetersDefault
+        let storedX = defaults.object(forKey: Keys.roadbookMiniMapPositionXFraction) as? Double
+        roadbookMiniMapPositionXFraction = storedX ?? RoadBookConstants.miniMapDefaultPositionXFraction
+        let storedY = defaults.object(forKey: Keys.roadbookMiniMapPositionYFraction) as? Double
+        roadbookMiniMapPositionYFraction = storedY ?? RoadBookConstants.miniMapDefaultPositionYFraction
     }
 }

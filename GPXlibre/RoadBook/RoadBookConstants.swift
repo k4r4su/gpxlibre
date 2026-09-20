@@ -13,11 +13,21 @@ enum RoadBookConstants {
     /// filet de lecture, pas un second moteur de guidage.
     static let liveManeuverReachedRadiusMeters: Double = 40
 
-    /// Portée de la mini-carte en mode Assisté GPS (spec "roadbook-focused-next-turn", it23ter,
-    /// retour terrain : "la map peut être zoomée pour afficher 2 km carré autour du point
-    /// actuel... un aperçu pour voir qu'on est bien sur la trace") — PAS la trace complète,
-    /// juste de quoi confirmer visuellement qu'on est au bon endroit localement.
-    static let miniMapSpanMeters: Double = 2000
+    /// Portée de la mini-carte en mode Assisté GPS — PAS la trace complète, juste de quoi
+    /// confirmer visuellement qu'on est au bon endroit localement (spec "roadbook-focused-next-
+    /// turn", it23ter). Resserrée en it23quinquies (retour terrain : "zoomé beaucoup plus...
+    /// qu'on voit les 400 mètres de chaque côté, peut-être même 300") — 700 m de portée totale
+    /// (~350 m de chaque côté du point central), RÉGLABLE par l'utilisateur (`RideSettingsStore.
+    /// roadbookMiniMapSpanMeters`, cette constante n'est plus que la valeur par défaut).
+    static let miniMapSpanMetersDefault: Double = 700
+    static let miniMapSpanMetersRange: ClosedRange<Double> = 200...1500
+    static let miniMapSpanMetersStep: Double = 100
+
+    /// Position par défaut de la mini-carte flottante (fraction de la zone disponible, 0...1)
+    /// — coin bas-droit, comme avant qu'elle devienne déplaçable (it23quinquies, retour terrain :
+    /// "il faudrait pouvoir la changer à la volée, comme une fenêtre qu'on peut déplacer").
+    static let miniMapDefaultPositionXFraction: Double = 0.82
+    static let miniMapDefaultPositionYFraction: Double = 0.82
 
     // MARK: - Enrichissement par repères OSM (spec "roadbook-mode", it23quater)
 

@@ -18,7 +18,7 @@ import MapKit
 struct RoadbookMiniMapView: UIViewRepresentable {
     let track: GPXTrack
     let currentLocation: CLLocationCoordinate2D?
-    var spanMeters: Double = RoadBookConstants.miniMapSpanMeters
+    var spanMeters: Double = RoadBookConstants.miniMapSpanMetersDefault
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()

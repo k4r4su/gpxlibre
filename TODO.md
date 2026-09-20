@@ -1,5 +1,16 @@
 # TODO
 
+## Itération 23quinquies (mini-carte : zoom réglable + fenêtre déplaçable)
+
+"Zoomé beaucoup plus... 400 mètres de chaque côté, peut-être même 300, ou fait que ce paramètre
+soit changeable. Et cette même map, il faudrait pouvoir la changer à la volée, comme une
+fenêtre qu'on peut déplacer suivant la préférence de l'utilisateur."
+
+- **`feat:"roadbook-minimap-draggable-zoom"`** : `RoadbookDraggableMiniMap` (nouveau) — portée
+  par défaut resserrée à 700 m (contre 2 km avant), réglable par +/- directement sur la carte
+  (200-1500 m par pas de 100, persisté). Position déplaçable par glisser, persistée en fraction
+  d'écran (jamais en points absolus). Voir RoadBook/CLAUDE.md.
+
 ## Itération 23quater (colonnes distance/cap + repères OSM à proximité)
 
 Capture d'un vrai roadbook rallye fournie par le propriétaire : "les deux premières colonnes,

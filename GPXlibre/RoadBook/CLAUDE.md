@@ -4,6 +4,28 @@ Chargé automatiquement quand une session travaille sous `GPXlibre/RoadBook/`. L
 contexte projet (philosophie, règles absolues, conventions) reste dans le CLAUDE.md racine —
 ce fichier ne documente que ce qui est spécifique à ce dossier.
 
+## Mini-carte déplaçable + zoom réglable (spec "roadbook-mode", it23quinquies)
+
+Retour terrain : "zoomé beaucoup plus... qu'on voit les 400 mètres de chaque côté, peut-être
+même 300, ou fait que ce paramètre soit changeable. Et cette même map, il faudrait pouvoir la
+changer à la volée, comme une fenêtre qui s'affiche par dessus et qu'on peut déplacer".
+
+`RoadbookDraggableMiniMap` (nouveau, enveloppe `RoadbookMiniMapView`) :
+- Portée par défaut resserrée à 700 m (`RoadBookConstants.miniMapSpanMetersDefault`, ~350 m de
+  chaque côté du point central) — RÉGLABLE par +/- directement sur la mini-carte (jamais un
+  réglage caché dans Réglages, ajustement immédiat pendant la lecture), persistée
+  (`RideSettingsStore.roadbookMiniMapSpanMeters`, bornée par `miniMapSpanMetersRange`,
+  200...1500 m par pas de 100).
+- Position déplaçable par glisser (`DragGesture`), persistée en FRACTION (0...1) de la zone
+  disponible (`roadbookMiniMapPositionXFraction`/`YFraction`) — JAMAIS en points absolus, pour
+  rester cohérente si l'orientation ou la taille d'écran change entre deux sessions. Pendant le
+  glisser, un `@State dragTranslation` éphémère pilote la position EN DIRECT
+  (`.position(x:y:)`) ; au relâchement, la position finale (clampée pour ne jamais sortir de
+  l'écran) est convertie en fraction et écrite dans les réglages persistés, `dragTranslation`
+  repart à zéro. Un tap sur les boutons +/- (imbriqués dans la même vue) n'active jamais le
+  `DragGesture` par erreur — un `DragGesture` SwiftUI exige un déplacement réel avant de se
+  déclencher, un tap sans mouvement ne l'arme jamais.
+
 ## Cap en degrés + repères OSM à proximité (spec "roadbook-mode", it23quater)
 
 Retour terrain avec capture d'un vrai roadbook rallye : "les deux premières colonnes, distance
