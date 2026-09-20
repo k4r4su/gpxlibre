@@ -211,22 +211,20 @@ enum RoadbookPDFExporter {
     }
 
     /// Flèche vectorielle simple (jamais une image/SF Symbol rasterisée) : pointe "tout droit"
-    /// au repos, tournée selon le signe/l'amplitude du virage — plus l'angle affiché est grand,
-    /// plus la flèche s'incline, un demi-tour affiche une flèche retournée. Teinte d'accent
-    /// orange/rouge (voir `RoadBookConstants.pdfAccentColorRGB`, clin d'œil à l'identité
-    /// visuelle du logo) : une couleur PLEINE, pas un dégradé (resterait lisible imprimé en
-    /// niveaux de gris, demande explicite de la fiche).
+    /// au repos, tournée d'un angle représentatif STANDARDISÉ par palier — PAS proportionnelle
+    /// à l'angle géométrique brut mesuré sur la trace. Fix "turn-icon-backward-looking"
+    /// (it23bis) : une rotation proportionnelle continue (jusqu'à 170° pour un virage "fort")
+    /// finissait par pointer quasiment vers le BAS, illisible comme "tourne fort" plutôt que
+    /// "fait demi-tour" — même bug, même cause profonde que `RoadbookTier.rotationDegrees`
+    /// (voir son commentaire), réutilisé ici tel quel pour que l'écran ET le PDF affichent
+    /// exactement la même convention visuelle. Teinte d'accent orange/rouge (voir
+    /// `RoadBookConstants.pdfAccentColorRGB`, clin d'œil à l'identité visuelle du logo) : une
+    /// couleur PLEINE, pas un dégradé (resterait lisible imprimé en niveaux de gris, demande
+    /// explicite de la fiche).
     private static func drawPictogram(for checkpoint: Checkpoint, in rect: CGRect) {
         let size: CGFloat = min(rect.width, rect.height) * 0.6
         let center = CGPoint(x: rect.midX, y: rect.midY)
-
-        let rotationDegrees: CGFloat
-        switch checkpoint.direction {
-        case .uTurn: rotationDegrees = 180
-        case .right: rotationDegrees = CGFloat(min(checkpoint.turnAngleDegrees, 170))
-        case .left: rotationDegrees = -CGFloat(min(checkpoint.turnAngleDegrees, 170))
-        case .straight: rotationDegrees = 0
-        }
+        let rotationDegrees = CGFloat(checkpoint.tier.rotationDegrees(direction: checkpoint.direction) ?? 0)
 
         let arrow = UIBezierPath()
         let half = size / 2

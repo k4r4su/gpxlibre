@@ -25,6 +25,7 @@ struct LateralCapBannerView: View {
             Image(systemName: tier.systemImageName(direction: direction))
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(.white)
+                .rotationEffect(.degrees(tier.rotationDegrees(direction: direction) ?? 0))
             Text(Self.steppedDistanceText(distanceMeters))
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)

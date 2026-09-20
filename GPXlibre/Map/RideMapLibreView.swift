@@ -953,7 +953,11 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
                 // Icône par PALIER (spec "roadbook-angle-buckets-replay", it14) — cohérente
                 // avec la bannière latérale, voir LateralCapBannerView.
                 let checkpoint = checkpointAnnotation.checkpoint
-                return annotationView(on: mapView, identifier: "checkpoint", annotation: checkpointAnnotation, tint: .systemRed, systemImageName: checkpoint.tier.systemImageName(direction: checkpoint.direction), size: 34)
+                return annotationView(
+                    on: mapView, identifier: "checkpoint", annotation: checkpointAnnotation, tint: .systemRed,
+                    systemImageName: checkpoint.tier.systemImageName(direction: checkpoint.direction), size: 34,
+                    rotationDegrees: checkpoint.tier.rotationDegrees(direction: checkpoint.direction) ?? 0
+                )
             }
             if let waypointAnnotation = annotation as? RollingWaypointMLNAnnotation {
                 return annotationView(on: mapView, identifier: "waypoint", annotation: waypointAnnotation, tint: .systemBlue, systemImageName: waypointAnnotation.waypoint.category.systemImageName, size: 28)
@@ -972,7 +976,8 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             annotation: MLNAnnotation,
             tint: UIColor,
             systemImageName: String,
-            size: CGFloat
+            size: CGFloat,
+            rotationDegrees: Double = 0
         ) -> MLNAnnotationView {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MLNAnnotationView(reuseIdentifier: identifier)
             view.frame = CGRect(x: 0, y: 0, width: size, height: size)
@@ -987,6 +992,13 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             imageView.image = UIImage(systemName: systemImageName)
             imageView.contentMode = .scaleAspectFit
             imageView.tintColor = .white
+            // Fix "turn-icon-backward-looking" (it23bis) : les pins de virage utilisent
+            // désormais un seul glyphe de base tourné par palier (voir RoadbookTier), jamais un
+            // nom de symbole différent par palier — `rotationDegrees` reste 0 pour tous les
+            // autres types d'annotation (waypoint, blocage partagé), jamais affecté.
+            if rotationDegrees != 0 {
+                imageView.transform = CGAffineTransform(rotationAngle: rotationDegrees * .pi / 180)
+            }
             view.addSubview(imageView)
 
             return view

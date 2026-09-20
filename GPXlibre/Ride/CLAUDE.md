@@ -373,3 +373,15 @@ d'init : son init est contractuel (protocole `MapProvider`, signature fixe, voir
 calcule la valeur AFFICHÉE (force cap-en-haut si `debugReplayForcesHeadingUp`) sans toucher à
 l'état persistant.
 
+## Pictogrammes de virage cohérents (fix "turn-icon-backward-looking", it23bis)
+
+`RoadbookTier.swift` (ce dossier) a été réécrit : un SEUL glyphe de base ("arrow.up") tourné
+d'un angle standardisé par palier, remplace les 4 noms de SF Symbol distincts d'avant (dont
+`.hard` pointait vers le BAS — se lisait comme "demi-tour" plutôt que "virage fort", bug
+remonté sur le Road Book mais qui affectait aussi `LateralCapBannerView` et les pins carte
+`RideMapLibreView`, tous les trois consommateurs de `RoadbookTier.systemImageName`). Détail
+complet, root cause et les 3 call sites mis à jour : voir `GPXlibre/RoadBook/CLAUDE.md` section
+"Pictogrammes". Si un futur palier est ajouté à `RoadbookTier`, lui donner une rotation dans
+`rotationDegrees(direction:)` plutôt qu'un nouveau nom de glyphe — c'est cette règle qui manquait
+et a permis au bug d'origine.
+

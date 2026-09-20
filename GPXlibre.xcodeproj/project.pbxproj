@@ -131,6 +131,7 @@
 		A5C8848C2C31EE8C476F7D0C /* SharedBlockageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B6DF158578C2F052AB468D /* SharedBlockageStore.swift */; };
 		A69615C3B7888222BD02DDA9 /* GoToStatusPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA367A3EE73A3BBE788A6EF5 /* GoToStatusPillView.swift */; };
 		A6A7BA1FB4E8A4D41C6F4769 /* PrecacheConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6F6ACEFE13A55FAA120D3D /* PrecacheConfirmationView.swift */; };
+		A71F00B0E5D25AF4101CB414 /* RoadbookTierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8989BB881B867A5A3E634C09 /* RoadbookTierTests.swift */; };
 		A72E159D4959780D1CB213BD /* RecordingConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A16BA2FC693F05256D5815 /* RecordingConstants.swift */; };
 		A7541430D60DA3C2CD3D1825 /* GoToGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B543FE9512085C6439D729 /* GoToGuidanceTests.swift */; };
 		A90EF23996C895F91A5AA82C /* NavGoToMutualExclusionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7C7F5A57FCF97BDA2DDDC5 /* NavGoToMutualExclusionTests.swift */; };
@@ -329,6 +330,7 @@
 		87FBC1BE9BC0141BA82603A6 /* RoadbookPDFExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookPDFExporterTests.swift; sourceTree = "<group>"; };
 		880511AA5A6E5C4609F0B188 /* TileCacheStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCacheStore.swift; sourceTree = "<group>"; };
 		88B543FE9512085C6439D729 /* GoToGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToGuidanceTests.swift; sourceTree = "<group>"; };
+		8989BB881B867A5A3E634C09 /* RoadbookTierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookTierTests.swift; sourceTree = "<group>"; };
 		8AFCDF4F0ED312F319A0A43B /* RoutingProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutingProvider.swift; sourceTree = "<group>"; };
 		8B0EDCD3378A969BDDEF1D3D /* TrackProjectorNearestPointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackProjectorNearestPointTests.swift; sourceTree = "<group>"; };
 		8B25E55ECA586D2964E86E1F /* RideMapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideMapLibreView.swift; sourceTree = "<group>"; };
@@ -701,6 +703,7 @@
 				A48F5E38B3BE8ED9166B1F4D /* RoadbookMapMatchCacheTests.swift */,
 				79F86C5D4DDC0295B8CDD54D /* RoadbookMapMatchingTests.swift */,
 				87FBC1BE9BC0141BA82603A6 /* RoadbookPDFExporterTests.swift */,
+				8989BB881B867A5A3E634C09 /* RoadbookTierTests.swift */,
 				9AE0FAA516B6A2AB685A45DA /* RoutingProviderTests.swift */,
 				10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */,
 				BA667B77E9866376A0DD365E /* SharedBlockageLiveServerTests.swift */,
@@ -936,6 +939,7 @@
 				A5C848B0A9410637FC44638E /* RoadbookMapMatchCacheTests.swift in Sources */,
 				C640257713BAF432DDEF219C /* RoadbookMapMatchingTests.swift in Sources */,
 				32B6741324E0096E14F7A6ED /* RoadbookPDFExporterTests.swift in Sources */,
+				A71F00B0E5D25AF4101CB414 /* RoadbookTierTests.swift in Sources */,
 				F1E9E5C1DC3170AA05A4A7DE /* RoutingProviderTests.swift in Sources */,
 				99A66F44AC26ECB625498587 /* SharedBlockageCodingTests.swift in Sources */,
 				E2488E86DC385FED1FF43AE6 /* SharedBlockageLiveServerTests.swift in Sources */,
@@ -1135,7 +1139,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.22;
+				MARKETING_VERSION = 0.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = com.olivier.gpxlibre;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -1233,7 +1237,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.22;
+				MARKETING_VERSION = 0.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = com.olivier.gpxlibre;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

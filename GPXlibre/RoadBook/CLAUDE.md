@@ -41,6 +41,40 @@ future si le besoin se confirme.
   (`@StateObject`, même patron que `FavoriteAddressesView`/`RegionDownloadView` — "instance
   locale, pas d'injection globale") — jamais le GPS de `RideSessionManager`.
 
+## UI façon roadbook papier + pictogrammes cohérents (retour terrain it23bis)
+
+Deux corrections après le premier retour terrain sur it23 : "niveau UI c'est pas ça du tout...
+regarde ce qui se fait en affichage roadbook, et copie la même chose" (référence choisie par le
+propriétaire : "roadbook papier de rallye classique") + "tu utilises des flèches bizarres,
+parfois on dirait qu'il faut faire un retour arrière".
+
+**UI** : `RoadbookTableView`/`RoadbookTableRow` remplacent l'ancien `List` SwiftUI générique par
+une vraie table dense en colonnes (N°/Cap/Partiel/Cumulé, traits fins verticaux ET horizontaux,
+chiffres `monospacedDigit`) — mêmes colonnes/terminologie que l'export PDF, jamais un `List`
+standard (ses insets/fonds par défaut cassent l'effet "tableau imprimé"). Largeurs de colonnes
+PROPORTIONNELLES à la largeur d'écran disponible (`GeometryReader`, pas des largeurs fixes) —
+un vrai roadbook papier est une bande étroite, mais sur un écran de téléphone une bande étroite
+avec un grand vide à droite aurait l'air cassé, pas "fidèle au papier".
+
+**Pictogrammes (bug réel, capture d'écran à l'appui)** : `RoadbookTier` choisissait un nom de SF
+Symbol DIFFÉRENT par palier (`.hard` → `arrow.turn.down.left/right`) sans vérifier que tous les
+paliers partagent la même convention visuelle — `.light`/`.marked` pointent globalement vers le
+HAUT (lu comme "tout droit"), `.hard` pointait vers le BAS (lu comme "fais demi-tour"),
+incohérence jamais remarquée avant que le Road Book ne l'affiche en grand ("Virage fort" avec
+une flèche qui semblait indiquer un retour en arrière). Corrigé À LA SOURCE
+(`RoadbookTier.baseSystemImageName`/`rotationDegrees(direction:)`) : UN SEUL glyphe de base
+("arrow.up"), tourné d'un angle STANDARDISÉ par palier (30°/65°/105°/180°, jamais l'angle
+géométrique brut mesuré sur la trace — trop bruité pour un pictogramme stable, et une rotation
+proportionnelle continue aurait fini par pointer vers le bas pour les virages francs, exactement
+le bug d'origine). Répercuté sur les TROIS call sites qui utilisaient déjà `systemImageName` :
+`LateralCapBannerView` (bannière Ride, `.rotationEffect`), pins carte
+(`RideMapLibreView.annotationView`, nouveau paramètre `rotationDegrees:` →
+`CGAffineTransform`), et `RoadbookPDFExporter.drawPictogram` (réécrit pour réutiliser
+`RoadbookTier.rotationDegrees` au lieu de sa propre rotation continue — écran et PDF partagent
+désormais EXACTEMENT la même convention visuelle). `.lightDirectionChange` (panneau de
+signalisation map matching) est le SEUL cas non concerné — il n'a jamais été une flèche tournée,
+voir son commentaire dédié.
+
 ## Export PDF (spec "roadbook-mode", it23, point 2)
 
 `RoadbookPDFExporter.generate(trackName:maneuvers:options:)` — génération CÔTÉ APP
