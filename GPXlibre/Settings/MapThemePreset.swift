@@ -8,11 +8,12 @@ import Foundation
 /// (voir `MapColorFlavor`) appliquées au MÊME style vectoriel — contrairement à l'ancien système
 /// où Standard/Clair étaient déjà, en pratique, rigoureusement identiques (aucune couche de code
 /// ne les distinguait), celles-ci produisent un rendu visuellement distinct.
+///
+/// Un 5e cas, `satellite` (Sentinel-2 cloudless via EOX, spec "satellite-sentinel2", it22), a
+/// existé brièvement puis a été RETIRÉ (chore "remove-satellite", it22bis, retour terrain :
+/// "vraiment pixelisé et inutilisable") — voir `TileSource.swift` pour l'historique complet.
 enum MapThemePreset: String, CaseIterable, Identifiable, Codable {
     case standard, hauteContraste, terreux, relief
-    /// Spec "satellite-sentinel2" (it22) — raster Sentinel-2 cloudless (EOX), voir
-    /// `TileSource.satellite` pour le détail de la source/licence.
-    case satellite
 
     var id: String { rawValue }
 
@@ -22,18 +23,17 @@ enum MapThemePreset: String, CaseIterable, Identifiable, Codable {
         case .hauteContraste: return "Contraste élevé"
         case .terreux: return "Terreux"
         case .relief: return "Relief"
-        case .satellite: return "Satellite"
         }
     }
 
-    /// `nil` pour Relief et Satellite (rasters, pas concernés par les palettes de couleur du
-    /// style vectoriel) — voir `MapSourceResolver`/`MapEngineConstants.buildVectorStyleJSON`.
+    /// `nil` pour Relief (raster OpenTopoMap, pas concerné par les palettes de couleur du style
+    /// vectoriel) — voir `MapSourceResolver`/`MapEngineConstants.buildVectorStyleJSON`.
     var colorFlavor: MapColorFlavor? {
         switch self {
         case .standard: return .standard
         case .hauteContraste: return .hauteContraste
         case .terreux: return .terreux
-        case .relief, .satellite: return nil
+        case .relief: return nil
         }
     }
 }

@@ -396,38 +396,18 @@ propriétaire, hors périmètre de cette itération).
   une liste de réglages aurait été un coût de rendu disproportionné pour un simple choix de
   palette. Remplace le `Picker` texte de Réglages > Carte > Thème, mêmes 4 valeurs
   (`MapThemePreset`), aucun nouveau style ajouté ce tour-ci (voir ci-dessous).
-- **Satellite : IMPLÉMENTÉ (spec "satellite-sentinel2", it22)** — remplace le backlog documenté
-  en it18-bis (Esri/Google/Bing World Imagery restent incompatibles avec un cache PMTiles
-  auto-hébergé, CGU inchangées). Choix explicite du propriétaire entre les deux pistes déjà
-  identifiées : Sentinel-2 cloudless (EOX, gratuit) plutôt qu'une clé Maxar/Mapbox Satellite
-  payante (aurait nécessité que le propriétaire crée lui-même un compte/une clé — non
-  automatisable). Nouveau `TileSource.satellite` (`GPXlibre/Offline/TileSource.swift`) : gabarit
-  d'URL `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg`
-  (ordre de jetons z/y/x, PAS z/x/y — vérifié directement dans la `WMTSCapabilities.xml`
-  officielle du service, jamais deviné/recopié d'un résumé tiers), plafonné au zoom 16 (au-delà,
-  suréchantillonnage pur de la résolution native ~10 m/pixel, pas la peine de mettre en cache).
-  Licence **CC BY-NC-SA 4.0** (vérifiée dans la même capabilities XML — un résumé web trouvé en
-  amont indiquait à tort une simple CC-BY 4.0 pour une vintage antérieure ; la clause
-  NonCommercial est sans incidence pour GPXlibre, gratuit et sans abonnement par construction).
-  Contrepartie assumée et présentée au propriétaire avant implémentation : résolution nettement
-  inférieure à un satellite commercial (mosaïque annuelle, ~10 m/pixel, pas d'imagerie récente)
-  — utile pour se repérer, pas pour distinguer un sentier étroit. Point de vigilance EOX
-  documenté (pas un blocage) : la "Fair Use Notice" du service réserve son niveau gratuit à un
-  usage raisonnable, pas à une app largement diffusée avec un vrai trafic de production — cohérent
-  avec l'échelle actuelle (perso/hobby) de GPXlibre, à revisiter si l'audience grandit
-  significativement. Nouveau thème `MapThemePreset.satellite` (raster, `colorFlavor: nil`, même
-  traitement que Relief dans `MapSourceResolver` et pour la limitation "labels ne pivotent pas
-  en cap-en-haut", `SettingsView`), nouvelle vignette dans `MapThemePickerView`.
-  **Fix "satellite-black-map" (it22bis, retour terrain immédiat : "la carte sentinel affiche une
-  carte complètement noire")** : `TileCacheURLProtocol.parseTile` supposait un ordre de chemin
-  FIXE `.../{z}/{x}/{y}.png` (position + extension ".png" codées en dur) — valable pour OSM/
-  OpenTopoMap, mais silencieusement FAUX pour EOX (ordre z/y/x, extension ".jpg") :
-  `Int("16.jpg")` échoue, donc CHAQUE tuile satellite était rejetée par l'interception disque
-  AVANT même d'atteindre le réseau, d'où l'écran totalement noir. Corrigé par un parsing par
-  regex dérivé DIRECTEMENT du gabarit d'URL de chaque source (jamais une position/extension
-  supposée) — voir `GPXlibre/Offline/CLAUDE.md`. `TileSource.tileFileExtension` (nouveau) fait
-  aussi que le cache disque nomme désormais les fichiers JPEG `.jpg` (au lieu de `.png` trompeur,
-  cosmétique mais corrigé au passage).
+- **Satellite : IMPLÉMENTÉ puis RETIRÉ (spec "satellite-sentinel2" it22, chore
+  "remove-satellite" it22bis)** — Sentinel-2 cloudless (EOX, gratuit) avait été choisi
+  explicitement par le propriétaire face à l'alternative payante (Maxar/Mapbox Satellite,
+  nécessite un compte que l'app ne peut pas provisionner). Retiré dès le retour terrain suivant
+  la livraison : "vraiment pixelisé et inutilisable" — la contrepartie de résolution (~10 m/pixel
+  natif, mosaïque annuelle), déjà documentée comme assumée AVANT l'implémentation, s'est avérée
+  rédhibitoire en usage réel, bien plus grossière qu'un satellite commercial. `TileSource.
+  satellite`/`MapThemePreset.satellite` et tout le code associé (vignette, footer raster, ancrage
+  hillshade) ont été intégralement supprimés — voir `GPXlibre/Offline/CLAUDE.md` pour
+  l'historique complet. Ne pas réintroduire cette même source sans un changement de fournisseur
+  (résolution) en amont ; si le besoin redevient réel, repartir directement de la piste Maxar/
+  Mapbox payante plutôt que retenter une source gratuite basse résolution déjà rejetée à l'usage.
 - **"Rando" (nouveau style vectoriel outdoor)** : proposé au propriétaire (réutilise les MÊMES
   tuiles OpenMapTiles déjà hébergées/téléchargées, donc zéro risque hors-ligne — juste un
   nouvel habillage JSON, chemins/pistes plus visibles, teintes terrain), mais PAS implémenté —
