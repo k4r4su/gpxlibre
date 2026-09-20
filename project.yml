@@ -62,6 +62,17 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: GPXlibre
+        # Fix "splash-version-still-1.0" (it23bis, retour terrain : "la version affichée sur le
+        # splash c'est toujours 1.0") — root cause réelle : XcodeGen insère ses PROPRES valeurs
+        # par défaut ("1.0"/"1", en dur) pour CFBundleShortVersionString/CFBundleVersion quand
+        # ces clés sont ABSENTES de `info.properties`, quelle que soit la valeur de
+        # MARKETING_VERSION/CURRENT_PROJECT_VERSION dans `settings.base` ci-dessous — ces deux
+        # réglages n'étaient donc JAMAIS lus, le "fix" de la session précédente (passer
+        # MARKETING_VERSION à "0.0.22") n'avait aucun effet réel sur le binaire généré. Corrigé
+        # en référençant EXPLICITEMENT les variables de build ici — c'est cette explicitation,
+        # pas la valeur de MARKETING_VERSION elle-même, qui manquait.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -98,7 +109,7 @@ targets:
         # "0.0.<numéro d'itération>" (0.0.21 = itération 21, 0.0.22 = itération 22, etc.) —
         # affichée sur l'écran de démarrage (SplashScreenView), lue depuis
         # CFBundleShortVersionString, jamais recopiée en dur côté Swift.
-        MARKETING_VERSION: "0.0.22"
+        MARKETING_VERSION: "0.0.23"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: V9Q4V3W2RZ
