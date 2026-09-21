@@ -1,10 +1,20 @@
 import SwiftUI
 
-/// Vue "focus" du mode Assisté GPS (spec "roadbook-focused-next-turn", it23ter, retour terrain :
-/// "il faudrait clairement afficher le prochain virage qui prenne au moins la moitié de l'écran
-/// pour être visible, et en dessous les 2 suivants en un peu plus petit"). Lit EXACTEMENT la
-/// même liste `[RoadbookManeuver]`/le même calcul `RoadbookLiveProgress` que le mode Classique —
-/// seule la présentation change, jamais une deuxième source de données (voir RoadBook/CLAUDE.md).
+/// Vue "focus" du mode Assisté GPS (spec "roadbook-focused-next-turn", it23ter ; refonte
+/// UI/UX "roadbook-ui-redesign", it25). Lit EXACTEMENT la même liste `[RoadbookManeuver]`/le
+/// même calcul `RoadbookLiveProgress` que le mode Classique — seule la présentation change,
+/// jamais une deuxième source de données (voir RoadBook/CLAUDE.md).
+///
+/// Layout PORTRAIT (it23ter, "au moins la moitié de l'écran... et en dessous les suivants") :
+/// carte hero fixe en haut (`RoadBookConstants.focusedHeroHeightFraction`), liste SCROLLABLE de
+/// TOUTES les manœuvres restantes en dessous (it25, point 1 — retour terrain : "seuls 2 éléments
+/// s'affichent avant d'être coupés par la tab bar", plus de limite à `.prefix(2)`).
+///
+/// Layout PAYSAGE (it25, point 2 — retour terrain détaillé : mini-carte en bande illisible,
+/// texte qui chevauche la tab bar) : hero à hauteur FIXE et COMPACTE
+/// (`focusedHeroLandscapeHeight`, pas la moitié de l'écran — un écran deux fois moins haut ne
+/// laisserait sinon presque rien à la liste), disposition HORIZONTALE dédiée (pictogramme à
+/// gauche, distance à droite) plutôt que le portrait simplement compressé.
 struct RoadbookFocusedView: View {
     let maneuvers: [RoadbookManeuver]
     let currentIndex: Int?
@@ -18,59 +28,79 @@ struct RoadbookFocusedView: View {
     /// clé absente = pas encore résolu, valeur `nil` = résolu sans résultat.
     let landmarks: [UUID: RoadbookLandmarkInfo?]
 
-    /// Les 2 manœuvres qui suivent celle actuellement mise en avant — distance recalculée
-    /// DEPUIS LA POSITION ACTUELLE (pas depuis la manœuvre courante), pour rester une vraie
-    /// distance "dans combien" plutôt qu'un simple report de `partialDistanceMeters`.
+    /// `.compact` = paysage sur iPhone (TARGETED_DEVICE_FAMILY "1", pas d'iPad à gérer) — signal
+    /// natif SwiftUI, se met à jour automatiquement à la rotation, jamais besoin d'observer
+    /// `UIDevice.orientation` à la main.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var isLandscape: Bool { verticalSizeClass == .compact }
+
+    /// TOUTES les manœuvres restantes (it25, point 1 — plus de `.prefix(2)`) — distance
+    /// recalculée DEPUIS LA POSITION ACTUELLE (pas depuis la manœuvre courante), pour rester une
+    /// vraie distance "dans combien" plutôt qu'un simple report de `partialDistanceMeters`.
     private var upcoming: [(maneuver: RoadbookManeuver, distanceFromNowMeters: Double)] {
         guard let currentIndex, let distanceRemainingMeters,
               maneuvers.indices.contains(currentIndex)
         else { return [] }
         let currentCumulative = maneuvers[currentIndex].cumulativeDistanceMeters
-        return maneuvers[(currentIndex + 1)...].prefix(2).map { maneuver in
+        return maneuvers[(currentIndex + 1)...].map { maneuver in
             (maneuver, maneuver.cumulativeDistanceMeters - currentCumulative + distanceRemainingMeters)
         }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                if let currentIndex, let distanceRemainingMeters, maneuvers.indices.contains(currentIndex) {
-                    let current = maneuvers[currentIndex]
-                    RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
-                } else if !hasLocationFix {
-                    RoadbookFocusStatusView(systemImage: "location.slash", message: "En attente d'une position GPS…")
-                } else {
-                    RoadbookFocusStatusView(systemImage: "checkered.flag", message: "Toutes les manœuvres de cette trace ont été passées.")
-                }
-            }
-            // "au moins la moitié de l'écran" : la carte occupe TOUT l'espace restant une fois
-            // les 2 lignes suivantes (taille intrinsèque) posées — largement plus de la moitié
-            // en pratique dès qu'il y a moins de 3 manœuvres à venir.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                heroContent
+                    .frame(maxWidth: .infinity)
+                    .frame(height: heroHeight(availableHeight: geometry.size.height))
 
-            if !upcoming.isEmpty {
-                Divider()
-                VStack(spacing: 0) {
-                    ForEach(Array(upcoming.enumerated()), id: \.element.maneuver.id) { offset, entry in
-                        RoadbookUpcomingRow(
-                            maneuver: entry.maneuver,
-                            distanceFromNowMeters: entry.distanceFromNowMeters,
-                            unit: unit,
-                            rank: offset + 2,
-                            landmark: landmarks[entry.maneuver.id] ?? nil
-                        )
-                        if offset < upcoming.count - 1 {
-                            Divider().padding(.leading, 16)
+                if !upcoming.isEmpty {
+                    Divider()
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(upcoming.enumerated()), id: \.element.maneuver.id) { offset, entry in
+                                RoadbookUpcomingRow(
+                                    maneuver: entry.maneuver,
+                                    distanceFromNowMeters: entry.distanceFromNowMeters,
+                                    unit: unit,
+                                    rank: offset + 2,
+                                    landmark: landmarks[entry.maneuver.id] ?? nil
+                                )
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    @ViewBuilder
+    private var heroContent: some View {
+        if let currentIndex, let distanceRemainingMeters, maneuvers.indices.contains(currentIndex) {
+            let current = maneuvers[currentIndex]
+            if isLandscape {
+                RoadbookBigManeuverCardLandscape(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+            } else {
+                RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+            }
+        } else if !hasLocationFix {
+            RoadbookFocusStatusView(systemImage: "location.slash", message: "En attente d'une position GPS…")
+        } else {
+            RoadbookFocusStatusView(systemImage: "checkered.flag", message: "Toutes les manœuvres de cette trace ont été passées.")
+        }
+    }
+
+    private func heroHeight(availableHeight: CGFloat) -> CGFloat {
+        if isLandscape {
+            return min(CGFloat(RoadBookConstants.focusedHeroLandscapeHeight), availableHeight)
+        }
+        return max(availableHeight * RoadBookConstants.focusedHeroHeightFraction, RoadBookConstants.focusedHeroMinHeight)
+    }
 }
 
-/// Carte plein écran de la manœuvre EN COURS — pictogramme et distance très larges, lisibles
-/// d'un coup d'œil bref (esprit "au moins la moitié de l'écran", demande explicite).
+/// Carte plein écran de la manœuvre EN COURS, layout PORTRAIT — pictogramme et distance très
+/// larges, lisibles d'un coup d'œil bref (esprit "au moins la moitié de l'écran").
 private struct RoadbookBigManeuverCard: View {
     let maneuver: RoadbookManeuver
     let distanceRemainingMeters: Double
@@ -109,6 +139,56 @@ private struct RoadbookBigManeuverCard: View {
             }
         }
         .padding(.horizontal, 24)
+    }
+}
+
+/// Équivalent PAYSAGE (spec "roadbook-ui-redesign", it25, point 2, demande explicite) :
+/// pictogramme à GAUCHE, distance à DROITE — jamais le portrait simplement compressé (root cause
+/// du bug terrain : les mêmes tailles de police qu'en portrait, sur un écran deux fois moins
+/// haut, débordaient jusqu'à chevaucher la tab bar). Polices réduites pour tenir dans
+/// `RoadBookConstants.focusedHeroLandscapeHeight`, jamais coupées.
+private struct RoadbookBigManeuverCardLandscape: View {
+    let maneuver: RoadbookManeuver
+    let distanceRemainingMeters: Double
+    let unit: DistanceUnit
+    let landmark: RoadbookLandmarkInfo?
+
+    var body: some View {
+        HStack(spacing: 20) {
+            VStack(spacing: 4) {
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 70)
+                    .foregroundStyle(Color.accentColor)
+                if let landmark {
+                    Text(landmark.category.emoji)
+                        .font(.system(size: 32))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(maneuver.checkpoint.tier.label)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if let landmark {
+                    Text(landmark.label)
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
+                Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            Text(unit.displayString(fromMeters: distanceRemainingMeters))
+                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 20)
     }
 }
 

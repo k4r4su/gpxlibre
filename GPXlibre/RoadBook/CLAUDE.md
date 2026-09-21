@@ -316,3 +316,76 @@ Non vérifié en conditions réelles (pas de device physique dans cet environnem
 des 3 pictogrammes dessinés, pertinence réelle des nouveaux POI sur un vrai trajet, indicateur
 de service de routage en conditions de coupure réseau réelle — logique couverte par les tests
 unitaires, à confirmer par le pilote (voir checklist manuelle du commit).
+
+## Refonte UI/UX (spec "roadbook-ui-redesign", it25)
+
+Retour terrain avec captures à l'appui : aucun pictogramme visible, liste illisible (texte petit
+uniforme), mode paysage cassé (mini-carte en bande illisible, texte "Legal"/distance/palier qui
+chevauchent la tab bar). Quatre points, tous scopés à CET écran (jamais la carte Ride/le reste
+de l'app).
+
+**Point 0 — Palette jour/nuit** (`RoadbookPalette.swift`) : `RoadbookPalette` (`.paper`/`.night`,
+RÉSOLU) DISTINCT de `RoadbookPaletteSetting` (`.automatic`/`.paper`/`.night`, réglage UTILISATEUR,
+Réglages > Apparence > "Palette Road Book", persisté `RideSettingsStore.roadbookPaletteSetting`).
+`RoadbookPaletteResolver.resolve(override:now:coordinate:calendar:)` — un override explicite
+gagne toujours, sinon `SolarTimeCalculator.sunriseSunset(for:coordinate:)` (formule d'équation du
+lever de soleil, ±10-15 min, ÉQUATION DU TEMPS IGNORÉE — largement suffisant pour une bascule de
+palette visuelle, jamais un usage scientifique) décide selon la position GPS actuelle ; sans
+position (permission refusée, pas de fix, ou cas polaire) repli honnête sur une heuristique
+horaire simple (`RoadBookConstants.paletteFallbackDayStartHour/EndHour`, 7h-20h). `RoadBookTabView`
+recalcule `resolvedPalette` à l'apparition, à chaque changement de position/réglage, ET toutes les
+`paletteReevaluationIntervalSeconds` (5 min, `Timer.publish`) — sans ce filet, un Road Book ouvert
+à cheval sur le coucher du soleil resterait figé sur la palette de l'ouverture. Appliqué à la
+racine SEULEMENT (`NavigationStack` de `RoadBookTabView`) via `.environment(\.colorScheme,...)`
+(pilote `.primary`/`.secondary`/les contrôles natifs) + `.environment(\.roadbookPaletteColors,...)`
+(nouvel `EnvironmentKey`, teintes crème/surface/filet PROPRES — un `Color(.systemBackground)` en
+mode clair standard est blanc pur, pas crème) + `.background(...ignoresSafeArea())` (jamais
+`.ignoresSafeArea()` sur le contenu lui-même, qui casserait le respect de la tab bar).
+
+**Point 1 — Liste scrollable complète (mode Assisté GPS)** : `RoadbookFocusedView.upcoming` ne
+tronque plus à `.prefix(2)` — TOUTES les manœuvres restantes, dans un `ScrollView`/`LazyVStack`
+sous la carte hero (qui garde sa hauteur fixe ~50% de l'écran en portrait, `focusedHeroHeightFraction`).
+
+**Point 2 — Layout paysage dédié** : `@Environment(\.verticalSizeClass)` (`.compact` = paysage
+sur iPhone, seul device family ciblé) pilote DEUX bascules indépendantes :
+- Hero : `RoadbookBigManeuverCardLandscape` (HStack, pictogramme à gauche/distance à droite,
+  polices réduites) remplace le portrait simplement compressé — hauteur FIXE et compacte
+  (`focusedHeroLandscapeHeight`, PAS une fraction de l'écran comme en portrait : sur un écran
+  deux fois moins haut, la même fraction n'aurait laissé presque rien à la liste). Root cause du
+  bug terrain "634 m/Virage prononcé qui chevauchent la tab bar" : les mêmes tailles de police
+  qu'en portrait débordaient de l'espace disponible, bien plus court en paysage.
+- Mini-carte : `RoadbookLandscapeMiniMap` (taille FIXE en points, ancrée en coin via
+  `.overlay(alignment: .bottomTrailing)`) remplace `RoadbookDraggableMiniMap` (glisser/zoomer,
+  réservé au portrait où il fonctionne déjà, "ça marche" confirmé it24) — root cause du bug
+  "mini-carte réduite à une bande illisible" : `RoadbookDraggableMiniMap.mapSize` est une
+  FRACTION de `containerSize` (0.4×largeur, 0.16×hauteur), qui sur une hauteur de conteneur deux
+  fois plus petite en paysage produit un bandeau écrasé. Non déplaçable/zoomable en paysage
+  (simplicité assumée plutôt qu'étendre le système de glisser à une 2e orientation sans device
+  pour vérifier) ; MASQUÉE entièrement si le conteneur est trop court
+  (`miniMapLandscapeMinContainerHeight`, ex. clavier ouvert) — demande explicite : "masquée...
+  si le format ne permet pas un rendu propre, pas de compromis à moitié cassé".
+
+**Point 3 — Hiérarchie visuelle (Roadbook classique)** : `RoadbookTableView` extrait désormais la
+PREMIÈRE manœuvre en `RoadbookHeroRow` (esprit carte, même langage visuel que la carte du mode
+Assisté GPS, ~3× plus imposante que les lignes suivantes) — données INCHANGÉES (partielle/
+cumulée/cap), juste réorganisées autour de cette hiérarchie (partielle en gros chiffre dominant,
+comme la distance restante de `RoadbookBigManeuverCard`). Les lignes suivantes
+(`RoadbookTableRow`) gagnent des polices agrandies sur toute la ligne (ex. cumulée `.subheadline`
+→ `.title3`, pictogramme 22pt → 30pt, tier label `.subheadline` → `.headline`) — priorité
+lisibilité (gants, plein soleil) plutôt que densité. Les pictogrammes RÉELS it24
+(`RoadbookManeuverIcon`) étaient déjà branchés depuis it24 (pas un bug de branchement trouvé ici)
+— seule leur TAILLE était petite (22pt) ; s'ils continuent à sembler "génériques" sur le terrain,
+c'est très probablement que la trace testée n'a déclenché aucun rond-point/fourche/fusion réel
+via map matching Valhalla (voir it24 point 1 — un simple virage classique retombe légitimement
+sur la flèche générique tournée, ce n'est pas un défaut de rendu).
+
+**Point 4 — Badge service de routage** : `RoutingServiceBadge` (RoadBookTabView.swift, `private`)
+réutilise `RoutingActivityMonitor.shared` (it24, point 0) — même donnée que
+`ValhallaSettingsView`, affichée en PLUS ici (jamais une 2e source de vérité), à côté du Picker
+"Mode de lecture" (même ligne, aucun coût de hauteur supplémentaire — précieux en paysage).
+
+Non vérifié visuellement (pas de device physique dans cet environnement, demande explicite de la
+fiche pour cette itération en particulier vu son caractère "purement visuel") : bascule jour/nuit
+réelle, rendu paysage sur device réel, ratio de taille effectif du premier élément, lisibilité
+gants/plein soleil — logique de résolution (palette/paysage/hiérarchie) couverte par les tests
+unitaires, le rendu visuel reste entièrement à valider par le propriétaire.

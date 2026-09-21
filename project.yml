@@ -109,7 +109,7 @@ targets:
         # "0.0.<numéro d'itération>" (0.0.21 = itération 21, 0.0.22 = itération 22, etc.) —
         # affichée sur l'écran de démarrage (SplashScreenView), lue depuis
         # CFBundleShortVersionString, jamais recopiée en dur côté Swift.
-        MARKETING_VERSION: "0.0.24"
+        MARKETING_VERSION: "0.0.25"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: V9Q4V3W2RZ

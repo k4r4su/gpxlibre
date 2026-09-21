@@ -1,12 +1,13 @@
 import SwiftUI
 import CoreLocation
 
-/// Onglet Road Book (spec "roadbook-mode", it23, point 1) — lecture d'une trace en mode liste
-/// de directions pures, esprit roadbook papier de rallye. TOTALEMENT DÉCOUPLÉ de l'état de Ride
-/// actif : lit une trace en entrée (celle affichée dans Ride, ou une autre choisie ici depuis
-/// la Bibliothèque), ne pilote RIEN — jamais un accès à `RideSessionManager`, jamais une
-/// écriture dans `LibraryStore.activeTrackID`/`displayedTrackIDs` (invariant it10). La sélection
-/// de trace ici est un `@State` PUREMENT LOCAL à cet écran.
+/// Onglet Road Book (spec "roadbook-mode", it23, point 1 ; refonte UI/UX "roadbook-ui-redesign",
+/// it25) — lecture d'une trace en mode liste de directions pures, esprit roadbook papier de
+/// rallye. TOTALEMENT DÉCOUPLÉ de l'état de Ride actif : lit une trace en entrée (celle affichée
+/// dans Ride, ou une autre choisie ici depuis la Bibliothèque), ne pilote RIEN — jamais un accès
+/// à `RideSessionManager`, jamais une écriture dans `LibraryStore.activeTrackID`/
+/// `displayedTrackIDs` (invariant it10). La sélection de trace ici est un `@State` PUREMENT
+/// LOCAL à cet écran.
 struct RoadBookTabView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var settings: RideSettingsStore
@@ -22,6 +23,13 @@ struct RoadBookTabView: View {
     /// l'affichage des manœuvres elles-mêmes.
     @State private var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
     @State private var landmarkCache = RoadbookLandmarkCache()
+
+    /// Palette jour/nuit RÉSOLUE (spec "roadbook-ui-redesign", it25, point 0) — recalculée à
+    /// l'apparition, à chaque mise à jour de position, à chaque changement du réglage manuel, ET
+    /// périodiquement (`paletteReevaluationIntervalSeconds`) pendant que l'écran reste ouvert :
+    /// sans ce filet, un Road Book ouvert à cheval sur le coucher du soleil resterait figé sur la
+    /// palette du moment de l'ouverture.
+    @State private var resolvedPalette: RoadbookPalette = .paper
 
     private var selectedTrack: GPXTrack? {
         if let selectedTrackID, let track = library.tracks.first(where: { $0.id == selectedTrackID }) {
@@ -55,6 +63,8 @@ struct RoadBookTabView: View {
         guard let projection = TrackProjector.project(location.coordinate, onto: track.points, cumulativeDistances: cumulativeDistances) else { return nil }
         return RoadbookLiveProgress.nextManeuver(maneuvers: maneuvers, currentCumulativeDistanceMeters: projection.cumulativeDistanceMeters)
     }
+
+    private var paletteColors: RoadbookPaletteColors { .resolved(for: resolvedPalette) }
 
     var body: some View {
         NavigationStack {
@@ -102,11 +112,18 @@ struct RoadBookTabView: View {
                 }
             }
         }
+        // Spec "roadbook-ui-redesign" (it25, point 0) — périmètre EXPLICITEMENT limité à cet
+        // écran (ni la carte Ride, ni le reste de l'app) : appliqué ICI, à la racine du Road
+        // Book uniquement, jamais plus haut dans la hiérarchie de vues.
+        .environment(\.colorScheme, paletteColors.colorScheme)
+        .environment(\.roadbookPaletteColors, paletteColors)
+        .background(paletteColors.background.ignoresSafeArea())
         .onAppear {
             if settings.roadbookReadingMode == .gpsAssisted {
                 locationManager.requestAuthorization()
                 locationManager.startUpdating()
             }
+            updateResolvedPalette()
         }
         .onDisappear {
             locationManager.stopUpdating()
@@ -119,12 +136,24 @@ struct RoadBookTabView: View {
                 locationManager.stopUpdating()
             }
         }
+        .onChange(of: settings.roadbookPaletteSetting) { _ in updateResolvedPalette() }
+        .onChange(of: locationManager.currentLocation?.coordinate.latitude) { _ in updateResolvedPalette() }
+        .onReceive(Timer.publish(every: RoadBookConstants.paletteReevaluationIntervalSeconds, on: .main, in: .common).autoconnect()) { _ in
+            updateResolvedPalette()
+        }
         // `.task(id:)` annule/relance automatiquement si la trace sélectionnée change — jamais
         // besoin de gérer l'annulation à la main (voir RoadBook/CLAUDE.md pour le détail du
         // fonctionnement best-effort, point par point, sans jamais bloquer l'affichage).
         .task(id: selectedTrack?.id) {
             await loadLandmarksIfNeeded()
         }
+    }
+
+    private func updateResolvedPalette() {
+        resolvedPalette = RoadbookPaletteResolver.resolve(
+            override: settings.roadbookPaletteSetting.overrideValue,
+            coordinate: locationManager.currentLocation?.coordinate
+        )
     }
 
     /// Résout les repères OSM manquants un par un (jamais en rafale concurrente — bonne conduite
@@ -149,12 +178,20 @@ struct RoadBookTabView: View {
     @ViewBuilder
     private func content(track: GPXTrack) -> some View {
         VStack(spacing: 0) {
-            Picker("Mode de lecture", selection: $settings.roadbookReadingMode) {
-                ForEach(RoadbookReadingMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
+            HStack(spacing: 10) {
+                Picker("Mode de lecture", selection: $settings.roadbookReadingMode) {
+                    ForEach(RoadbookReadingMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+
+                // Spec "roadbook-ui-redesign" (it25, point 4) — retour terrain : "confirmer d'un
+                // coup d'œil, depuis l'écran Road Book lui-même, que c'est bien Valhalla qui a
+                // généré les données affichées". Réutilise `RoutingActivityMonitor` (it24, point
+                // 0), déjà affiché en Réglages > Avancé — même source, deux endroits.
+                RoutingServiceBadge()
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 12)
             .padding(.bottom, 4)
@@ -184,14 +221,7 @@ struct RoadBookTabView: View {
                         )
 
                         if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
-                            RoadbookDraggableMiniMap(
-                                track: track,
-                                currentLocation: coordinate,
-                                containerSize: geometry.size,
-                                spanMeters: $settings.roadbookMiniMapSpanMeters,
-                                positionXFraction: $settings.roadbookMiniMapPositionXFraction,
-                                positionYFraction: $settings.roadbookMiniMapPositionYFraction
-                            )
+                            miniMap(track: track, coordinate: coordinate, containerSize: geometry.size)
                         }
                     }
                 }
@@ -204,6 +234,34 @@ struct RoadBookTabView: View {
                     landmarks: landmarks
                 )
             }
+        }
+    }
+
+    /// Bascule PORTRAIT (glisser/zoomer, `RoadbookDraggableMiniMap`, inchangé depuis it23quinquies
+    /// — "ça marche" confirmé par retour terrain) / PAYSAGE (`RoadbookLandscapeMiniMap`, coin
+    /// fixe, spec it25 point 2). `verticalSizeClass == .compact` = paysage sur iPhone (seul
+    /// device family ciblé, `TARGETED_DEVICE_FAMILY "1"`).
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    @ViewBuilder
+    private func miniMap(track: GPXTrack, coordinate: CLLocationCoordinate2D, containerSize: CGSize) -> some View {
+        if verticalSizeClass == .compact {
+            // "Masquée en paysage si le format ne permet pas un rendu propre" — demande
+            // explicite, jamais un compromis à moitié cassé.
+            if containerSize.height >= RoadBookConstants.miniMapLandscapeMinContainerHeight {
+                RoadbookLandscapeMiniMap(track: track, currentLocation: coordinate, spanMeters: settings.roadbookMiniMapSpanMeters)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(10)
+            }
+        } else {
+            RoadbookDraggableMiniMap(
+                track: track,
+                currentLocation: coordinate,
+                containerSize: containerSize,
+                spanMeters: $settings.roadbookMiniMapSpanMeters,
+                positionXFraction: $settings.roadbookMiniMapPositionXFraction,
+                positionYFraction: $settings.roadbookMiniMapPositionYFraction
+            )
         }
     }
 
@@ -246,12 +304,57 @@ struct RoadBookTabView: View {
     }
 }
 
+/// Badge discret du service de routage actif (spec "roadbook-ui-redesign", it25, point 4) —
+/// même donnée que `ValhallaSettingsView` (Réglages > Avancé), affichée en plus ICI pour que la
+/// fiabilité route-aware du Road Book (it24) soit visible sans changer d'écran. "Valhalla" (vert)
+/// / "OSRM" (orange, repli — précision route-aware non garantie) / "—" (gris, aucune requête).
+private struct RoutingServiceBadge: View {
+    @ObservedObject private var monitor = RoutingActivityMonitor.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(label).font(.caption2.bold())
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.15), in: Capsule())
+        .foregroundStyle(color)
+        .fixedSize()
+        .longPressTooltip(tooltip)
+        .accessibilityLabel("Service de routage : \(label)")
+    }
+
+    private var label: String {
+        switch monitor.lastEvent?.provider {
+        case .valhalla: return "Valhalla"
+        case .osrm: return "OSRM"
+        case nil: return "—"
+        }
+    }
+
+    private var color: Color {
+        switch monitor.lastEvent?.provider {
+        case .valhalla: return .green
+        case .osrm: return .orange
+        case nil: return .secondary
+        }
+    }
+
+    private var tooltip: String {
+        switch monitor.lastEvent?.provider {
+        case .valhalla: return "Détection route-aware active via Valhalla"
+        case .osrm: return "Repli OSRM — la précision route-aware (rond-points/fourches) n'est pas garantie"
+        case nil: return "Aucune requête de routage récente"
+        }
+    }
+}
+
 /// Table dense en colonnes façon roadbook papier de rallye (spec "roadbook-mode", it23bis/
-/// it23quater, retour terrain : "regarde ce qui se fait en affichage roadbook, et copie la
-/// même chose" — capture d'un vrai roadbook rallye fournie par le propriétaire, adaptée en 3
-/// blocs : distances (cumulée en grand, partielle en dessous), cap (pictogramme + degrés),
-/// info (direction + repère OSM à proximité si trouvé). Jamais un `List` SwiftUI standard (ses
-/// insets/fonds par défaut cassent l'effet "tableau imprimé" recherché).
+/// it23quater ; refonte hiérarchie visuelle "roadbook-ui-redesign", it25, point 3 — retour
+/// terrain : "texte petit uniforme, aucune hiérarchie... premier élément au moins 3× plus
+/// grand"). Jamais un `List` SwiftUI standard (ses insets/fonds par défaut cassent l'effet
+/// "tableau imprimé" recherché).
 private struct RoadbookTableView: View {
     let maneuvers: [RoadbookManeuver]
     let unit: DistanceUnit
@@ -259,7 +362,8 @@ private struct RoadbookTableView: View {
     let liveDistanceRemainingMeters: Double?
     let landmarks: [UUID: RoadbookLandmarkInfo?]
 
-    private static let ruleColor = Color.primary.opacity(0.15)
+    @Environment(\.roadbookPaletteColors) private var palette
+
     // Fractions de la largeur totale — le bloc "info" absorbe le reste, jamais une largeur
     // fixe qui laisserait un grand vide à droite sur un écran de téléphone.
     private static let distanceColumnFraction: CGFloat = 0.26
@@ -275,8 +379,26 @@ private struct RoadbookTableView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         headerRow(distanceWidth: distanceWidth, headingWidth: headingWidth, infoWidth: infoWidth)
-                        Divider().background(Self.ruleColor)
-                        ForEach(Array(maneuvers.enumerated()), id: \.element.id) { index, maneuver in
+                        Divider().background(palette.rule)
+
+                        // Premier élément = HERO (spec it25, point 3 : "au moins 3× plus grand,
+                        // doit sauter aux yeux comme ce qui arrive maintenant") — même esprit
+                        // visuel que la carte du mode Assisté GPS, données INCHANGÉES (partielle/
+                        // cumulée/cap), juste réorganisées autour de cette hiérarchie.
+                        if let first = maneuvers.first {
+                            RoadbookHeroRow(
+                                maneuver: first,
+                                unit: unit,
+                                isCurrent: currentIndex == 0,
+                                liveDistanceRemainingMeters: currentIndex == 0 ? liveDistanceRemainingMeters : nil,
+                                landmark: landmarks[first.id] ?? nil
+                            )
+                            .id(0)
+                            .background(palette.surface)
+                            Divider().background(palette.rule)
+                        }
+
+                        ForEach(Array(maneuvers.enumerated().dropFirst()), id: \.element.id) { index, maneuver in
                             RoadbookTableRow(
                                 maneuver: maneuver,
                                 index: index,
@@ -287,10 +409,10 @@ private struct RoadbookTableView: View {
                                 distanceColumnWidth: distanceWidth,
                                 headingColumnWidth: headingWidth,
                                 infoColumnWidth: infoWidth,
-                                ruleColor: Self.ruleColor
+                                ruleColor: palette.rule
                             )
                             .id(index)
-                            Divider().background(Self.ruleColor)
+                            Divider().background(palette.rule)
                         }
                     }
                 }
@@ -320,13 +442,60 @@ private struct RoadbookTableView: View {
 
     private func columnHeader(_ title: String, width: CGFloat) -> some View {
         Text(title)
-            .font(.caption2.bold())
+            .font(.caption.bold())
             .foregroundStyle(.secondary)
             .frame(width: width)
     }
 
     private var verticalRule: some View {
-        Rectangle().fill(Self.ruleColor).frame(width: 1)
+        Rectangle().fill(palette.rule).frame(width: 1)
+    }
+}
+
+/// Ligne HERO — première manœuvre de la liste, esprit "carte" plutôt que ligne de tableau (spec
+/// it25, point 3). Garde les 3 données existantes (partielle/cumulée/cap) mais la partielle (le
+/// "combien avant CE virage", l'info la plus actionnable) devient le gros chiffre dominant —
+/// même rôle que la distance restante dans `RoadbookBigManeuverCard` (mode Assisté GPS).
+private struct RoadbookHeroRow: View {
+    let maneuver: RoadbookManeuver
+    let unit: DistanceUnit
+    let isCurrent: Bool
+    let liveDistanceRemainingMeters: Double?
+    let landmark: RoadbookLandmarkInfo?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 84)
+                    .foregroundStyle(isCurrent ? Color.accentColor : Color.accentColor.opacity(0.9))
+                if let landmark {
+                    Text(landmark.category.emoji)
+                        .font(.system(size: 46))
+                }
+            }
+            Text(unit.displayString(fromMeters: liveDistanceRemainingMeters ?? maneuver.partialDistanceMeters))
+                .font(.system(size: 52, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text(maneuver.checkpoint.tier.label)
+                .font(.title2.bold())
+            HStack(spacing: 8) {
+                Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
+                Text("· Cumulé \(unit.displayString(fromMeters: maneuver.cumulativeDistanceMeters))")
+            }
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(.secondary)
+            if let landmark {
+                Text(landmark.label)
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 20)
     }
 }
 
@@ -349,22 +518,23 @@ private struct RoadbookTableRow: View {
         HStack(spacing: 0) {
             // Bloc distances : cumulée en grand (ce qu'on lit sur son compteur), partielle en
             // dessous dans un badge avec le n° de manœuvre — même hiérarchie visuelle que la
-            // référence rallye (gros chiffre + petit chiffre encadré).
-            VStack(spacing: 4) {
+            // référence rallye (gros chiffre + petit chiffre encadré). Polices agrandies (it25,
+            // point 3 : "priorité à la lisibilité — gants, plein soleil, coup d'œil rapide").
+            VStack(spacing: 5) {
                 Text(unit.displayString(fromMeters: maneuver.cumulativeDistanceMeters))
-                    .font(.subheadline.monospacedDigit().bold())
-                HStack(spacing: 4) {
+                    .font(.title3.monospacedDigit().bold())
+                HStack(spacing: 5) {
                     Text("\(index + 1)")
-                        .font(.caption2.bold())
+                        .font(.caption.bold())
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
                         .background(isCurrent ? Color.accentColor : Color.secondary, in: Capsule())
                     // Partielle : la distance restante LIVE remplace la distance partielle fixe
                     // pour la manœuvre courante en mode Assisté GPS (même donnée, présentation
                     // différente selon le mode — voir RoadbookLiveProgress).
                     Text(unit.displayString(fromMeters: liveDistanceRemainingMeters ?? maneuver.partialDistanceMeters))
-                        .font(.caption.monospacedDigit())
+                        .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -372,33 +542,32 @@ private struct RoadbookTableRow: View {
 
             verticalRule
 
-            VStack(spacing: 3) {
-                // Pictogramme emoji du repère À CÔTÉ de la flèche (retour terrain it23sexies :
-                // "à côté de la flèche il y ait des pictogrammes afin d'augmenter l'aide") —
-                // HStack plutôt qu'un badge superposé, plus lisible dans une colonne déjà
-                // étroite.
-                HStack(spacing: 4) {
-                    RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 22)
+            VStack(spacing: 4) {
+                // Pictogramme RÉEL du palier (rond-point/fourche/fusion/demi-tour, it24) à côté
+                // de l'emoji de repère OSM (it23sexies) — HStack plutôt qu'un badge superposé,
+                // plus lisible dans une colonne déjà étroite.
+                HStack(spacing: 5) {
+                    RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 30)
                         .foregroundStyle(isCurrent ? Color.accentColor : .primary)
                     if let landmark {
                         Text(landmark.category.emoji)
-                            .font(.system(size: 20))
+                            .font(.system(size: 26))
                     }
                 }
                 Text("\(Int(maneuver.headingDegrees.rounded()))°")
-                    .font(.caption2.bold().monospacedDigit())
+                    .font(.caption.bold().monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             .frame(width: headingColumnWidth)
 
             verticalRule
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(maneuver.checkpoint.tier.label)
-                    .font(.subheadline.bold())
+                    .font(.headline)
                 if let landmark {
                     Text(landmark.label)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -406,7 +575,7 @@ private struct RoadbookTableRow: View {
             .frame(width: infoColumnWidth, alignment: .leading)
             .padding(.leading, 10)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 14)
         .background(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
     }
 

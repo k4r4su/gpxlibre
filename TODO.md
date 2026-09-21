@@ -1,5 +1,35 @@
 # TODO
 
+## Itération 25 (refonte UI/UX du Road Book)
+
+Retour terrain avec captures à l'appui, sur la livraison it24 : "aucun pictogramme visible,
+liste illisible, mode paysage cassé". Quatre points, tous scopés à l'écran Road Book (jamais la
+carte Ride/le reste de l'app) : (0) palette jour/nuit façon roadbook papier (auto au lever/
+coucher du soleil réel + forçage manuel) ; (1) liste scrollable complète en mode Assisté GPS
+(plus de limite à 2 éléments) ; (2) layout paysage dédié (hero horizontal compact + mini-carte
+en coin fixe, plus de chevauchement de la tab bar) ; (3) hiérarchie visuelle du Roadbook
+classique (premier élément ~3× plus grand, texte agrandi partout, pictogrammes it24 réutilisés
+à plus grande taille) ; (4) badge de service de routage actif visible sur l'écran lui-même.
+
+- **`feat:"roadbook-ui-redesign"`** : `RoadbookPalette.swift` (nouveau — `RoadbookPalette`/
+  `RoadbookPaletteSetting`/`RoadbookPaletteResolver`/`SolarTimeCalculator`/
+  `RoadbookPaletteColors`), `RoadbookLandscapeMiniMap.swift` (nouveau), `RoadbookFocusedView.swift`
+  (liste complète + layout paysage dédié), `RoadBookTabView.swift` (application de la palette,
+  bascule paysage de la mini-carte, hero row classique, badge de routage),
+  `RideSettingsStore.roadbookPaletteSetting` (Réglages > Apparence). Voir RoadBook/CLAUDE.md
+  section "Refonte UI/UX" pour le détail complet, dont les root cause identifiées des bugs
+  terrain (mini-carte en bande illisible = fraction de hauteur sur un conteneur 2× plus court ;
+  texte qui chevauche la tab bar = mêmes tailles de police qu'en portrait débordant d'un écran
+  2× moins haut).
+
+Checklist manuelle restant à faire par le propriétaire (pas de device physique dans cet
+environnement, demande EXPLICITE de la fiche pour cette itération vu son caractère purement
+visuel) : bascule automatique jour/nuit + forçage manuel (2 modes × 2 orientations) ; scroll
+jusqu'au dernier événement sur une trace 20+ changements ; rotation portrait→paysage sans rien
+de coupé/chevauché ; ratio de taille réel du premier élément en Roadbook classique ; pictogramme
+distinctif rond-point/fourche/demi-tour visible dans les 2 modes et 2 palettes ; badge de service
+cohérent avec Réglages au même instant.
+
 ## Itération 24 (roadbook route-aware + diagnostic Valhalla)
 
 Trois points indépendants : (0) diagnostic + indicateur de service de routage actif, retour

@@ -99,4 +99,43 @@ enum RoadBookConstants {
     /// 45° laisse la place à 7 sorties avant de boucler sur 315°, largement au-delà de la
     /// quasi-totalité des ronds-points rencontrés en usage réel.
     static let roundaboutExitSpacingDegrees: Double = 45
+
+    // MARK: - Palette jour/nuit (spec "roadbook-ui-redesign", it25, point 0)
+
+    /// Repli SANS position GPS (permission refusée/pas encore de fix) — heuristique horaire
+    /// simple, jamais une fausse précision astronomique qu'on ne peut pas calculer sans
+    /// coordonnées. Plage large et prudente (7h-20h) plutôt que calée sur un lever/coucher moyen.
+    static let paletteFallbackDayStartHour = 7
+    static let paletteFallbackDayEndHour = 20
+    /// Fréquence de réévaluation de la palette automatique pendant que l'écran est ouvert — le
+    /// lever/coucher du soleil ne change jamais assez vite pour justifier plus fréquent, mais
+    /// sans ce filet, un roadbook ouvert à cheval sur le coucher du soleil resterait figé sur la
+    /// palette du moment de l'ouverture jusqu'au prochain changement de trace/onglet.
+    static let paletteReevaluationIntervalSeconds: Double = 300
+
+    // MARK: - Mode Assisté GPS : carte hero + liste (spec "roadbook-ui-redesign", it25, points 1/2)
+
+    /// "Au moins la moitié de l'écran" (spec it23ter, réaffirmé it25) — fraction de la hauteur
+    /// disponible en PORTRAIT. En paysage, hauteur FIXE bien plus compacte à la place (voir
+    /// `focusedHeroLandscapeHeight`) : sur un écran deux fois moins haut, la même fraction
+    /// laisserait beaucoup trop peu de place à la liste scrollable en dessous.
+    static let focusedHeroHeightFraction: Double = 0.5
+    static let focusedHeroMinHeight: Double = 220
+    /// Hauteur FIXE de la carte hero en paysage — layout dédié horizontal (pictogramme à gauche,
+    /// distance à droite), volontairement compact pour laisser de la place à la liste et ne
+    /// jamais chevaucher la tab bar (retour terrain : "634 m"/"Virage prononcé" qui chevauchent").
+    static let focusedHeroLandscapeHeight: Double = 170
+
+    // MARK: - Mini-carte en paysage (spec "roadbook-ui-redesign", it25, point 2)
+
+    /// Taille FIXE (pas une fraction de `containerSize`, root cause du bug terrain "mini-carte
+    /// réduite à une bande illisible" — une fraction de hauteur calculée sur un écran deux fois
+    /// moins haut qu'en portrait produisait un bandeau écrasé) — ancrée dans un coin dédié via
+    /// `.overlay(alignment:)`, jamais déplaçable en paysage (voir RoadbookLandscapeMiniMap).
+    static let miniMapLandscapeWidth: Double = 150
+    static let miniMapLandscapeHeight: Double = 100
+    /// En dessous de cette hauteur de conteneur disponible, la mini-carte est MASQUÉE plutôt
+    /// qu'affichée à moitié cassée (demande explicite : "pas de compromis à moitié cassé") — un
+    /// iPhone en paysage avec le clavier ouvert, par exemple.
+    static let miniMapLandscapeMinContainerHeight: Double = 170
 }

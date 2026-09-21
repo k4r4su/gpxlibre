@@ -50,6 +50,7 @@ final class RideSettingsStore: ObservableObject {
         static let roadbookMiniMapSpanMeters = "settings.roadbookMiniMapSpanMeters"
         static let roadbookMiniMapPositionXFraction = "settings.roadbookMiniMapPositionXFraction"
         static let roadbookMiniMapPositionYFraction = "settings.roadbookMiniMapPositionYFraction"
+        static let roadbookPaletteSetting = "settings.roadbookPaletteSetting"
     }
 
     private let defaults: UserDefaults
@@ -198,6 +199,15 @@ final class RideSettingsStore: ObservableObject {
     }
     @Published var roadbookMiniMapPositionYFraction: Double {
         didSet { defaults.set(roadbookMiniMapPositionYFraction, forKey: Keys.roadbookMiniMapPositionYFraction) }
+    }
+    /// Palette Road Book (spec "roadbook-ui-redesign", it25, point 0 — retour terrain : "le Road
+    /// Book hérite du thème sombre global de l'app... à l'inverse d'un vrai roadbook papier de
+    /// rallye") — `.automatic` (défaut) bascule selon le lever/coucher du soleil réel
+    /// (`RoadbookPaletteResolver`/`SolarTimeCalculator`), `.paper`/`.night` forcent l'un ou
+    /// l'autre en permanence (Réglages > Apparence > "Palette Road Book"). Réglage propre à cet
+    /// écran, DISTINCT de tout thème global de l'app (périmètre explicite de la fiche).
+    @Published var roadbookPaletteSetting: RoadbookPaletteSetting {
+        didSet { defaults.set(roadbookPaletteSetting.rawValue, forKey: Keys.roadbookPaletteSetting) }
     }
 
     // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
@@ -417,5 +427,10 @@ final class RideSettingsStore: ObservableObject {
         roadbookMiniMapPositionXFraction = storedX ?? RoadBookConstants.miniMapDefaultPositionXFraction
         let storedY = defaults.object(forKey: Keys.roadbookMiniMapPositionYFraction) as? Double
         roadbookMiniMapPositionYFraction = storedY ?? RoadBookConstants.miniMapDefaultPositionYFraction
+        if let rawPalette = defaults.string(forKey: Keys.roadbookPaletteSetting), let setting = RoadbookPaletteSetting(rawValue: rawPalette) {
+            roadbookPaletteSetting = setting
+        } else {
+            roadbookPaletteSetting = .automatic
+        }
     }
 }

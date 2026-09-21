@@ -198,6 +198,20 @@ struct SettingsView: View {
                         .labelsHidden()
                         .longPressTooltip("Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté")
                     }
+
+                    // Spec "roadbook-ui-redesign" (it25, point 0) : palette PROPRE à l'écran Road
+                    // Book, distincte du thème carte ci-dessus — jamais appliquée ailleurs.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Palette Road Book").font(.subheadline)
+                        Picker("Palette Road Book", selection: $settings.roadbookPaletteSetting) {
+                            ForEach(RoadbookPaletteSetting.allCases) { setting in
+                                Text(setting.label).tag(setting)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .longPressTooltip("Automatique bascule entre un fond clair \"papier\" le jour et sombre la nuit selon le lever/coucher du soleil réel — force l'un ou l'autre en permanence si besoin (tunnel long, préférence)")
+                    }
                 }
 
                 Section("Écran") {
