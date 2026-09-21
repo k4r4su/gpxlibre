@@ -191,6 +191,17 @@ struct RoadBookTabView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                // Fix "roadbook-landscape-picker-stretched" (it25, retour terrain avec capture :
+                // "regarde les proportions, ça change... les menus Assisté GPS/Roadbook
+                // classique") — un `.segmented` sans largeur bornée s'étire sur toute la HStack ;
+                // sur un écran deux fois plus large en paysage, ça donnait un sélecteur démesuré
+                // avec beaucoup de vide dans chaque segment. Largeur plafonnée en paysage
+                // seulement (portrait inchangé, déjà confirmé correct par capture).
+                .frame(maxWidth: verticalSizeClass == .compact ? RoadBookConstants.modePickerLandscapeMaxWidth : .infinity)
+
+                if verticalSizeClass == .compact {
+                    Spacer(minLength: 12)
+                }
 
                 // Spec "roadbook-ui-redesign" (it25, point 4) — retour terrain : "confirmer d'un
                 // coup d'œil, depuis l'écran Road Book lui-même, que c'est bien Valhalla qui a
@@ -223,7 +234,9 @@ struct RoadBookTabView: View {
                             distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
                             unit: settings.roadbookPDFOptions.distanceUnit,
                             hasLocationFix: locationManager.currentLocation != nil,
-                            landmarks: landmarks
+                            landmarks: landmarks,
+                            landscapeMiniMapReservedWidth: showsLandscapeMiniMap(containerSize: geometry.size)
+                                ? RoadBookConstants.miniMapLandscapeWidth + 24 : 0
                         )
 
                         if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
@@ -249,15 +262,33 @@ struct RoadBookTabView: View {
     /// device family ciblé, `TARGETED_DEVICE_FAMILY "1"`).
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
+    /// `true` si la mini-carte paysage sera RÉELLEMENT affichée (mêmes conditions que `miniMap`
+    /// ci-dessous) — calculé une seule fois et réutilisé pour réserver la place correspondante
+    /// dans le layout du hero (`RoadbookFocusedView.landscapeMiniMapReservedWidth`), jamais
+    /// dupliqué/désynchronisé entre les deux (fix "roadbook-landscape-minimap-overlap", it25,
+    /// retour terrain avec capture : la mini-carte chevauchait le texte de distance ET la
+    /// première ligne de la liste).
+    private func showsLandscapeMiniMap(containerSize: CGSize) -> Bool {
+        verticalSizeClass == .compact
+            && settings.roadbookMiniMapEnabled
+            && locationManager.currentLocation != nil
+            && containerSize.height >= RoadBookConstants.miniMapLandscapeMinContainerHeight
+    }
+
     @ViewBuilder
     private func miniMap(track: GPXTrack, coordinate: CLLocationCoordinate2D, containerSize: CGSize) -> some View {
         if verticalSizeClass == .compact {
             // "Masquée en paysage si le format ne permet pas un rendu propre" — demande
             // explicite, jamais un compromis à moitié cassé.
-            if containerSize.height >= RoadBookConstants.miniMapLandscapeMinContainerHeight {
+            if showsLandscapeMiniMap(containerSize: containerSize) {
+                // CONFINÉE à la bande du hero (`.topTrailing`, jamais `.bottomTrailing` sur tout
+                // l'écran) — root cause du chevauchement : ancrée sur la hauteur TOTALE (hero +
+                // liste), elle débordait dans la zone de la liste en dessous.
                 RoadbookLandscapeMiniMap(track: track, currentLocation: coordinate, spanMeters: settings.roadbookMiniMapSpanMeters)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 14)
+                    .padding(.top, max((RoadBookConstants.focusedHeroLandscapeHeight - RoadBookConstants.miniMapLandscapeHeight) / 2, 8))
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
         } else {
             RoadbookDraggableMiniMap(

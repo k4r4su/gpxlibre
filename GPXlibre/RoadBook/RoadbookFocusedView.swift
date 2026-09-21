@@ -27,6 +27,12 @@ struct RoadbookFocusedView: View {
     /// Repères OSM à proximité (spec "roadbook-mode", it23quater) — voir `RoadBookTabView`,
     /// clé absente = pas encore résolu, valeur `nil` = résolu sans résultat.
     let landmarks: [UUID: RoadbookLandmarkInfo?]
+    /// Largeur à réserver à DROITE du hero en paysage quand la mini-carte sera affichée par-
+    /// dessus (`RoadBookTabView`, même condition exacte que `showsLandscapeMiniMap`) — `0` sinon.
+    /// Fix "roadbook-landscape-minimap-overlap" (it25, retour terrain avec capture : la mini-
+    /// carte chevauchait le texte de distance) : sans cette réservation, le texte de distance
+    /// (aligné à droite) et la mini-carte (ancrée à droite) se disputaient le même espace.
+    var landscapeMiniMapReservedWidth: CGFloat = 0
 
     /// `.compact` = paysage sur iPhone (TARGETED_DEVICE_FAMILY "1", pas d'iPad à gérer) — signal
     /// natif SwiftUI, se met à jour automatiquement à la rotation, jamais besoin d'observer
@@ -80,7 +86,7 @@ struct RoadbookFocusedView: View {
         if let currentIndex, let distanceRemainingMeters, maneuvers.indices.contains(currentIndex) {
             let current = maneuvers[currentIndex]
             if isLandscape {
-                RoadbookBigManeuverCardLandscape(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+                RoadbookBigManeuverCardLandscape(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil, trailingReservedWidth: landscapeMiniMapReservedWidth)
             } else {
                 RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
             }
@@ -152,6 +158,8 @@ private struct RoadbookBigManeuverCardLandscape: View {
     let distanceRemainingMeters: Double
     let unit: DistanceUnit
     let landmark: RoadbookLandmarkInfo?
+    /// Cf. `RoadbookFocusedView.landscapeMiniMapReservedWidth`.
+    let trailingReservedWidth: CGFloat
 
     var body: some View {
         HStack(spacing: 20) {
@@ -188,7 +196,8 @@ private struct RoadbookBigManeuverCardLandscape: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 20)
+        .padding(.leading, 20)
+        .padding(.trailing, 20 + trailingReservedWidth)
     }
 }
 

@@ -138,4 +138,10 @@ enum RoadBookConstants {
     /// qu'affichée à moitié cassée (demande explicite : "pas de compromis à moitié cassé") — un
     /// iPhone en paysage avec le clavier ouvert, par exemple.
     static let miniMapLandscapeMinContainerHeight: Double = 170
+
+    /// Largeur max du sélecteur de mode en paysage (fix "roadbook-landscape-picker-stretched",
+    /// it25, retour terrain avec capture : un `.segmented` sans largeur bornée s'étire sur toute
+    /// la largeur, démesuré sur un écran deux fois plus large qu'en portrait) — portrait
+    /// inchangé (`.infinity`, déjà confirmé correct par capture terrain).
+    static let modePickerLandscapeMaxWidth: Double = 420
 }
