@@ -107,16 +107,24 @@ enum DetourRoutingService {
     /// vérifier le repli en chaîne SANS jamais dépendre d'un vrai réseau (ni OSRM, ni Valhalla).
     /// Aucun appelant réel ne passe `providers:` explicitement — toujours via l'overload
     /// ci-dessus, résolu depuis les Réglages.
+    ///
+    /// `activityMonitor` (spec "routing-active-service-indicator", it24, point 0) : injectable
+    /// pour les tests (une instance FRAÎCHE, jamais `.shared`, voir `RoutingProviderTests`) —
+    /// défaut `.shared` pour tout appelant réel, mis à jour sur CHAQUE succès (jamais sur un
+    /// échec, voir `RoutingActivityMonitor`).
     static func route(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
         profile: DetourProfile,
-        providers: [RoutingProvider]
+        providers: [RoutingProvider],
+        activityMonitor: RoutingActivityMonitor = .shared
     ) async throws -> [CLLocationCoordinate2D] {
         var lastError: Error?
         for provider in providers {
             do {
-                return try await provider.route(from: origin, to: destination, profile: profile)
+                let result = try await provider.route(from: origin, to: destination, profile: profile)
+                await activityMonitor.recordSuccess(provider: provider.kind)
+                return result
             } catch {
                 lastError = error
                 continue

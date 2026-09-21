@@ -10,6 +10,10 @@ import CoreLocation
 /// en cas d'échec) vit désormais ICI, dans `DetourRoutingService.route(...providers:)`, plutôt
 /// que dispersé/dupliqué dans chaque appelant.
 protocol RoutingProvider {
+    /// Spec "routing-active-service-indicator" (it24, point 0) — identifie quel backend répond,
+    /// pour `RoutingActivityMonitor` (mis à jour par `DetourRoutingService.route` sur un succès).
+    var kind: RoutingActivityProvider { get }
+
     func route(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
@@ -22,6 +26,8 @@ protocol RoutingProvider {
 /// c'est le comportement historique de l'app, garanti même si Valhalla n'est pas configuré du
 /// tout ou devient injoignable.
 struct OSRMRoutingProvider: RoutingProvider {
+    let kind: RoutingActivityProvider = .osrm
+
     func route(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
@@ -51,6 +57,7 @@ struct OSRMRoutingProvider: RoutingProvider {
 /// Backend auto-hébergé optionnel (spec "valhalla-client-toggle", it19 ; branché réellement sur
 /// le guidage en it20) — voir `ValhallaRoutingService` pour le détail de l'appel HTTP.
 struct ValhallaProvider: RoutingProvider {
+    let kind: RoutingActivityProvider = .valhalla
     let configuration: ValhallaConfiguration
 
     func route(

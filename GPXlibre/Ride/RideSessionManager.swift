@@ -1569,6 +1569,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    // Spec "routing-active-service-indicator" (it24, point 0) — seul autre point
+                    // de code (avec RoutingProviderResolver/DetourRoutingService) où une requête
+                    // de ROUTAGE Valhalla part réellement : le guidage riche n'a pas de repli
+                    // OSRM (voir Nav/CLAUDE.md, "dépendance dure"), donc uniquement `.valhalla`.
+                    RoutingActivityMonitor.shared.recordSuccess(provider: .valhalla)
                     self.navRoute = NavRoute(
                         coordinates: valhallaRoute.coordinates,
                         maneuvers: [],

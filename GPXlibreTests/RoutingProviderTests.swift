@@ -5,13 +5,21 @@ import CoreLocation
 /// Spec "valhalla-live-routing" (it20) — providers FACTICES, jamais de vrai réseau (ni OSRM, ni
 /// Valhalla) : vérifie uniquement la logique de résolution/repli en chaîne, pas un moteur réel.
 private struct FakeAlwaysSucceedsProvider: RoutingProvider {
+    let kind: RoutingActivityProvider
     let coordinates: [CLLocationCoordinate2D]
+
+    init(kind: RoutingActivityProvider = .osrm, coordinates: [CLLocationCoordinate2D]) {
+        self.kind = kind
+        self.coordinates = coordinates
+    }
+
     func route(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D, profile: DetourProfile) async throws -> [CLLocationCoordinate2D] {
         coordinates
     }
 }
 
 private struct FakeAlwaysFailsProvider: RoutingProvider {
+    let kind: RoutingActivityProvider = .valhalla
     struct Failure: Error {}
     func route(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D, profile: DetourProfile) async throws -> [CLLocationCoordinate2D] {
         throw Failure()
@@ -81,5 +89,39 @@ final class RoutingProviderTests: XCTestCase {
         } catch {
             // Attendu.
         }
+    }
+
+    // MARK: - RoutingActivityMonitor (spec "routing-active-service-indicator", it24, point 0)
+    // Instance FRAÎCHE à chaque test (jamais `.shared`) — jamais d'état partagé entre tests.
+
+    func testChainRecordsValhallaOnDirectSuccess() async throws {
+        let monitor = await RoutingActivityMonitor()
+        let providers: [RoutingProvider] = [FakeAlwaysSucceedsProvider(kind: .valhalla, coordinates: [origin, destination])]
+
+        _ = try await DetourRoutingService.route(from: origin, to: destination, profile: .route, providers: providers, activityMonitor: monitor)
+
+        let lastEvent = await monitor.lastEvent
+        XCTAssertEqual(lastEvent?.provider, .valhalla)
+    }
+
+    /// Cœur du retour terrain : "mock Valhalla en échec → bascule affichée sur OSRM".
+    func testChainRecordsOSRMWhenValhallaFailsAndOSRMFallsBackSuccessfully() async throws {
+        let monitor = await RoutingActivityMonitor()
+        let providers: [RoutingProvider] = [FakeAlwaysFailsProvider(), FakeAlwaysSucceedsProvider(kind: .osrm, coordinates: [origin, destination])]
+
+        _ = try await DetourRoutingService.route(from: origin, to: destination, profile: .route, providers: providers, activityMonitor: monitor)
+
+        let lastEvent = await monitor.lastEvent
+        XCTAssertEqual(lastEvent?.provider, .osrm, "Valhalla en échec doit basculer l'indicateur sur OSRM (repli)")
+    }
+
+    func testChainNeverRecordsAnythingWhenEveryProviderFails() async {
+        let monitor = await RoutingActivityMonitor()
+        let providers: [RoutingProvider] = [FakeAlwaysFailsProvider(), FakeAlwaysFailsProvider()]
+
+        _ = try? await DetourRoutingService.route(from: origin, to: destination, profile: .route, providers: providers, activityMonitor: monitor)
+
+        let lastEvent = await monitor.lastEvent
+        XCTAssertNil(lastEvent, "aucun service n'a RÉELLEMENT répondu — l'indicateur ne doit jamais afficher un succès qui n'a pas eu lieu")
     }
 }

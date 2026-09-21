@@ -9,6 +9,7 @@ import SwiftUI
 /// identifiants via `ValhallaKeychainStore`).
 struct ValhallaSettingsView: View {
     @EnvironmentObject private var settings: RideSettingsStore
+    @ObservedObject private var activityMonitor = RoutingActivityMonitor.shared
 
     @State private var username = ""
     @State private var password = ""
@@ -33,6 +34,7 @@ struct ValhallaSettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+                routingActivityRow
             } footer: {
                 Text("Désactivé par défaut. \"Aller à\" > Mixte continue d'utiliser OSRM dans tous les cas — Valhalla reste retenté en premier partout ailleurs (dont le guidage classique \"Aller à\" > Itinéraire, qui en a besoin pour ses manœuvres détaillées), avec repli automatique et silencieux en cas d'échec ou si désactivé.")
             }
@@ -90,6 +92,59 @@ struct ValhallaSettingsView: View {
         .onAppear {
             username = ValhallaKeychainStore.username()
             password = ValhallaKeychainStore.password()
+        }
+    }
+
+    /// Spec "routing-active-service-indicator" (it24, point 0) — retour terrain : "aucun moyen
+    /// de confirmer à l'œil quel service répond réellement à un instant donné". Reflète
+    /// `RoutingActivityMonitor.shared.lastEvent`, mis à jour EN LIVE à chaque requête de routage
+    /// RÉELLE (jamais un statut figé au démarrage) — voir `DetourRoutingService.route`/
+    /// `RideSessionManager.requestNavRoute` pour les deux points d'écriture.
+    @ViewBuilder
+    private var routingActivityRow: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dernier service de routage ayant répondu")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(routingActivityLabel)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(routingActivityColor)
+                    if let date = activityMonitor.lastEvent?.date {
+                        Text("· \(date.formatted(date: .omitted, time: .standard))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } icon: {
+            Image(systemName: routingActivityIconName)
+                .foregroundStyle(routingActivityColor)
+        }
+    }
+
+    private var routingActivityLabel: String {
+        switch activityMonitor.lastEvent?.provider {
+        case .valhalla: return "Valhalla"
+        case .osrm: return "OSRM (repli)"
+        case nil: return "Aucune requête récente"
+        }
+    }
+
+    private var routingActivityColor: Color {
+        switch activityMonitor.lastEvent?.provider {
+        case .valhalla: return .green
+        case .osrm: return .orange
+        case nil: return .secondary
+        }
+    }
+
+    private var routingActivityIconName: String {
+        switch activityMonitor.lastEvent?.provider {
+        case .valhalla: return "checkmark.circle.fill"
+        case .osrm: return "arrow.triangle.branch"
+        case nil: return "questionmark.circle"
         }
     }
 
