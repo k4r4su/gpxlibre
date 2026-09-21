@@ -546,7 +546,23 @@ private struct RoadbookHeroRow: View {
     let liveDistanceRemainingMeters: Double?
     let landmark: RoadbookLandmarkInfo?
 
+    /// Fix "roadbook-classic-landscape-hero-overflow" (it25, retour terrain avec capture :
+    /// "Virage prononcé"/"Cap" passaient SOUS la tab bar en mode Liste paysage) — la disposition
+    /// verticale portrait (icône, puis distance, puis palier, puis cap/cumulé empilés) est bien
+    /// trop haute pour un écran deux fois moins haut en paysage ; même bug de fond que la carte
+    /// hero du mode Assisté GPS, jamais corrigé ici puisque `RoadbookHeroRow` n'avait reçu aucune
+    /// variante paysage jusqu'ici.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     var body: some View {
+        if verticalSizeClass == .compact {
+            landscapeBody
+        } else {
+            portraitBody
+        }
+    }
+
+    private var portraitBody: some View {
         VStack(spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
                 RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 84)
@@ -579,6 +595,51 @@ private struct RoadbookHeroRow: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
         .padding(.horizontal, 20)
+    }
+
+    /// Horizontal et compact — même esprit que `RoadbookBigManeuverCardLandscape` (mode Assisté
+    /// GPS) : icône à gauche, distance bien visible, palier/cap/cumulé/repère empilés à droite en
+    /// petit, jamais plus haut qu'une seule ligne de contrôles.
+    private var landscapeBody: some View {
+        HStack(spacing: 20) {
+            VStack(spacing: 4) {
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 84)
+                    .foregroundStyle(isCurrent ? Color.accentColor : Color.accentColor.opacity(0.9))
+                if let landmark {
+                    Text(landmark.category.emoji)
+                        .font(.system(size: 30))
+                }
+            }
+
+            Text(unit.displayString(fromMeters: liveDistanceRemainingMeters ?? maneuver.partialDistanceMeters))
+                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(maneuver.checkpoint.tier.label)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("Cap \(Int(maneuver.headingDegrees.rounded()))° · Cumulé \(unit.displayString(fromMeters: maneuver.cumulativeDistanceMeters))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let landmark {
+                    Text(landmark.label)
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
     }
 }
 
