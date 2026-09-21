@@ -83,10 +83,8 @@ private struct RoadbookBigManeuverCard: View {
             // "à côté de la flèche il y ait des pictogrammes afin d'augmenter l'aide au niveau
             // du prochain virage") — HStack pour rester bien lisible même en très grande taille.
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                    .font(.system(size: 120, weight: .bold))
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 120)
                     .foregroundStyle(Color.accentColor)
-                    .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
                 if let landmark {
                     Text(landmark.category.emoji)
                         .font(.system(size: 64))
@@ -131,10 +129,8 @@ private struct RoadbookUpcomingRow: View {
                 .frame(width: 28)
 
             HStack(spacing: 4) {
-                Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                    .font(.system(size: 28, weight: .semibold))
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 28)
                     .foregroundStyle(.primary)
-                    .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
                 if let landmark {
                     Text(landmark.category.emoji)
                         .font(.system(size: 22))

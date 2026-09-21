@@ -378,10 +378,8 @@ private struct RoadbookTableRow: View {
                 // HStack plutôt qu'un badge superposé, plus lisible dans une colonne déjà
                 // étroite.
                 HStack(spacing: 4) {
-                    Image(systemName: maneuver.checkpoint.tier.systemImageName(direction: maneuver.checkpoint.direction))
-                        .font(.system(size: 22, weight: .bold))
+                    RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 22)
                         .foregroundStyle(isCurrent ? Color.accentColor : .primary)
-                        .rotationEffect(.degrees(maneuver.checkpoint.tier.rotationDegrees(direction: maneuver.checkpoint.direction) ?? 0))
                     if let landmark {
                         Text(landmark.category.emoji)
                             .font(.system(size: 20))

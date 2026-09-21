@@ -85,5 +85,18 @@ enum RoadBookConstants {
     /// imprimable en niveaux de gris") — une seule teinte plate plutôt qu'un vrai dégradé par
     /// glyphe (un dégradé par petit pictogramme serait imperceptible et compliquerait le rendu
     /// PDF pour rien) ; rendu correctement en gris moyen sur une impression noir & blanc.
+    /// PLUS seulement le PDF depuis it24 (point 2) — `RoadbookPictograms.swift` (écrans) réutilise
+    /// EXACTEMENT la même valeur (`Color(red:green:blue:)`), un seul repère visuel dans toute
+    /// l'app plutôt que deux teintes "orange" indépendantes qui pourraient dériver l'une de
+    /// l'autre au fil des itérations.
     static let pdfAccentColorRGB: (red: CGFloat, green: CGFloat, blue: CGFloat) = (0.92, 0.35, 0.15)
+
+    // MARK: - Pictogrammes enrichis (spec "roadbook-route-aware-maneuvers", it24, point 2)
+
+    /// Rond-point : angle (degrés, 0 = tout droit/12h, sens HORAIRE positif) entre deux sorties
+    /// consécutives — convention visuelle FIXE, Valhalla ne fournit que le RANG de la sortie
+    /// prise (`roundabout_exit_count`), jamais la géométrie réelle des sorties intermédiaires.
+    /// 45° laisse la place à 7 sorties avant de boucler sur 315°, largement au-delà de la
+    /// quasi-totalité des ronds-points rencontrés en usage réel.
+    static let roundaboutExitSpacingDegrees: Double = 45
 }

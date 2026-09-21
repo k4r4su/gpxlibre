@@ -104,4 +104,47 @@ final class RoadbookPDFExporterTests: XCTestCase {
         let layout = RoadbookPDFExporter.columnLayout(options: options, contentRect: CGRect(x: 0, y: 0, width: 400, height: 30))
         XCTAssertNil(layout.note)
     }
+
+    // MARK: - Pictogrammes route-aware (spec "roadbook-route-aware-maneuvers", it24, point 2)
+    // Aucun de ces 3 paliers n'existait au moment où `drawPictogram` a été écrit (it23) — vérifie
+    // que le dessin dédié (rond-point/fourche/fusion) ne fait jamais planter la génération.
+
+    private func maneuver(tier: RoadbookTier, direction: TurnDirection, roundaboutExitCount: Int? = nil) -> RoadbookManeuver {
+        let checkpoint = Checkpoint(
+            coordinate: .init(latitude: 45, longitude: 5),
+            turnAngleDegrees: 40,
+            direction: direction,
+            tier: tier,
+            sequenceIndex: 1,
+            sourcePointIndex: 0,
+            roundaboutExitCount: roundaboutExitCount
+        )
+        return RoadbookManeuver(checkpoint: checkpoint, partialDistanceMeters: 300, cumulativeDistanceMeters: 300, headingDegrees: 90)
+    }
+
+    func testGenerateNeverCrashesOnARoundaboutManeuver() {
+        let data = RoadbookPDFExporter.generate(trackName: "Rond-point", maneuvers: [maneuver(tier: .roundabout, direction: .straight, roundaboutExitCount: 3)], options: RoadbookPDFOptions())
+        XCTAssertTrue(data.starts(with: Array("%PDF".utf8)))
+    }
+
+    /// `roundaboutExitCount` absent (repli sur la 1ʳᵉ sortie, voir `RoadbookPictogramGeometry`)
+    /// — ne doit jamais crasher même sans cette donnée.
+    func testGenerateNeverCrashesOnARoundaboutManeuverWithoutAnExitCount() {
+        let data = RoadbookPDFExporter.generate(trackName: "Rond-point sans rang", maneuvers: [maneuver(tier: .roundabout, direction: .straight)], options: RoadbookPDFOptions())
+        XCTAssertTrue(data.starts(with: Array("%PDF".utf8)))
+    }
+
+    func testGenerateNeverCrashesOnAForkManeuverInEachDirection() {
+        for direction: TurnDirection in [.left, .right, .straight] {
+            let data = RoadbookPDFExporter.generate(trackName: "Fourche", maneuvers: [maneuver(tier: .fork, direction: direction)], options: RoadbookPDFOptions())
+            XCTAssertTrue(data.starts(with: Array("%PDF".utf8)), "\(direction)")
+        }
+    }
+
+    func testGenerateNeverCrashesOnAMergeManeuverInEachDirection() {
+        for direction: TurnDirection in [.left, .right, .straight] {
+            let data = RoadbookPDFExporter.generate(trackName: "Fusion", maneuvers: [maneuver(tier: .merge, direction: direction)], options: RoadbookPDFOptions())
+            XCTAssertTrue(data.starts(with: Array("%PDF".utf8)), "\(direction)")
+        }
+    }
 }
