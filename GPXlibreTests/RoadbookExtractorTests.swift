@@ -146,4 +146,55 @@ final class RoadbookExtractorTests: XCTestCase {
         let maneuvers = extract(track)
         XCTAssertEqual(Set(maneuvers.map(\.id)).count, maneuvers.count)
     }
+
+    // MARK: - Route-aware Valhalla (fix "roadbook-valhalla-route-aware")
+
+    /// Root cause du bug terrain "le Road Book n'utilise jamais la détection route-aware" :
+    /// `mapMatchedManeuvers` n'existait pas du tout sur cette API avant ce fix. Verrouille que le
+    /// paramètre atteint bien `RoadbookAnalyzer` et produit le palier attendu (rond-point, ici),
+    /// pas seulement qu'il compile.
+    func testMapMatchedManeuverProducesTheCorrespondingRoadbookTier() {
+        // Trace RECTILIGNE (aucun virage géométrique, voir `testStraightTrackProducesNoManeuvers`)
+        // — un point de map matching placé sur un virage géométrique DÉJÀ détecté serait fusionné
+        // dans cet événement existant plutôt que d'apparaître comme un événement séparé (voir
+        // `RoadbookMapMatchingTests.testMapMatchedCoordinateAtAnExistingGeometricEventProducesNoDuplicate`,
+        // comportement voulu) — sans virage géométrique concurrent ici, rien ne peut absorber le
+        // rond-point route-aware.
+        let track = staircaseTrack(legs: 1, pointsPerLeg: 10, legLengthMeters: 200)
+        let matched = MapMatchedManeuver(coordinate: track.points[5].coordinate, type: .roundaboutExit, roundaboutExitCount: 2)
+
+        let maneuvers = RoadbookExtractor.maneuvers(
+            for: track,
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault,
+            mapMatchedManeuvers: [matched]
+        )
+
+        XCTAssertTrue(maneuvers.contains { $0.checkpoint.tier == .roundabout && $0.checkpoint.roundaboutExitCount == 2 })
+    }
+
+    /// Non-régression explicite : omettre `mapMatchedManeuvers` (valeur par défaut `[]`) laisse
+    /// le comportement géométrique STRICTEMENT identique à avant ce fix.
+    func testOmittingMapMatchedManeuversLeavesGeometricDetectionUnchanged() {
+        let track = staircaseTrack(legs: 4)
+        let withoutParam = extract(track)
+        let withEmptyParam = RoadbookExtractor.maneuvers(
+            for: track,
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault,
+            mapMatchedManeuvers: []
+        )
+        XCTAssertEqual(withoutParam.map(\.id), withEmptyParam.map(\.id))
+        XCTAssertEqual(withoutParam.map { $0.checkpoint.tier }, withEmptyParam.map { $0.checkpoint.tier })
+    }
 }

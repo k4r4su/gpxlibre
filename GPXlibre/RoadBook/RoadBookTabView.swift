@@ -24,6 +24,20 @@ struct RoadBookTabView: View {
     @State private var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
     @State private var landmarkCache = RoadbookLandmarkCache()
 
+    /// Détection route-aware Valhalla (spec "roadbook-valhalla-route-aware", retour terrain :
+    /// "le Road Book n'a jamais utilisé la détection route-aware de Valhalla, contrairement à
+    /// la bannière latérale du Ride") — même mécanisme que `RideSessionManager.
+    /// triggerMapMatchingIfNeeded`/`RoadbookMapMatchCache`, dupliqué ICI plutôt que partagé
+    /// pour garder ce module décorrélé du fichier `RideSessionManager` (invariant "totalement
+    /// découplé de l'état de Ride actif") — mais le CACHE DISQUE, lui, est bien le même
+    /// (`Documents/RoadbookMapMatchCache/`, clé = id de trace) : un trajet déjà map-matché
+    /// depuis l'onglet Ride profite d'un cache-hit immédiat ici, et vice-versa.
+    @State private var mapMatchedManeuvers: [MapMatchedManeuver] = []
+    @State private var mapMatchCache = RoadbookMapMatchCache()
+    @State private var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
+    @State private var mapMatchingTask: Task<Void, Never>?
+    @State private var mapMatchedTrackID: UUID?
+
     /// Palette jour/nuit RÉSOLUE (spec "roadbook-ui-redesign", it25, point 0) — recalculée à
     /// l'apparition, à chaque mise à jour de position, à chaque changement du réglage manuel, ET
     /// périodiquement (`paletteReevaluationIntervalSeconds`) pendant que l'écran reste ouvert :
@@ -48,7 +62,21 @@ struct RoadBookTabView: View {
             markedThresholdDegrees: settings.roadbookMarkedThresholdDegrees,
             hardThresholdDegrees: settings.roadbookHardThresholdDegrees,
             uTurnThresholdDegrees: settings.roadbookUTurnThresholdDegrees,
-            mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters
+            mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters,
+            mapMatchedManeuvers: mapMatchedManeuvers
+        )
+    }
+
+    /// `nil` tant que le toggle Réglages > Avancé > Routage Valhalla est désactivé ou l'endpoint
+    /// vide — dans ce cas, `triggerMapMatchingIfNeeded` ne fait aucun appel réseau et le Road
+    /// Book retombe silencieusement sur la détection géométrique seule, comportement identique
+    /// à avant ce fix (jamais un échec qui ferait croire à une précision route-aware absente).
+    private var currentValhallaConfiguration: ValhallaConfiguration? {
+        guard settings.valhallaEnabled, !settings.valhallaEndpointURLString.isEmpty else { return nil }
+        return ValhallaConfiguration(
+            endpointURLString: settings.valhallaEndpointURLString,
+            username: ValhallaKeychainStore.username(),
+            password: ValhallaKeychainStore.password()
         )
     }
 
@@ -155,6 +183,11 @@ struct RoadBookTabView: View {
             // "roadbook-landmark-id-stability") — deux traces différentes peuvent partager le
             // même index, donc jamais réutiliser les entrées d'une trace précédente ici.
             landmarks = [:]
+            if let track = selectedTrack {
+                triggerMapMatchingIfNeeded(for: track)
+            } else {
+                mapMatchedManeuvers = []
+            }
             await loadLandmarksIfNeeded()
         }
     }
@@ -164,6 +197,53 @@ struct RoadBookTabView: View {
             override: settings.roadbookPaletteSetting.overrideValue,
             coordinate: locationManager.currentLocation?.coordinate
         )
+    }
+
+    /// Déclenche le map matching Valhalla EN TÂCHE DE FOND, une fois par trace RÉELLEMENT
+    /// différente — même patron que `RideSessionManager.triggerMapMatchingIfNeeded` (voir
+    /// Ride/CLAUDE.md pour le détail du fonctionnement cache-hit/cache-miss), dupliqué ici pour
+    /// garder ce module décorrélé du fichier `RideSessionManager`. Dégradation propre partout :
+    /// Valhalla désactivé/non configuré → aucun appel réseau, roadbook géométrique identique à
+    /// avant ce fix ; échec réseau (`try?`) → même résultat, jamais de crash ni de blocage.
+    private func triggerMapMatchingIfNeeded(for track: GPXTrack) {
+        guard mapMatchedTrackID != track.id else { return }
+        mapMatchedTrackID = track.id
+        mapMatchingTask?.cancel()
+
+        guard let configuration = currentValhallaConfiguration else {
+            mapMatchedManeuvers = []
+            return
+        }
+
+        if let cached = mapMatchCache.maneuvers(for: track.id) {
+            mapMatchedManeuvers = cached
+            return
+        }
+
+        mapMatchedManeuvers = []
+        let trackID = track.id
+        let sampled = Self.downsampledForMapMatching(track.points.map(\.coordinate))
+        let provider = mapMatchingProvider
+
+        mapMatchingTask = Task {
+            guard let matched = try? await provider.matchRoute(coordinates: sampled, configuration: configuration) else { return }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard selectedTrack?.id == trackID else { return }
+                mapMatchCache.store(trackID: trackID, maneuvers: matched)
+                mapMatchedManeuvers = matched
+            }
+        }
+    }
+
+    /// Sous-échantillonnage UNIFORME avant map matching — même patron que `RideSessionManager.
+    /// downsampledForMapMatching`, dupliqué ici plutôt que partagé (invariant "totalement
+    /// découplé de l'état de Ride actif" : ce module n'importe jamais RideSessionManager.swift).
+    private static func downsampledForMapMatching(_ coordinates: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        let maxPoints = RideConstants.mapMatchingMaxTracePoints
+        guard coordinates.count > maxPoints, maxPoints > 1 else { return coordinates }
+        let step = Double(coordinates.count - 1) / Double(maxPoints - 1)
+        return (0..<maxPoints).map { coordinates[Int((Double($0) * step).rounded())] }
     }
 
     /// Résout les repères OSM manquants un par un (jamais en rafale concurrente — bonne conduite

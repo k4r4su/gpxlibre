@@ -2,11 +2,13 @@ import Foundation
 
 /// Construit la liste ORDONNÉE de manœuvres d'un Road Book à partir d'une trace (spec
 /// "roadbook-mode", it23, point 1) — RÉUTILISE `RoadbookAnalyzer.buildRoadbookEvents`
-/// (détection de virage existante, it14, paliers 30/45/90/135°) et
-/// `TrackProjector.cumulativeDistances` (distance cumulée par point de trace) SANS nouvelle
-/// logique de détection ("pas de nouvelle logique de détection à ce stade", demande explicite
-/// de la fiche) : ce fichier ne fait qu'ASSEMBLER les distances partielle/cumulée autour de la
-/// liste de checkpoints déjà produite ailleurs — seule vraie nouveauté ici.
+/// (détection de virage existante, it14, paliers 30/45/90/135° ; route-aware Valhalla, it20/it24,
+/// branché ici depuis "roadbook-valhalla-route-aware") et `TrackProjector.cumulativeDistances`
+/// (distance cumulée par point de trace) SANS nouvelle logique de détection PROPRE À CE FICHIER
+/// ("pas de nouvelle logique de détection à ce stade", demande explicite de la fiche it23) : ce
+/// fichier ne fait qu'ASSEMBLER les distances partielle/cumulée autour de la liste de checkpoints
+/// déjà produite ailleurs, et transmettre les manœuvres route-aware déjà résolues par
+/// `RoadBookTabView` (voir `mapMatchedManeuvers` ci-dessous) — seule vraie nouveauté ici.
 ///
 /// Pure et testable, AUCUNE dépendance à `RideSessionManager`/`LibraryStore` — prend une
 /// `GPXTrack` en entrée, ne lit ni n'écrit aucun état partagé. C'est cette pureté qui garantit
@@ -14,6 +16,14 @@ import Foundation
 /// PEUT toucher `GuidanceTarget` (it22) ni l'invariant trace unique `activeTrackID`/
 /// `displayedTrackIDs` (it10), puisque ce module n'y a tout simplement pas accès.
 enum RoadbookExtractor {
+    /// - Parameter mapMatchedManeuvers : manœuvres route-aware Valhalla déjà RETENUES (filtrage
+    ///   par type déjà appliqué, voir `ValhallaManeuverType.roadbookTier`) — spec
+    ///   "roadbook-valhalla-route-aware", retour terrain : "le Road Book n'a jamais utilisé la
+    ///   détection route-aware de Valhalla" (root cause confirmée : ce paramètre n'existait pas
+    ///   ici avant ce fix, `RoadbookAnalyzer` retombait systématiquement sur son défaut `[]`,
+    ///   pur géométrique). `[]` par défaut — Valhalla désactivé/non configuré/trace hors-piste
+    ///   dégrade proprement vers le même comportement géométrique qu'avant ce fix, jamais un
+    ///   échec silencieux qui ferait croire à une précision route-aware absente.
     static func maneuvers(
         for track: GPXTrack,
         windowBeforeMeters: Double,
@@ -22,7 +32,8 @@ enum RoadbookExtractor {
         markedThresholdDegrees: Double,
         hardThresholdDegrees: Double,
         uTurnThresholdDegrees: Double,
-        mergeMinDistanceMeters: Double
+        mergeMinDistanceMeters: Double,
+        mapMatchedManeuvers: [MapMatchedManeuver] = []
     ) -> [RoadbookManeuver] {
         let checkpoints = RoadbookAnalyzer.buildRoadbookEvents(
             for: track,
@@ -32,7 +43,8 @@ enum RoadbookExtractor {
             markedThresholdDegrees: markedThresholdDegrees,
             hardThresholdDegrees: hardThresholdDegrees,
             uTurnThresholdDegrees: uTurnThresholdDegrees,
-            mergeMinDistanceMeters: mergeMinDistanceMeters
+            mergeMinDistanceMeters: mergeMinDistanceMeters,
+            mapMatchedManeuvers: mapMatchedManeuvers
         )
         // Trace sans aucun changement de direction (ou trop courte pour buildRoadbookEvents,
         // voir son garde `points.count > 2`) → liste vide, jamais un crash ni un repli sur un
