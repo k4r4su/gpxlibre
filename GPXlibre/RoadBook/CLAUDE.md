@@ -258,3 +258,61 @@ légèrement différent (position live optionnelle, mode Assisté GPS uniquement
 `roadbookMiniMapEnabled` : "utile en debug de fiabilité de la feature et comme filet de
 sécurité visuel" (spec) — jamais affiché en mode Roadbook classique (pas de position live à
 montrer dans ce mode).
+
+## Détection route-aware + pictogrammes enrichis (spec "roadbook-route-aware-maneuvers", it24)
+
+Retour terrain (point 0) : le toggle Valhalla (Réglages > Avancé) n'avait aucun indicateur de
+service RÉELLEMENT utilisé — voir `Ride/CLAUDE.md` section "Indicateur de service de routage
+actif" pour `RoutingActivityMonitor`, hors périmètre RoadBook mais découvert/corrigé dans la
+même itération.
+
+**Filtrage type de manœuvre (point 1)** — root cause d'un bug terrain ("une courbe progressive
+sur le même axe déclenche un événement à tort") : `ValhallaMapMatchingService` (déjà branché
+depuis it20) ne regardait QUE `begin_shape_index`, jamais le TYPE de manœuvre — `.continueStraight`/
+`.becomes` (la route continue/change de nom SANS virage réel) devenaient donc des événements
+roadbook comme n'importe quel vrai virage. Fix : `ValhallaManeuverType.roadbookTier` (Nav/
+ValhallaManeuverType.swift — réutilise l'énumération déjà vérifiée contre la doc Valhalla en
+it21) filtre EN AMONT (`ValhallaMapMatchingService.intermediateManeuvers`) — `nil` = pas une
+vraie décision de conduite, écarté avant même d'atteindre `RoadbookAnalyzer`. `bearing_before`/
+`bearing_after` (demandés par la fiche it24) délibérément PAS décodés — vérifiés ABSENTS du
+schéma réel des manœuvres Valhalla dès it21 : la direction vient de `roadbookDirection` (dérivée
+du TYPE lui-même), plus fiable que l'angle géométrique bruité au point.
+
+**Nouveaux paliers `RoadbookTier`** : `.roundabout`/`.fork`/`.merge` (map matching UNIQUEMENT,
+jamais par angle géométrique seul) — `.uTurn` détecté par map matching réutilise le palier
+EXISTANT, comme demandé ("à conserver tel quel"). `Checkpoint.roundaboutExitCount: Int?` (champ
+séparé, même patron que `direction`) porte le rang Valhalla (`roundabout_exit_count`) pour le
+pictogramme. `MapMatchedManeuver` (coordonnée + type + exit count) remplace le simple
+`[CLLocationCoordinate2D]` partout (service/cache/analyzer) — format de cache disque CHANGÉ,
+dégradation propre (`RoadbookMapMatchCache`, un ancien fichier it20 échoue simplement à décoder,
+jamais un crash, recalculé au prochain accès).
+
+**Pictogrammes dédiés (point 2)** — `RoadbookPictogramGeometry.swift` (géométrie PURE,
+`roundaboutExitAngleDegrees`/`skippedExitRanks`, 45°/sortie, convention visuelle FIXE car
+Valhalla ne fournit que le RANG de sortie jamais la géométrie réelle) + `RoadbookPictograms.swift`
+(SwiftUI Canvas — `RoadbookRoundaboutPictogram`/`RoadbookForkPictogram`/`RoadbookMergePictogram`,
+teinte d'accent PARTAGÉE avec le PDF via `RoadBookConstants.pdfAccentColorRGB`) +
+`RoadbookManeuverIcon` (point d'entrée UNIQUE table/vue focalisée, bascule dessin dédié ou repli
+SF Symbol). `RoadbookPDFExporter.drawPictogram` bascule pareil côté Core Graphics
+(`drawRoundaboutPictogram`/`drawForkPictogram`/`drawMergePictogram`, MÊME géométrie partagée) —
+écran et PDF affichent toujours exactement le même pictogramme pour une manœuvre donnée.
+`RoadbookTier.systemImageName` (repli SF Symbol générique) ne sert plus QUE aux pins carte
+(`RideMapLibreView`, trop petits pour un pictogramme dessiné).
+
+**Liste de POI étendue à 50 tags OSM (point 3)** — `RoadbookLandmarkCategory` passe à
+`CaseIterable` (32 catégories), `RoadbookLandmark.bestLandmark` réécrit autour d'une table
+déclarative de `Matcher` (tier + catégorie + fonction de correspondance) plutôt que des `if let`
+empilés à la main — ajouter un tag revient à ajouter UNE ligne. Priorité INCHANGÉE pour les
+catégories déjà existantes (it23quater/it23sexies) ; les nouvelles sont classées par ANALOGIE
+avec l'esprit de chaque palier (la fiche donne des groupes THÉMATIQUES, pas un ordre de
+priorité — choix assumé, documenté dans `RoadbookLandmark.swift`). `RoadbookLandmarkService` :
+la plupart des nouvelles familles de tags sont interrogées EN BLOC côté Overpass
+(`["tourism"]`/`["historic"]`/`["natural"]`/`["man_made"]`/`["shop"]`/`["leisure"]`/
+`["barrier"]`/`["railway"]`) plutôt que valeur par valeur — un futur ajout ne touchera que
+`RoadbookLandmark`, jamais ce fichier. `highway=speed_camera` explicitement HORS PÉRIMÈTRE
+(même sujet que les alertes trafic TomTom, à trancher séparément).
+
+Non vérifié en conditions réelles (pas de device physique dans cet environnement) : rendu visuel
+des 3 pictogrammes dessinés, pertinence réelle des nouveaux POI sur un vrai trajet, indicateur
+de service de routage en conditions de coupure réseau réelle — logique couverte par les tests
+unitaires, à confirmer par le pilote (voir checklist manuelle du commit).

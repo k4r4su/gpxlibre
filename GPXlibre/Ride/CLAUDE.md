@@ -298,7 +298,8 @@ nativement) : "auto" par défaut privilégierait sinon l'autoroute la plus rapid
 pour un contournement/une reprise moto sur petites routes.
 
 ## Détection fine de virages via map matching (spec
-## "valhalla-map-matching-direction-change", it20)
+## "valhalla-map-matching-direction-change", it20 ; filtrage par type de manœuvre, it24 point 1
+## — voir RoadBook/CLAUDE.md section "Détection route-aware" pour le détail complet)
 
 Retour terrain : un léger virage (< `roadbookLightThresholdDegrees`, 30° par défaut)
 correspondant à un VRAI changement de rue/bifurcation n'était pas signalé — le roadbook ne
@@ -314,20 +315,28 @@ changement de rue) :
   complexe à interpréter) : chaque élément de `trip.legs[].maneuvers[]` délimite déjà un segment
   de manœuvre distinct (nom de rue/type différent), exactement ce qu'on veut détecter sans
   reconstruire cette segmentation depuis des attributs bas niveau. Première ET dernière manœuvre
-  (Départ/Arrivée) toujours exclues (`intermediateManeuverCoordinates`) — seules les manœuvres
-  EN COURS de route sont des candidats. `RideConstants.mapMatchingMaxTracePoints` (2000) :
-  sous-échantillonnage UNIFORME en amont si la trace dépasse ce nombre de points (charge utile
-  raisonnable même sur un enregistrement dense "précis", 5 s/15 m).
-- `RoadbookTier.lightDirectionChange` : nouveau palier, DISTINCT des 4 paliers d'angle existants
+  (Départ/Arrivée) toujours exclues (`intermediateManeuvers`, ex-`intermediateManeuverCoordinates`
+  avant it24) — seules les manœuvres EN COURS de route sont des candidates, ET (it24 point 1)
+  seules celles dont `ValhallaManeuverType.roadbookTier` n'est pas `nil` survivent (écarte
+  `.continueStraight`/`.becomes`, présents à chaque changement de nom de rue même sans virage).
+  `RideConstants.mapMatchingMaxTracePoints` (2000) : sous-échantillonnage UNIFORME en amont si
+  la trace dépasse ce nombre de points (charge utile raisonnable même sur un enregistrement
+  dense "précis", 5 s/15 m).
+- `RoadbookTier.lightDirectionChange` : palier DISTINCT des 4 paliers d'angle existants
   (light/marked/hard/uTurn) — icône "signpost.left/right" (panneau de signalisation, pas une
-  flèche), signale explicitement "pas un virage géométrique classique".
-- `RoadbookAnalyzer.buildRoadbookEvents(..., mapMatchedDirectionChangeCoordinates: [] par
-  défaut)` — respecte l'invariant it14 "source unique pour épingles carte ET bannière latérale" :
-  UNE SEULE liste `[Checkpoint]`, enrichie plutôt que dupliquée. Un point de map matching à
-  moins de `mergeMinDistanceMeters` d'un événement géométrique déjà détecté est ignoré (pas de
-  doublon) ; sinon assigné au point de trace le plus proche à vol d'oiseau
-  (`nearestPointIndex`, parcours linéaire — trace de taille raisonnable, pas besoin d'index
-  spatial) et ajouté avec `tier: .lightDirectionChange`. La liste fusionnée est re-triée par
+  flèche), signale explicitement "pas un virage géométrique classique". Depuis it24, ce n'est
+  plus le SEUL palier possible pour un point de map matching — `.roundabout`/`.fork`/`.merge`
+  (rond-point/fourche/fusion-bretelle, dérivés du TYPE de manœuvre Valhalla) et même `.uTurn`
+  (réutilisé tel quel) peuvent aussi être assignés, voir RoadBook/CLAUDE.md.
+- `RoadbookAnalyzer.buildRoadbookEvents(..., mapMatchedManeuvers: [] par défaut, ex-
+  `mapMatchedDirectionChangeCoordinates` avant it24)` — respecte l'invariant it14 "source unique
+  pour épingles carte ET bannière latérale" : UNE SEULE liste `[Checkpoint]`, enrichie plutôt
+  que dupliquée. Une manœuvre à moins de `mergeMinDistanceMeters` d'un événement géométrique
+  déjà détecté est ignorée (pas de doublon) ; sinon assignée au point de trace le plus proche à
+  vol d'oiseau (`nearestPointIndex`, parcours linéaire — trace de taille raisonnable, pas besoin
+  d'index spatial) avec le `tier`/la `direction` dérivés de son TYPE Valhalla (`roadbookTier`/
+  `roadbookDirection`, it24 — plus fiable que l'angle géométrique bruité utilisé avant). La
+  liste fusionnée est re-triée par
   `sourcePointIndex` (progression le long du trajet) puis renumérotée — l'ordre d'INSERTION
   (géométrique toujours ajouté avant map matching dans le code) ne reflète pas forcément l'ordre
   RÉEL le long du trajet. `windowedTurn(at:...)`, extrait de la boucle principale sans
@@ -372,6 +381,35 @@ d'init : son init est contractuel (protocole `MapProvider`, signature fixe, voir
 `is2DNorthUp` réel de l'utilisateur n'est jamais modifié — `RideView.effectiveIs2DNorthUp`
 calcule la valeur AFFICHÉE (force cap-en-haut si `debugReplayForcesHeadingUp`) sans toucher à
 l'état persistant.
+
+## Indicateur de service de routage actif (spec "routing-active-service-indicator", it24, point 0)
+
+Retour terrain : "le toggle Valhalla est activé côté Réglages, mais il n'y a aujourd'hui aucun
+moyen de confirmer à l'œil quel service répond réellement à un instant donné (Valhalla, ou
+repli silencieux vers OSRM)". Vérification technique PRÉALABLE (demandée par la fiche) :
+`RoutingProviderResolver` existait DÉJÀ (it20) et est réellement câblé dans
+`DetourRoutingService.route(...)` — confirmé par un vrai appel réseau (curl direct vers
+`valhalla.zim.ovh/status`/`route`, hors app, pendant cette itération) montrant un serveur
+joignable derrière Traefik/Basic Auth (401 attendu sans identifiants) : le chemin réseau
+fonctionne de bout en bout, seule l'authentification (Trousseau iOS du propriétaire) reste à
+vérifier en conditions réelles via l'indicateur ci-dessous.
+
+`RoutingActivityMonitor` (@MainActor ObservableObject, même patron que `NetworkMonitor`) —
+`RoutingActivityEvent(provider: .valhalla/.osrm, date:)`, mis à jour EN LIVE à chaque succès
+RÉEL, jamais un statut figé au démarrage, jamais sur un échec (un échec total laisse
+l'indicateur sur le dernier succès réel, ou "Aucune requête récente" si aucun n'a encore eu
+lieu — volontairement PAS de 4e état "erreur", la fiche n'en demande que 3). DEUX points
+d'écriture, les SEULS endroits du code où une requête de routage Valhalla part réellement :
+- `RoutingProvider.kind: RoutingActivityProvider` (`.valhalla`/`.osrm`) + `DetourRoutingService.
+  route(...providers:activityMonitor:)` enregistre `provider.kind` sur CHAQUE succès de la
+  chaîne de repli (contournement/reprise hors-trace/hors-route d'Aller à) — `activityMonitor`
+  injectable (défaut `.shared`), une instance FRAÎCHE en test plutôt que le singleton partagé.
+- `RideSessionManager.requestNavRoute` enregistre `.valhalla` directement (guidage riche,
+  AUCUN repli OSRM — dépendance dure, voir section Nav/CLAUDE.md "Branchement Valhalla").
+
+Affiché dans `ValhallaSettingsView` (Réglages > Avancé > Routage Valhalla), juste sous le
+toggle existant — "Valhalla" (vert) / "OSRM (repli)" (orange) / "Aucune requête récente" (gris)
++ heure du dernier appel.
 
 ## Pictogrammes de virage cohérents (fix "turn-icon-backward-looking", it23bis)
 

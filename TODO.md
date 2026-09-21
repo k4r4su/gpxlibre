@@ -1,5 +1,41 @@
 # TODO
 
+## Itération 24 (roadbook route-aware + diagnostic Valhalla)
+
+Trois points indépendants : (0) diagnostic + indicateur de service de routage actif, retour
+terrain "aucun moyen de confirmer à l'œil quel service répond réellement" ; (1) détection de
+virage route-aware via filtrage du type de manœuvre Valhalla, root cause du bug "une courbe
+progressive sur le même axe déclenche un événement à tort" ; (2) pictogrammes enrichis
+(rond-point avec sortie surlignée, fourche en Y, fusion/bretelle) ; (3) liste de tags OSM
+étendue à 50 pour l'enrichissement visuel du roadbook.
+
+- **`feat:"routing-active-service-indicator"`** : `RoutingActivityMonitor` (Ride/) — dernier
+  service ayant EFFECTIVEMENT répondu à une requête de routage réelle, affiché dans Réglages >
+  Avancé > Routage Valhalla ("Valhalla"/"OSRM (repli)"/"Aucune requête récente" + heure).
+  Vérification technique préalable : `RoutingProviderResolver` existait déjà (it20), confirmé
+  réellement câblé + un vrai appel réseau vers `valhalla.zim.ovh` (401/Basic Auth attendu, sans
+  identifiants disponibles dans cet environnement). Voir Ride/CLAUDE.md.
+- **`feat:"roadbook-route-aware-maneuver-filtering"`** : `ValhallaManeuverType.roadbookTier`/
+  `roadbookDirection` filtrent les manœuvres de map matching par TYPE (écarte `.continueStraight`/
+  `.becomes`) plutôt que d'accepter toute manœuvre intermédiaire comme avant it24 — nouveaux
+  paliers `RoadbookTier.roundabout`/`.fork`/`.merge`, `Checkpoint.roundaboutExitCount`. Format de
+  cache `RoadbookMapMatchCache` changé (dégradation propre sur un ancien cache it20). Voir
+  RoadBook/CLAUDE.md section "Détection route-aware".
+- **`feat:"roadbook-enriched-pictograms"`** : `RoadbookPictogramGeometry`/`RoadbookPictograms.swift`
+  (SwiftUI Canvas) + équivalents Core Graphics dans `RoadbookPDFExporter` — rond-point/fourche/
+  fusion dessinés dédiés, même géométrie partagée écran/PDF. Non vérifié visuellement (pas de
+  device physique dans cet environnement).
+- **`feat:"roadbook-poi-tag-list-expansion"`** : `RoadbookLandmarkCategory` (32 catégories,
+  `CaseIterable`) + `RoadbookLandmark.bestLandmark` réécrit en table déclarative de `Matcher`.
+  Requête Overpass étendue (familles de tags en bloc). `highway=speed_camera` explicitement
+  hors périmètre (même sujet que TomTom, à trancher séparément). Voir RoadBook/CLAUDE.md.
+
+Checklist manuelle restant à faire par le propriétaire (pas de device physique dans cet
+environnement) : lire l'indicateur de service actif en conditions réelles (couper le réseau
+pour forcer un repli OSRM et vérifier le changement) ; vérifier sur une trace routière connue
+qu'une longue courbe douce sur le même axe ne génère plus d'événement à tort ; rond-point réel
+(bonne sortie affichée) ; traverser une zone avec plusieurs POI de la nouvelle liste.
+
 ## Itération 23sexies (repères en pictogrammes emoji + zoom mini-carte encore resserré)
 
 Retour terrain double : "zoom serré je pense que tu peux mettre 200m de chaque côté, c'est
