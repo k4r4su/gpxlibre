@@ -24,7 +24,6 @@ enum TurnDirection {
 }
 
 struct Checkpoint: Identifiable, Hashable {
-    let id = UUID()
     let coordinate: CLLocationCoordinate2D
     let turnAngleDegrees: Double
     let direction: TurnDirection
@@ -61,6 +60,36 @@ struct Checkpoint: Identifiable, Hashable {
         self.roundaboutExitCount = roundaboutExitCount
     }
 
-    static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    /// Fix "roadbook-landmark-id-stability" (retour terrain, session it25 : "il n'y a que des
+    /// flèches, pas d'emoji de repère" — jamais un seul ne s'affichait). Root cause :
+    /// `let id = UUID()` générait un id ALÉATOIRE à CHAQUE construction, or
+    /// `RoadBookTabView.maneuvers` est une propriété CALCULÉE réévaluée à chaque rendu SwiftUI
+    /// (chaque fix GPS en mode Assisté) — les `Checkpoint` du même point de la trace obtenaient
+    /// donc un id DIFFÉRENT à chaque rendu, désynchronisant immédiatement
+    /// `RoadBookTabView.landmarks: [UUID: RoadbookLandmarkInfo?]` (rempli une fois avec les ids
+    /// du PREMIER rendu) de la liste réellement affichée l'instant d'après.
+    ///
+    /// `sourcePointIndex` est stable et UNIQUE PAR TRACE (`mergeNearby`/
+    /// `mergingMapMatchedDirectionChanges` ne produisent jamais deux checkpoints au même index)
+    /// tant que la trace/les réglages de détection ne changent pas — un id dérivé de cette seule
+    /// valeur reste donc identique d'un recalcul à l'autre. Deux traces DIFFÉRENTES peuvent
+    /// partager le même `sourcePointIndex` : voir `RoadBookTabView`, qui vide `landmarks` au
+    /// changement de trace pour ne jamais laisser un repère d'une autre trace s'y mélanger.
+    var id: UUID { Self.deterministicID(forSourcePointIndex: sourcePointIndex) }
+
+    private static func deterministicID(forSourcePointIndex index: Int) -> UUID {
+        let hex = String(format: "%032x", max(index, 0))
+        let last32 = String(hex.suffix(32))
+        let uuidString = [
+            last32.prefix(8),
+            last32.dropFirst(8).prefix(4),
+            last32.dropFirst(12).prefix(4),
+            last32.dropFirst(16).prefix(4),
+            last32.dropFirst(20).prefix(12),
+        ].joined(separator: "-")
+        return UUID(uuidString: uuidString) ?? UUID()
+    }
+
+    static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.sourcePointIndex == rhs.sourcePointIndex }
+    func hash(into hasher: inout Hasher) { hasher.combine(sourcePointIndex) }
 }

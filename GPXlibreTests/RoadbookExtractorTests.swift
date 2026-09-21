@@ -121,4 +121,29 @@ final class RoadbookExtractorTests: XCTestCase {
         let track = staircaseTrack(legs: 2)
         XCTAssertNoThrow(extract(track))
     }
+
+    // MARK: - Stabilité de l'identité (fix "roadbook-landmark-id-stability")
+
+    /// Root cause du bug terrain "aucun emoji de repère ne s'affiche jamais" : `RoadBookTabView.
+    /// maneuvers` est une propriété CALCULÉE, réévaluée à CHAQUE rendu SwiftUI (chaque fix GPS en
+    /// mode Assisté) — si `Checkpoint.id` changeait à chaque extraction, le dictionnaire
+    /// `landmarks: [UUID: RoadbookLandmarkInfo?]` rempli lors d'un rendu perdait toutes ses
+    /// entrées dès le rendu suivant. Verrouille le contrat : extraire DEUX FOIS la MÊME trace
+    /// (mêmes réglages) doit produire EXACTEMENT les mêmes ids, dans le même ordre.
+    func testManeuverIdentityIsStableAcrossRepeatedExtractionsOfTheSameTrack() {
+        let track = staircaseTrack(legs: 5)
+        let firstPass = extract(track)
+        let secondPass = extract(track)
+
+        XCTAssertFalse(firstPass.isEmpty, "précondition : au moins une manœuvre à comparer")
+        XCTAssertEqual(firstPass.map(\.id), secondPass.map(\.id))
+    }
+
+    /// Deux manœuvres DISTINCTES de la même trace ne doivent jamais partager le même id (l'id
+    /// dérive uniquement de `sourcePointIndex`, unique par trace après fusion).
+    func testDifferentManeuversOfTheSameTrackHaveDistinctIdentities() {
+        let track = staircaseTrack(legs: 5)
+        let maneuvers = extract(track)
+        XCTAssertEqual(Set(maneuvers.map(\.id)).count, maneuvers.count)
+    }
 }

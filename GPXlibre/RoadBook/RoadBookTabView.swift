@@ -151,6 +151,10 @@ struct RoadBookTabView: View {
         // besoin de gérer l'annulation à la main (voir RoadBook/CLAUDE.md pour le détail du
         // fonctionnement best-effort, point par point, sans jamais bloquer l'affichage).
         .task(id: selectedTrack?.id) {
+            // `Checkpoint.id` est désormais dérivé de `sourcePointIndex` SEUL (fix
+            // "roadbook-landmark-id-stability") — deux traces différentes peuvent partager le
+            // même index, donc jamais réutiliser les entrées d'une trace précédente ici.
+            landmarks = [:]
             await loadLandmarksIfNeeded()
         }
     }
