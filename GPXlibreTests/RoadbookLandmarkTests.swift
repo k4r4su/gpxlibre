@@ -129,14 +129,128 @@ final class RoadbookLandmarkTests: XCTestCase {
 
     /// Chaque catégorie doit produire un emoji NON VIDE — un repère sans pictogramme visible
     /// contredirait exactement la demande terrain ("à côté de la flèche il y ait des
-    /// pictogrammes afin d'augmenter l'aide").
+    /// pictogrammes afin d'augmenter l'aide"). `CaseIterable` (it24) : exhaustif par
+    /// construction, aucun risque d'oublier une catégorie ajoutée plus tard dans ce test.
     func testEveryCategoryProducesANonEmptyEmoji() {
-        for category in [
-            RoadbookLandmarkCategory.unpavedRoad, .levelCrossing, .bridge, .ford,
-            .roundabout, .church, .powerLine, .trafficSignals, .giveWay, .fuel, .railway,
-            .tree, .house, .genericName,
-        ] {
+        for category in RoadbookLandmarkCategory.allCases {
             XCTAssertFalse(category.emoji.isEmpty, "\(category)")
         }
+    }
+
+    /// Chaque emoji doit être UNIQUE — deux catégories partageant le même pictogramme seraient
+    /// indiscernables à l'écran (le texte du libellé n'est pas toujours affiché en grand, voir
+    /// `RoadbookBigManeuverCard`).
+    func testEveryCategoryHasADistinctEmoji() {
+        let emojis = RoadbookLandmarkCategory.allCases.map(\.emoji)
+        XCTAssertEqual(Set(emojis).count, emojis.count)
+    }
+
+    // MARK: - Nouveaux tags OSM (spec "roadbook-route-aware-maneuvers", it24, point 3 — liste
+    // de 50 tags). Un cas représentatif par nouvelle catégorie plutôt que ré-exercer toute la
+    // logique de priorité déjà couverte ci-dessus pour le palier historique.
+
+    func testDetectsTunnel() {
+        XCTAssertEqual(category([["tunnel": "yes"]]), .tunnel)
+    }
+
+    func testDetectsTollBooth() {
+        XCTAssertEqual(category([["barrier": "toll_booth"]]), .tollBooth)
+    }
+
+    func testDetectsBorderControl() {
+        XCTAssertEqual(category([["barrier": "border_control"]]), .borderControl)
+    }
+
+    func testDetectsCityLimitSign() {
+        XCTAssertEqual(category([["traffic_sign": "city_limit"]]), .citySign)
+    }
+
+    func testDetectsMiniRoundaboutAsTheSameCategoryAsAJunctionRoundabout() {
+        XCTAssertEqual(category([["highway": "mini_roundabout"]]), .roundabout)
+    }
+
+    func testDetectsSpeedBumpFromEitherTrafficCalmingValue() {
+        XCTAssertEqual(category([["traffic_calming": "bump"]]), .speedBump)
+        XCTAssertEqual(category([["traffic_calming": "table"]]), .speedBump)
+    }
+
+    func testDetectsPedestrianCrossing() {
+        XCTAssertEqual(category([["highway": "crossing"]]), .pedestrianCrossing)
+    }
+
+    func testDetectsGateAndLiftGateAsTheSameCategory() {
+        XCTAssertEqual(category([["barrier": "gate"]]), .gate)
+        XCTAssertEqual(category([["barrier": "lift_gate"]]), .gate)
+    }
+
+    func testDetectsRestAreaAndServicesAsTheSameCategory() {
+        XCTAssertEqual(category([["highway": "rest_area"]]), .restArea)
+        XCTAssertEqual(category([["highway": "services"]]), .restArea)
+    }
+
+    func testDetectsEachTowerLikeStructure() {
+        XCTAssertEqual(label([["man_made": "water_tower"]]), "Château d'eau")
+        XCTAssertEqual(label([["man_made": "windmill"]]), "Moulin")
+        XCTAssertEqual(label([["man_made": "chimney"]]), "Cheminée")
+        XCTAssertEqual(label([["man_made": "silo"]]), "Silo")
+        XCTAssertEqual(label([["man_made": "lighthouse"]]), "Phare")
+    }
+
+    func testDetectsCastle() {
+        XCTAssertEqual(category([["historic": "castle"]]), .castle)
+    }
+
+    func testDetectsRailwayStation() {
+        XCTAssertEqual(category([["railway": "station"]]), .station)
+    }
+
+    func testDetectsServiceAmenities() {
+        XCTAssertEqual(category([["amenity": "townhall"]]), .townHall)
+        XCTAssertEqual(category([["amenity": "hospital"]]), .hospital)
+        XCTAssertEqual(category([["amenity": "police"]]), .police)
+        XCTAssertEqual(category([["amenity": "fire_station"]]), .fireStation)
+        XCTAssertEqual(category([["amenity": "school"]]), .school)
+    }
+
+    func testDetectsHotelWithName() {
+        XCTAssertEqual(label([["tourism": "hotel", "name": "Ibis"]]), "Hôtel Ibis")
+    }
+
+    func testDetectsSupermarketWithName() {
+        XCTAssertEqual(label([["shop": "supermarket", "name": "Leclerc"]]), "Supermarché Leclerc")
+    }
+
+    func testDetectsRestaurantWithName() {
+        XCTAssertEqual(label([["amenity": "restaurant", "name": "Chez Marcel"]]), "Restaurant Chez Marcel")
+    }
+
+    func testDetectsNatureAndHistoricLandmarks() {
+        XCTAssertEqual(category([["tourism": "camp_site"]]), .campSite)
+        XCTAssertEqual(category([["leisure": "park"]]), .park)
+        XCTAssertEqual(category([["tourism": "viewpoint"]]), .viewpoint)
+        XCTAssertEqual(category([["natural": "cave_entrance"]]), .caveEntrance)
+        XCTAssertEqual(category([["natural": "cliff"]]), .cliff)
+        XCTAssertEqual(category([["natural": "spring"]]), .spring)
+        XCTAssertEqual(category([["waterway": "waterfall"]]), .waterfall)
+        XCTAssertEqual(category([["natural": "water"]]), .water)
+        XCTAssertEqual(category([["historic": "monument"]]), .monument)
+        XCTAssertEqual(category([["historic": "wayside_cross"]]), .waysideCross)
+        XCTAssertEqual(category([["landuse": "cemetery"]]), .cemetery)
+    }
+
+    func testDetectsPeakWithName() {
+        XCTAssertEqual(label([["natural": "peak", "name": "Mont Aigoual"]]), "Sommet Mont Aigoual")
+    }
+
+    func testDetectsRuinsAndArchaeologicalSiteAsTheSameCategory() {
+        XCTAssertEqual(category([["historic": "ruins"]]), .ruins)
+        XCTAssertEqual(category([["historic": "archaeological_site"]]), .ruins)
+    }
+
+    /// Priorité inchangée : un tag de sécurité route (palier 1) reste prioritaire même face à un
+    /// nouveau tag de palier 2/3 trouvé plus près.
+    func testRoadSafetyTagsStillTakePriorityOverTheNewCategories() {
+        let tags = [["man_made": "water_tower"], ["tunnel": "yes"]]
+        XCTAssertEqual(label(tags), "Tunnel")
     }
 }

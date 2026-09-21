@@ -24,20 +24,47 @@ actor RoadbookLandmarkService {
         // tags unionnées (way ET node — un rond-point/un revêtement sont des `way`, une église/
         // des feux sont typiquement des `node`) — `out tags center` renvoie les tags SANS la
         // géométrie complète (on n'a besoin que des tags pour `RoadbookLandmark`).
+        //
+        // Liste de tags étendue à 50 en it24 (point 3) — plutôt que lister CHAQUE valeur une par
+        // une (`RoadbookLandmark.Matcher` s'en charge côté filtrage), la plupart des familles de
+        // clés qui n'ont pas d'autre sens que "repère" sont interrogées EN BLOC (`["tourism"]`,
+        // `["historic"]`, `["natural"]`, `["man_made"]`, `["shop"]`, `["leisure"]`, `["barrier"]`,
+        // `["railway"]` — comme `["amenity"]`/`["religion"]` déjà en place depuis it23quater) :
+        // un seul ajout de valeur côté `RoadbookLandmark` suffit ensuite, sans repasser par ce
+        // fichier. Seules les clés à trop large spectre pour être interrogées en bloc SANS noyer
+        // la requête sous des résultats hors sujet (`highway`, `traffic_calming`, `landuse` — la
+        // quasi-totalité des segments de route/parcelles du monde portent une valeur) restent
+        // filtrées par valeur explicite.
         let query = """
         [out:json][timeout:\(Int(RoadBookConstants.landmarkRequestTimeoutSeconds))];
         (
           node(around:\(radius),\(lat),\(lon))["amenity"];
           node(around:\(radius),\(lat),\(lon))["religion"];
-          node(around:\(radius),\(lat),\(lon))["railway"="level_crossing"];
-          node(around:\(radius),\(lat),\(lon))["highway"~"traffic_signals|give_way|stop"];
-          way(around:\(radius),\(lat),\(lon))["junction"="roundabout"];
+          node(around:\(radius),\(lat),\(lon))["tourism"];
+          node(around:\(radius),\(lat),\(lon))["historic"];
+          way(around:\(radius),\(lat),\(lon))["historic"];
+          node(around:\(radius),\(lat),\(lon))["natural"];
+          node(around:\(radius),\(lat),\(lon))["man_made"];
+          way(around:\(radius),\(lat),\(lon))["man_made"];
+          node(around:\(radius),\(lat),\(lon))["shop"];
+          node(around:\(radius),\(lat),\(lon))["leisure"];
+          way(around:\(radius),\(lat),\(lon))["leisure"];
+          node(around:\(radius),\(lat),\(lon))["barrier"];
           way(around:\(radius),\(lat),\(lon))["power"~"line|tower"];
+          node(around:\(radius),\(lat),\(lon))["railway"];
+          way(around:\(radius),\(lat),\(lon))["railway"];
+          node(around:\(radius),\(lat),\(lon))["highway"~"traffic_signals|give_way|stop|crossing|mini_roundabout|rest_area|services"];
+          way(around:\(radius),\(lat),\(lon))["highway"~"rest_area|services"];
+          node(around:\(radius),\(lat),\(lon))["traffic_sign"="city_limit"];
+          node(around:\(radius),\(lat),\(lon))["traffic_calming"];
+          way(around:\(radius),\(lat),\(lon))["traffic_calming"];
+          way(around:\(radius),\(lat),\(lon))["waterway"="waterfall"];
+          way(around:\(radius),\(lat),\(lon))["landuse"="cemetery"];
+          way(around:\(radius),\(lat),\(lon))["junction"="roundabout"];
+          way(around:\(radius),\(lat),\(lon))["tunnel"="yes"];
           way(around:\(radius),\(lat),\(lon))["surface"];
           way(around:\(radius),\(lat),\(lon))["bridge"="yes"];
           way(around:\(radius),\(lat),\(lon))["ford"="yes"];
-          way(around:\(radius),\(lat),\(lon))["railway"="rail"];
-          node(around:\(radius),\(lat),\(lon))["natural"="tree"];
           node(around:\(radius),\(lat),\(lon))["building"];
           way(around:\(radius),\(lat),\(lon))["building"];
         );
