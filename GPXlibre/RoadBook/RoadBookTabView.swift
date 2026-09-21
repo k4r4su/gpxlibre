@@ -181,78 +181,124 @@ struct RoadBookTabView: View {
         }
     }
 
+    /// Retour terrain (it25, capture en paysage) : "essaye de caler [le sélecteur de mode] à
+    /// droite en vertical, j'aimerais donner la priorité à la direction et la distance avant le
+    /// changement de trace" — en paysage, le sélecteur/badge quittent la bande du haut (qui
+    /// mangeait de la hauteur, précieuse sur un écran deux fois moins haut) pour une colonne
+    /// étroite à DROITE de tout l'écran (hero + liste), rendant à la carte hero toute la largeur
+    /// ET la hauteur libérée. Portrait INCHANGÉ (ligne du haut, déjà confirmé correct).
     @ViewBuilder
     private func content(track: GPXTrack) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Picker("Mode de lecture", selection: $settings.roadbookReadingMode) {
-                    ForEach(RoadbookReadingMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
+        if verticalSizeClass == .compact {
+            HStack(spacing: 0) {
+                mainArea(track: track)
+                    .frame(maxWidth: .infinity)
+                landscapeModeColumn
+            }
+        } else {
+            VStack(spacing: 0) {
+                modePickerRow
+                mainArea(track: track)
+            }
+        }
+    }
+
+    private var modePickerRow: some View {
+        HStack(spacing: 10) {
+            Picker("Mode de lecture", selection: $settings.roadbookReadingMode) {
+                ForEach(RoadbookReadingMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            // Spec "roadbook-ui-redesign" (it25, point 4) — retour terrain : "confirmer d'un
+            // coup d'œil, depuis l'écran Road Book lui-même, que c'est bien Valhalla qui a
+            // généré les données affichées". Réutilise `RoutingActivityMonitor` (it24, point
+            // 0), déjà affiché en Réglages > Avancé — même source, deux endroits.
+            RoutingServiceBadge()
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    /// Colonne étroite à droite, PAYSAGE uniquement — deux boutons de mode empilés + le badge de
+    /// service, remplacent le `Picker` segmenté horizontal (pas de style natif vertical pour
+    /// `.segmented`, d'où ce contrôle maison).
+    private var landscapeModeColumn: some View {
+        VStack(spacing: 12) {
+            landscapeModeButton(.gpsAssisted, systemImage: "location.fill", shortLabel: "GPS")
+            landscapeModeButton(.classic, systemImage: "list.bullet", shortLabel: "Liste")
+            RoutingServiceBadge()
+                .fixedSize()
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 8)
+        .frame(width: 94)
+    }
+
+    private func landscapeModeButton(_ mode: RoadbookReadingMode, systemImage: String, shortLabel: String) -> some View {
+        let isSelected = settings.roadbookReadingMode == mode
+        return Button {
+            settings.roadbookReadingMode = mode
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(shortLabel)
+                    .font(.caption2.bold())
+            }
+            .frame(width: 76, height: 52)
+            .background(isSelected ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.label)
+    }
+
+    @ViewBuilder
+    private func mainArea(track: GPXTrack) -> some View {
+        if maneuvers.isEmpty {
+            RoadBookEmptyState(
+                title: "Aucune manœuvre détectée",
+                systemImage: "arrow.up",
+                message: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace."
+            )
+        } else if settings.roadbookReadingMode == .gpsAssisted {
+            // Fix "roadbook-focused-next-turn" (it23ter, retour terrain : "il faudrait
+            // clairement afficher le prochain virage, au moins la moitié de l'écran... la
+            // map doit être un aperçu, 15% de l'écran max") — mode Assisté GPS uniquement,
+            // "prochain virage" n'a de sens qu'avec une position réelle à comparer. Le mode
+            // Classique garde la table complète ci-dessous (aucune notion de "position
+            // actuelle" à mettre en avant dans ce mode).
+            GeometryReader { geometry in
+                ZStack {
+                    RoadbookFocusedView(
+                        maneuvers: maneuvers,
+                        currentIndex: liveProgress?.index,
+                        distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
+                        unit: settings.roadbookPDFOptions.distanceUnit,
+                        hasLocationFix: locationManager.currentLocation != nil,
+                        landmarks: landmarks,
+                        landscapeMiniMapReservedWidth: showsLandscapeMiniMap(containerSize: geometry.size)
+                            ? RoadBookConstants.miniMapLandscapeWidth + 24 : 0
+                    )
+
+                    if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
+                        miniMap(track: track, coordinate: coordinate, containerSize: geometry.size)
                     }
                 }
-                .pickerStyle(.segmented)
-                // Fix "roadbook-landscape-picker-stretched" (it25, retour terrain avec capture :
-                // "regarde les proportions, ça change... les menus Assisté GPS/Roadbook
-                // classique") — un `.segmented` sans largeur bornée s'étire sur toute la HStack ;
-                // sur un écran deux fois plus large en paysage, ça donnait un sélecteur démesuré
-                // avec beaucoup de vide dans chaque segment. Largeur plafonnée en paysage
-                // seulement (portrait inchangé, déjà confirmé correct par capture).
-                .frame(maxWidth: verticalSizeClass == .compact ? RoadBookConstants.modePickerLandscapeMaxWidth : .infinity)
-
-                if verticalSizeClass == .compact {
-                    Spacer(minLength: 12)
-                }
-
-                // Spec "roadbook-ui-redesign" (it25, point 4) — retour terrain : "confirmer d'un
-                // coup d'œil, depuis l'écran Road Book lui-même, que c'est bien Valhalla qui a
-                // généré les données affichées". Réutilise `RoutingActivityMonitor` (it24, point
-                // 0), déjà affiché en Réglages > Avancé — même source, deux endroits.
-                RoutingServiceBadge()
             }
-            .padding(.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-
-            if maneuvers.isEmpty {
-                RoadBookEmptyState(
-                    title: "Aucune manœuvre détectée",
-                    systemImage: "arrow.up",
-                    message: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace."
-                )
-            } else if settings.roadbookReadingMode == .gpsAssisted {
-                // Fix "roadbook-focused-next-turn" (it23ter, retour terrain : "il faudrait
-                // clairement afficher le prochain virage, au moins la moitié de l'écran... la
-                // map doit être un aperçu, 15% de l'écran max") — mode Assisté GPS uniquement,
-                // "prochain virage" n'a de sens qu'avec une position réelle à comparer. Le mode
-                // Classique garde la table complète ci-dessous (aucune notion de "position
-                // actuelle" à mettre en avant dans ce mode).
-                GeometryReader { geometry in
-                    ZStack {
-                        RoadbookFocusedView(
-                            maneuvers: maneuvers,
-                            currentIndex: liveProgress?.index,
-                            distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
-                            unit: settings.roadbookPDFOptions.distanceUnit,
-                            hasLocationFix: locationManager.currentLocation != nil,
-                            landmarks: landmarks,
-                            landscapeMiniMapReservedWidth: showsLandscapeMiniMap(containerSize: geometry.size)
-                                ? RoadBookConstants.miniMapLandscapeWidth + 24 : 0
-                        )
-
-                        if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
-                            miniMap(track: track, coordinate: coordinate, containerSize: geometry.size)
-                        }
-                    }
-                }
-            } else {
-                RoadbookTableView(
-                    maneuvers: maneuvers,
-                    unit: settings.roadbookPDFOptions.distanceUnit,
-                    currentIndex: nil,
-                    liveDistanceRemainingMeters: nil,
-                    landmarks: landmarks
-                )
-            }
+        } else {
+            RoadbookTableView(
+                maneuvers: maneuvers,
+                unit: settings.roadbookPDFOptions.distanceUnit,
+                currentIndex: nil,
+                liveDistanceRemainingMeters: nil,
+                landmarks: landmarks
+            )
         }
     }
 

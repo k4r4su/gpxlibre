@@ -151,8 +151,12 @@ private struct RoadbookBigManeuverCard: View {
 /// Équivalent PAYSAGE (spec "roadbook-ui-redesign", it25, point 2, demande explicite) :
 /// pictogramme à GAUCHE, distance à DROITE — jamais le portrait simplement compressé (root cause
 /// du bug terrain : les mêmes tailles de police qu'en portrait, sur un écran deux fois moins
-/// haut, débordaient jusqu'à chevaucher la tab bar). Polices réduites pour tenir dans
-/// `RoadBookConstants.focusedHeroLandscapeHeight`, jamais coupées.
+/// haut, débordaient jusqu'à chevaucher la tab bar). Agrandi une seconde fois (retour terrain :
+/// "augmenter encore plus la taille de la flèche... priorité à la direction et la distance")
+/// une fois le sélecteur de mode déplacé dans une colonne à droite (voir `RoadBookTabView.
+/// landscapeModeColumn`) — la hauteur ainsi libérée (`RoadBookConstants.
+/// focusedHeroLandscapeHeight`, 170→210) permet un pictogramme et un chiffre de distance
+/// nettement plus imposants sans déborder.
 private struct RoadbookBigManeuverCardLandscape: View {
     let maneuver: RoadbookManeuver
     let distanceRemainingMeters: Double
@@ -162,36 +166,36 @@ private struct RoadbookBigManeuverCardLandscape: View {
     let trailingReservedWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 24) {
             VStack(spacing: 4) {
-                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 70)
+                RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 120)
                     .foregroundStyle(Color.accentColor)
                 if let landmark {
                     Text(landmark.category.emoji)
-                        .font(.system(size: 32))
+                        .font(.system(size: 40))
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(maneuver.checkpoint.tier.label)
-                    .font(.headline)
+                    .font(.title2.bold())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if let landmark {
                     Text(landmark.label)
-                        .font(.caption.bold())
+                        .font(.subheadline.bold())
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
                 Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
-                    .font(.caption.monospacedDigit())
+                    .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 12)
 
             Text(unit.displayString(fromMeters: distanceRemainingMeters))
-                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .font(.system(size: 60, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)

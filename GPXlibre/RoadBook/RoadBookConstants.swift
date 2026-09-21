@@ -124,7 +124,11 @@ enum RoadBookConstants {
     /// Hauteur FIXE de la carte hero en paysage — layout dédié horizontal (pictogramme à gauche,
     /// distance à droite), volontairement compact pour laisser de la place à la liste et ne
     /// jamais chevaucher la tab bar (retour terrain : "634 m"/"Virage prononcé" qui chevauchent").
-    static let focusedHeroLandscapeHeight: Double = 170
+    /// Augmentée de 170 à 210 une fois le sélecteur de mode déplacé dans une colonne à droite
+    /// plutôt qu'une bande en haut (retour terrain : "donner la priorité à la direction et la
+    /// distance") — la hauteur ainsi libérée revient à la carte hero plutôt que de rester
+    /// inexploitée.
+    static let focusedHeroLandscapeHeight: Double = 210
 
     // MARK: - Mini-carte en paysage (spec "roadbook-ui-redesign", it25, point 2)
 
@@ -138,10 +142,4 @@ enum RoadBookConstants {
     /// qu'affichée à moitié cassée (demande explicite : "pas de compromis à moitié cassé") — un
     /// iPhone en paysage avec le clavier ouvert, par exemple.
     static let miniMapLandscapeMinContainerHeight: Double = 170
-
-    /// Largeur max du sélecteur de mode en paysage (fix "roadbook-landscape-picker-stretched",
-    /// it25, retour terrain avec capture : un `.segmented` sans largeur bornée s'étire sur toute
-    /// la largeur, démesuré sur un écran deux fois plus large qu'en portrait) — portrait
-    /// inchangé (`.infinity`, déjà confirmé correct par capture terrain).
-    static let modePickerLandscapeMaxWidth: Double = 420
 }
