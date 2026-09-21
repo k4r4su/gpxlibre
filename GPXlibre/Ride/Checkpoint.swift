@@ -36,6 +36,30 @@ struct Checkpoint: Identifiable, Hashable {
     /// checkpoint (`trackCumulativeDistances[sourcePointIndex]`) sans re-projeter sa
     /// coordonnée sur la trace.
     let sourcePointIndex: Int
+    /// Rang de la sortie prise dans un rond-point (Valhalla `roundabout_exit_count`, spec
+    /// "roadbook-route-aware-maneuvers", it24, point 2) — `nil` sauf `tier == .roundabout`.
+    /// Champ SÉPARÉ plutôt qu'une valeur associée sur `RoadbookTier` (même patron que
+    /// `direction`, déjà distinct du tier) : évite de casser tous les `switch tier` existants
+    /// (map/table/PDF) pour une information optionnelle propre à UN SEUL palier.
+    let roundaboutExitCount: Int?
+
+    init(
+        coordinate: CLLocationCoordinate2D,
+        turnAngleDegrees: Double,
+        direction: TurnDirection,
+        tier: RoadbookTier,
+        sequenceIndex: Int,
+        sourcePointIndex: Int,
+        roundaboutExitCount: Int? = nil
+    ) {
+        self.coordinate = coordinate
+        self.turnAngleDegrees = turnAngleDegrees
+        self.direction = direction
+        self.tier = tier
+        self.sequenceIndex = sequenceIndex
+        self.sourcePointIndex = sourcePointIndex
+        self.roundaboutExitCount = roundaboutExitCount
+    }
 
     static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

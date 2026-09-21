@@ -20,6 +20,20 @@ enum RoadbookTier: Equatable {
     /// (voir RoadbookAnalyzer.buildRoadbookEvents, section map matching).
     case lightDirectionChange
 
+    /// Trois paliers "route-aware" supplémentaires (spec "roadbook-route-aware-maneuvers", it24,
+    /// points 1/2) — DÉTECTÉS UNIQUEMENT via map matching Valhalla (`ValhallaManeuverType.
+    /// roadbookTier`), jamais par l'angle géométrique seul (comme `.lightDirectionChange`
+    /// ci-dessus) : `.roundabout` (rond-point, `Checkpoint.roundaboutExitCount` pilote la sortie
+    /// mise en surbrillance du pictogramme circulaire dédié), `.fork` (fourche avec choix réel —
+    /// Valhalla `stayStraight/Right/Left`, un embranchement où NE RIEN FAIRE mènerait sur la
+    /// mauvaise branche, contrairement à un simple "tout droit"), `.merge` (fusion/bretelle —
+    /// Valhalla `merge`/`ramp*`/`exit*`). Les trois ont un pictogramme DESSINÉ dédié sur les
+    /// écrans Road Book/le PDF (voir RoadBook/RoadbookPictograms.swift), PAS une simple flèche
+    /// tournée comme les 4 paliers d'angle — `rotationDegrees`/`systemImageName` ci-dessous ne
+    /// servent que de repli (pins carte `RideMapLibreView`, SF Symbol générique suffisant à cette
+    /// échelle).
+    case roundabout, fork, merge
+
     /// Fix "turn-icon-backward-looking" (it23bis, retour terrain avec capture d'écran : la ligne
     /// "Virage fort" du Road Book affichait une flèche `arrow.turn.down.right` — visuellement
     /// "descend PUIS crochette à droite", illisible comme "tourne fort à droite EN CONTINUANT
@@ -50,7 +64,7 @@ enum RoadbookTier: Equatable {
         case .marked: return 65
         case .hard: return 105
         case .uTurn: return 180
-        case .lightDirectionChange: return 0
+        case .lightDirectionChange, .roundabout, .fork, .merge: return 0
         }
     }
 
@@ -63,19 +77,26 @@ enum RoadbookTier: Equatable {
     func rotationDegrees(direction: TurnDirection) -> Double? {
         switch self {
         case .uTurn: return 180
-        case .lightDirectionChange: return nil
+        case .lightDirectionChange, .roundabout, .fork, .merge: return nil
         case .light, .marked, .hard: return direction == .left ? -baseRotationDegrees : baseRotationDegrees
         }
     }
 
-    /// `.lightDirectionChange` reste un panneau de signalisation dédié (pas une flèche tournée,
-    /// voir son commentaire de cas ci-dessus : signale explicitement "pas un virage géométrique
-    /// classique") — SEUL cas où le nom d'image diffère encore par palier plutôt que par
-    /// rotation d'un glyphe unique.
+    /// `.lightDirectionChange`/`.roundabout`/`.fork`/`.merge` restent des pictogrammes DÉDIÉS
+    /// (pas une flèche tournée) — ce repli SF Symbol générique n'est utilisé QUE par les pins
+    /// carte (`RideMapLibreView`, échelle trop petite pour un pictogramme dessiné) ; les écrans
+    /// Road Book/le PDF utilisent `RoadbookPictograms` pour `.roundabout`/`.fork`/`.merge` (spec
+    /// it24, point 2 — "pas une flèche courbe générique").
     func systemImageName(direction: TurnDirection) -> String {
         switch self {
         case .lightDirectionChange:
             return direction == .left ? "signpost.left" : "signpost.right"
+        case .roundabout:
+            return "arrow.triangle.2.circlepath"
+        case .fork:
+            return "arrow.triangle.branch"
+        case .merge:
+            return "arrow.merge"
         case .light, .marked, .hard, .uTurn:
             return Self.baseSystemImageName
         }
@@ -88,6 +109,9 @@ enum RoadbookTier: Equatable {
         case .hard: return "Virage fort"
         case .uTurn: return "Demi-tour"
         case .lightDirectionChange: return "Changement de direction"
+        case .roundabout: return "Rond-point"
+        case .fork: return "Fourche"
+        case .merge: return "Fusion / bretelle"
         }
     }
 }

@@ -21,16 +21,19 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
     }
 
     private final class FakeMapMatchingProvider: MapMatchingProvider {
-        let coordinatesToReturn: [CLLocationCoordinate2D]
+        let maneuversToReturn: [MapMatchedManeuver]
         private(set) var callCount = 0
 
-        init(coordinatesToReturn: [CLLocationCoordinate2D]) {
-            self.coordinatesToReturn = coordinatesToReturn
+        /// `type: .right` par défaut — une vraie décision de conduite (`roadbookTier` non `nil`,
+        /// voir it24 point 1), pour ne pas avoir à répéter ce détail dans chaque test qui ne
+        /// s'intéresse qu'au déclenchement/cache, pas au filtrage type.
+        init(coordinatesToReturn: [CLLocationCoordinate2D], type: ValhallaManeuverType = .right) {
+            maneuversToReturn = coordinatesToReturn.map { MapMatchedManeuver(coordinate: $0, type: type, roundaboutExitCount: nil) }
         }
 
-        func matchRoute(coordinates: [CLLocationCoordinate2D], configuration: ValhallaConfiguration) async throws -> [CLLocationCoordinate2D] {
+        func matchRoute(coordinates: [CLLocationCoordinate2D], configuration: ValhallaConfiguration) async throws -> [MapMatchedManeuver] {
             callCount += 1
-            return coordinatesToReturn
+            return maneuversToReturn
         }
     }
 
@@ -89,7 +92,7 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
 
         XCTAssertEqual(provider.callCount, 1)
         XCTAssertEqual(session.mapMatchedDirectionChangePoints.count, 1)
-        XCTAssertEqual(session.mapMatchCache.coordinates(for: matchedTrack.id)?.count, 1, "le résultat doit être écrit dans le cache disque")
+        XCTAssertEqual(session.mapMatchCache.maneuvers(for: matchedTrack.id)?.count, 1, "le résultat doit être écrit dans le cache disque")
     }
 
     /// Retour d'onglet (Ride→Biblio→Ride) : `switchMode` est appelé pour la MÊME trace, le map

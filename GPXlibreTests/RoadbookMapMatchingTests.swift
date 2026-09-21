@@ -47,7 +47,11 @@ final class RoadbookMapMatchingTests: XCTestCase {
         return GPXTrack(id: UUID(), name: "Ordre", fileName: "ordre.gpx", importDate: Date(), points: points, waypoints: [])
     }
 
-    private func events(for track: GPXTrack, mapMatched: [CLLocationCoordinate2D] = [], mergeMinDistanceMeters: Double = 150) -> [Checkpoint] {
+    /// `type: .right` par défaut — une vraie décision de conduite classique (`roadbookTier ==
+    /// .lightDirectionChange`), suffisant pour les tests de fusion/ordonnancement ci-dessous, qui
+    /// ne s'intéressent pas au choix de palier lui-même (voir `ValhallaMapMatchingServiceTests`/
+    /// `testMapMatchedManeuverTypeDrivesTheAssignedTier` pour ça).
+    private func events(for track: GPXTrack, mapMatched: [CLLocationCoordinate2D] = [], type: ValhallaManeuverType = .right, mergeMinDistanceMeters: Double = 150) -> [Checkpoint] {
         RoadbookAnalyzer.buildRoadbookEvents(
             for: track,
             windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
@@ -57,7 +61,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
             uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
             mergeMinDistanceMeters: mergeMinDistanceMeters,
-            mapMatchedDirectionChangeCoordinates: mapMatched
+            mapMatchedManeuvers: mapMatched.map { MapMatchedManeuver(coordinate: $0, type: type, roundaboutExitCount: nil) }
         )
     }
 
@@ -156,5 +160,63 @@ final class RoadbookMapMatchingTests: XCTestCase {
         XCTAssertEqual(result.count, 2, "1 virage marqué géométrique + 1 léger changement de direction map matché")
         XCTAssertEqual(result.map(\.sequenceIndex), [1, 2], "numérotation continue dans l'ordre de progression")
         XCTAssertEqual(result.map(\.tier), [.lightDirectionChange, .marked], "le point de map matching (point 1) précède le virage géométrique (point 3) le long de la trace, malgré un ordre d'insertion inverse dans le code")
+    }
+
+    // MARK: - Palier/direction pilotés par le type Valhalla (spec "roadbook-route-aware-maneuvers", it24, point 2)
+
+    func testRoundaboutManeuverProducesRoundaboutTierWithItsExitCount() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        let maneuver = MapMatchedManeuver(coordinate: track.points[1].coordinate, type: .roundaboutExit, roundaboutExitCount: 3)
+
+        let result = RoadbookAnalyzer.buildRoadbookEvents(
+            for: track,
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: 150,
+            mapMatchedManeuvers: [maneuver]
+        )
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.tier, .roundabout)
+        XCTAssertEqual(result.first?.roundaboutExitCount, 3)
+    }
+
+    func testForkManeuverProducesForkTier() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        let result = events(for: track, mapMatched: [track.points[1].coordinate], type: .stayRight)
+
+        XCTAssertEqual(result.first?.tier, .fork)
+        XCTAssertEqual(result.first?.direction, .right)
+    }
+
+    func testMergeManeuverProducesMergeTier() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        let result = events(for: track, mapMatched: [track.points[1].coordinate], type: .rampRight)
+
+        XCTAssertEqual(result.first?.tier, .merge)
+    }
+
+    /// "Demi-tour : déjà existant (palier uTurn), à conserver tel quel" — un demi-tour détecté
+    /// par map matching réutilise le MÊME palier que la détection géométrique, jamais un
+    /// nouveau palier dédié.
+    func testUTurnManeuverReusesTheExistingUTurnTier() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        let result = events(for: track, mapMatched: [track.points[1].coordinate], type: .uturnLeft)
+
+        XCTAssertEqual(result.first?.tier, .uTurn)
+        XCTAssertEqual(result.first?.direction, .uTurn)
+    }
+
+    /// Un rond-point/une fourche/une fusion ne portent PAS de `roundaboutExitCount` en dehors du
+    /// cas rond-point — jamais une valeur fantôme héritée d'un autre champ.
+    func testNonRoundaboutTiersNeverCarryARoundaboutExitCount() {
+        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
+        let result = events(for: track, mapMatched: [track.points[1].coordinate], type: .stayLeft)
+
+        XCTAssertNil(result.first?.roundaboutExitCount)
     }
 }

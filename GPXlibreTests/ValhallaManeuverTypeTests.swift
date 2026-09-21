@@ -81,4 +81,71 @@ final class ValhallaManeuverTypeTests: XCTestCase {
     func testUnknownRawValueFailsToInitDirectly() {
         XCTAssertNil(ValhallaManeuverType(rawValue: 999), "précondition : une valeur inconnue ne doit PAS correspondre à un cas existant par accident")
     }
+
+    // MARK: - roadbookTier/roadbookDirection (spec "roadbook-route-aware-maneuvers", it24, point 1)
+
+    /// Cœur du bug terrain corrigé : "continuer tout droit"/"la route change de nom" ne sont
+    /// JAMAIS une vraie décision de conduite.
+    func testContinueStraightAndBecomesAreNotRoadbookRelevant() {
+        XCTAssertNil(ValhallaManeuverType.continueStraight.roadbookTier)
+        XCTAssertNil(ValhallaManeuverType.becomes.roadbookTier)
+    }
+
+    /// Ni le départ/l'arrivée, ni le transit (jamais retourné avec `costing: "auto"` mais modélisé
+    /// par exhaustivité) — aucun n'est une décision EN COURS de route.
+    func testStartDestinationAndTransitAreNotRoadbookRelevant() {
+        for type: ValhallaManeuverType in [.none, .start, .startRight, .startLeft, .destination, .destinationRight, .destinationLeft, .transit, .transitTransfer, .transitRemainOn, .transitConnectionStart, .transitConnectionTransfer, .transitConnectionDestination, .postTransitConnectionDestination] {
+            XCTAssertNil(type.roadbookTier, "\(type)")
+        }
+    }
+
+    func testRoundaboutTypesMapToTheRoundaboutTier() {
+        XCTAssertEqual(ValhallaManeuverType.roundaboutEnter.roadbookTier, .roundabout)
+        XCTAssertEqual(ValhallaManeuverType.roundaboutExit.roadbookTier, .roundabout)
+    }
+
+    /// `stay*` = un VRAI point de décision à un embranchement (ne rien faire mènerait sur la
+    /// mauvaise branche) — distinct de `continueStraight`, filtré ci-dessus.
+    func testStayTypesMapToTheForkTier() {
+        XCTAssertEqual(ValhallaManeuverType.stayStraight.roadbookTier, .fork)
+        XCTAssertEqual(ValhallaManeuverType.stayRight.roadbookTier, .fork)
+        XCTAssertEqual(ValhallaManeuverType.stayLeft.roadbookTier, .fork)
+    }
+
+    func testMergeAndRampTypesMapToTheMergeTier() {
+        for type: ValhallaManeuverType in [.merge, .rampStraight, .rampRight, .rampLeft, .exitRight, .exitLeft] {
+            XCTAssertEqual(type.roadbookTier, .merge, "\(type)")
+        }
+    }
+
+    /// "Demi-tour : déjà existant (palier uTurn), à conserver tel quel."
+    func testUTurnTypesReuseTheExistingUTurnTier() {
+        XCTAssertEqual(ValhallaManeuverType.uturnRight.roadbookTier, .uTurn)
+        XCTAssertEqual(ValhallaManeuverType.uturnLeft.roadbookTier, .uTurn)
+    }
+
+    func testPlainTurnsAndFerriesMapToLightDirectionChange() {
+        for type: ValhallaManeuverType in [.slightRight, .right, .sharpRight, .slightLeft, .left, .sharpLeft, .ferryEnter, .ferryExit] {
+            XCTAssertEqual(type.roadbookTier, .lightDirectionChange, "\(type)")
+        }
+    }
+
+    func testRoadbookDirectionMatchesTheSemanticSideOfTheManeuver() {
+        XCTAssertEqual(ValhallaManeuverType.right.roadbookDirection, .right)
+        XCTAssertEqual(ValhallaManeuverType.sharpRight.roadbookDirection, .right)
+        XCTAssertEqual(ValhallaManeuverType.rampRight.roadbookDirection, .right)
+        XCTAssertEqual(ValhallaManeuverType.stayRight.roadbookDirection, .right)
+        XCTAssertEqual(ValhallaManeuverType.left.roadbookDirection, .left)
+        XCTAssertEqual(ValhallaManeuverType.stayLeft.roadbookDirection, .left)
+        XCTAssertEqual(ValhallaManeuverType.uturnRight.roadbookDirection, .uTurn)
+        XCTAssertEqual(ValhallaManeuverType.uturnLeft.roadbookDirection, .uTurn)
+    }
+
+    /// `.merge` n'a aucune variante directionnelle côté Valhalla (vérifié, voir Nav/CLAUDE.md) —
+    /// retombe sur `.straight`, jamais interprété comme un vrai virage affiché.
+    func testMergeAndRoundaboutHaveANeutralStraightDirection() {
+        XCTAssertEqual(ValhallaManeuverType.merge.roadbookDirection, .straight)
+        XCTAssertEqual(ValhallaManeuverType.roundaboutEnter.roadbookDirection, .straight)
+        XCTAssertEqual(ValhallaManeuverType.roundaboutExit.roadbookDirection, .straight)
+    }
 }

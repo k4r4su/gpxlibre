@@ -123,7 +123,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// (`await session.mapMatchingTask?.value`) la fin de la tâche de fond avant d'asserter,
     /// sans `Task.sleep` arbitraire.
     var mapMatchingTask: Task<Void, Never>?
-    private(set) var mapMatchedDirectionChangePoints: [CLLocationCoordinate2D] = []
+    private(set) var mapMatchedDirectionChangePoints: [MapMatchedManeuver] = []
 
     /// Guidage arrêté (spec "stop-guidance-semantics", it14, Bloc 3) — DISTINCT de
     /// `isRecordingPaused` ci-dessus (jamais touché par Stop désormais, l'enregistrement
@@ -569,7 +569,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             hardThresholdDegrees: settings.roadbookHardThresholdDegrees,
             uTurnThresholdDegrees: settings.roadbookUTurnThresholdDegrees,
             mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters,
-            mapMatchedDirectionChangeCoordinates: mapMatchedDirectionChangePoints
+            mapMatchedManeuvers: mapMatchedDirectionChangePoints
         )
         checkpoints = events
         inflectionPoints = events
@@ -595,7 +595,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             return
         }
 
-        if let cached = mapMatchCache.coordinates(for: track.id) {
+        if let cached = mapMatchCache.maneuvers(for: track.id) {
             // Pas de rebuildCheckpoints() ici : l'appelant (start/switchMode) en fait déjà un
             // juste après avoir appelé cette fonction, qui lira cette valeur à jour.
             mapMatchedDirectionChangePoints = cached
@@ -612,7 +612,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self, self.track?.id == trackID else { return }
-                self.mapMatchCache.store(trackID: trackID, coordinates: matched)
+                self.mapMatchCache.store(trackID: trackID, maneuvers: matched)
                 self.mapMatchedDirectionChangePoints = matched
                 // Contrairement au cas cache-hit ci-dessus, le rebuildCheckpoints() de
                 // start/switchMode a déjà eu lieu SANS ces points (réponse réseau arrivée après

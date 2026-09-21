@@ -18,14 +18,18 @@ enum RoadbookAnalyzer {
     ///     sur laquelle le cap entrant/sortant de chaque point est mesuré.
     ///   - lightThresholdDegrees...uTurnThresholdDegrees : paliers croissants (light < marked
     ///     < hard < uTurn) — un angle sous `lightThresholdDegrees` ne produit AUCUN événement.
-    /// - Parameter mapMatchedDirectionChangeCoordinates : points de changement de manœuvre/rue
-    ///   issus du map matching Valhalla (spec "valhalla-map-matching-direction-change", it20) —
-    ///   `[]` par défaut (comportement STRICTEMENT identique à avant it20, non-régression).
-    ///   Fusionnés dans la MÊME liste que les événements géométriques ci-dessous (invariant it14
-    ///   "source unique pour épingles carte ET bannière latérale" : un seul `[Checkpoint]`,
-    ///   jamais deux listes parallèles) — un point ignoré s'il tombe à moins de
-    ///   `mergeMinDistanceMeters` d'un événement géométrique déjà détecté (pas de doublon),
-    ///   sinon ajouté avec `tier: .lightDirectionChange`, DISTINCT des 4 paliers d'angle.
+    /// - Parameter mapMatchedManeuvers : manœuvres de changement de direction RETENUES (déjà
+    ///   filtrées route-aware, voir `ValhallaManeuverType.roadbookTier`) issues du map matching
+    ///   Valhalla (spec "valhalla-map-matching-direction-change", it20 ; filtrage type, it24
+    ///   point 1) — `[]` par défaut (comportement STRICTEMENT identique à avant it20, non-
+    ///   régression). Fusionnées dans la MÊME liste que les événements géométriques ci-dessous
+    ///   (invariant it14 "source unique pour épingles carte ET bannière latérale" : un seul
+    ///   `[Checkpoint]`, jamais deux listes parallèles) — une manœuvre ignorée si elle tombe à
+    ///   moins de `mergeMinDistanceMeters` d'un événement géométrique déjà détecté (pas de
+    ///   doublon), sinon ajoutée avec le `tier`/la `direction` dérivés de
+    ///   `ValhallaManeuverType.roadbookTier`/`roadbookDirection` (it24, point 2 — remplace
+    ///   l'ancien `tier: .lightDirectionChange` fixe et la direction dérivée de l'angle
+    ///   géométrique bruité au point).
     static func buildRoadbookEvents(
         for track: GPXTrack,
         windowBeforeMeters: Double,
@@ -35,7 +39,7 @@ enum RoadbookAnalyzer {
         hardThresholdDegrees: Double,
         uTurnThresholdDegrees: Double,
         mergeMinDistanceMeters: Double,
-        mapMatchedDirectionChangeCoordinates: [CLLocationCoordinate2D] = []
+        mapMatchedManeuvers: [MapMatchedManeuver] = []
     ) -> [Checkpoint] {
         let points = track.points
         guard points.count > 2, windowBeforeMeters > 0, windowAfterMeters > 0 else { return [] }
@@ -80,10 +84,10 @@ enum RoadbookAnalyzer {
         }
 
         let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
-        guard !mapMatchedDirectionChangeCoordinates.isEmpty else { return geometricEvents }
+        guard !mapMatchedManeuvers.isEmpty else { return geometricEvents }
 
         return mergingMapMatchedDirectionChanges(
-            mapMatchedDirectionChangeCoordinates,
+            mapMatchedManeuvers,
             into: geometricEvents,
             points: points,
             segmentBearings: segmentBearings,
@@ -99,7 +103,7 @@ enum RoadbookAnalyzer {
     /// source — la bannière latérale/la liste roadbook lisent cette liste séquentiellement, un
     /// événement mal ordonné y apparaîtrait au mauvais moment du trajet.
     private static func mergingMapMatchedDirectionChanges(
-        _ matchedCoordinates: [CLLocationCoordinate2D],
+        _ matchedManeuvers: [MapMatchedManeuver],
         into geometricEvents: [Checkpoint],
         points: [GPXPoint],
         segmentBearings: [Double],
@@ -110,9 +114,14 @@ enum RoadbookAnalyzer {
     ) -> [Checkpoint] {
         var combined = geometricEvents
 
-        for matchedCoordinate in matchedCoordinates {
-            guard !combined.contains(where: { distanceMeters($0.coordinate, matchedCoordinate) < mergeMinDistanceMeters }) else { continue }
-            guard let pointIndex = nearestPointIndex(to: matchedCoordinate, in: points) else { continue }
+        for maneuver in matchedManeuvers {
+            // Filtrage route-aware déjà appliqué en amont (voir `ValhallaMapMatchingService.
+            // intermediateManeuvers`) — `roadbookTier` ne peut plus être `nil` ici, mais on reste
+            // défensif plutôt que de force-unwrap une donnée qui a transité par un cache disque
+            // (voir `RoadbookMapMatchCache`, format qui peut évoluer).
+            guard let tier = maneuver.type.roadbookTier else { continue }
+            guard !combined.contains(where: { distanceMeters($0.coordinate, maneuver.coordinate) < mergeMinDistanceMeters }) else { continue }
+            guard let pointIndex = nearestPointIndex(to: maneuver.coordinate, in: points) else { continue }
 
             let windowed = windowedTurn(
                 at: pointIndex,
@@ -121,15 +130,15 @@ enum RoadbookAnalyzer {
                 windowBeforeMeters: windowBeforeMeters,
                 windowAfterMeters: windowAfterMeters
             )
-            let direction: TurnDirection = (windowed?.signedAngle ?? 0) >= 0 ? .right : .left
 
             combined.append(Checkpoint(
                 coordinate: points[pointIndex].coordinate,
                 turnAngleDegrees: windowed?.absAngle ?? 0,
-                direction: direction,
-                tier: .lightDirectionChange,
+                direction: maneuver.type.roadbookDirection,
+                tier: tier,
                 sequenceIndex: 0, // renuméroté ci-dessous une fois l'ordre final connu
-                sourcePointIndex: pointIndex
+                sourcePointIndex: pointIndex,
+                roundaboutExitCount: maneuver.roundaboutExitCount
             ))
         }
 
@@ -143,7 +152,8 @@ enum RoadbookAnalyzer {
                     direction: checkpoint.direction,
                     tier: checkpoint.tier,
                     sequenceIndex: index + 1,
-                    sourcePointIndex: checkpoint.sourcePointIndex
+                    sourcePointIndex: checkpoint.sourcePointIndex,
+                    roundaboutExitCount: checkpoint.roundaboutExitCount
                 )
             }
     }

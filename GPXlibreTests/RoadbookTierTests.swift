@@ -65,4 +65,28 @@ final class RoadbookTierTests: XCTestCase {
         XCTAssertEqual(RoadbookTier.lightDirectionChange.systemImageName(direction: .left), "signpost.left")
         XCTAssertEqual(RoadbookTier.lightDirectionChange.systemImageName(direction: .right), "signpost.right")
     }
+
+    // MARK: - Paliers route-aware (spec "roadbook-route-aware-maneuvers", it24, points 1/2)
+    // Pictogramme DÉDIÉ sur les écrans Road Book/le PDF (voir RoadbookPictograms) — ces 3 paliers
+    // n'ont donc PAS besoin d'une rotation d'arrow.up, seulement d'un repli SF Symbol distinct
+    // pour les pins carte (échelle trop petite pour un pictogramme dessiné).
+
+    func testRouteAwareTiersHaveNoRotationTheyUseADedicatedPictogram() {
+        for tier: RoadbookTier in [.roundabout, .fork, .merge] {
+            XCTAssertNil(tier.rotationDegrees(direction: .left))
+            XCTAssertNil(tier.rotationDegrees(direction: .right))
+        }
+    }
+
+    func testRouteAwareTiersEachHaveADistinctFallbackGlyph() {
+        let glyphs = [RoadbookTier.roundabout, .fork, .merge].map { $0.systemImageName(direction: .right) }
+        XCTAssertEqual(Set(glyphs).count, glyphs.count, "trois pictogrammes distincts, jamais le même repli pour deux paliers différents")
+        XCTAssertFalse(glyphs.contains(RoadbookTier.baseSystemImageName), "jamais la flèche générique des paliers d'angle")
+    }
+
+    func testEachRouteAwareTierHasANonEmptyLabel() {
+        for tier: RoadbookTier in [.roundabout, .fork, .merge] {
+            XCTAssertFalse(tier.label.isEmpty)
+        }
+    }
 }
