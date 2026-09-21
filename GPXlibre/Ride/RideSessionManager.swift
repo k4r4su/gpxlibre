@@ -502,7 +502,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     func stop() {
         isActive = false
         manager.stopUpdatingLocation()
-        UIApplication.shared.isIdleTimerDisabled = false
+        IdleTimerCoordinator.setActive(false, for: .ride)
         detourTask?.cancel()
         isGuidanceStopped = false
         track = nil
@@ -539,10 +539,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     /// N'agit que si le mode Ride est actif : évite qu'un changement de réglage fait
-    /// depuis un autre onglet ne bloque la mise en veille du téléphone hors Ride.
+    /// depuis un autre onglet ne bloque la mise en veille du téléphone hors Ride. Passe par
+    /// `IdleTimerCoordinator` (it25) plutôt que d'écrire `UIApplication.shared.isIdleTimerDisabled`
+    /// directement — un Road Book affiché en parallèle (le Ride continue en arrière-plan) ne doit
+    /// jamais voir son propre maintien réveillé coupé par un changement de ce réglage ici.
     func applyIdleTimerSetting() {
         guard isActive else { return }
-        UIApplication.shared.isIdleTimerDisabled = settings.keepScreenAwakeInRide
+        IdleTimerCoordinator.setActive(settings.keepScreenAwakeInRide, for: .ride)
     }
 
     /// Recalcule les événements roadbook (ex : l'utilisateur change un réglage sensibilité/

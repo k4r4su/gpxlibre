@@ -389,3 +389,37 @@ fiche pour cette itération en particulier vu son caractère "purement visuel") 
 réelle, rendu paysage sur device réel, ratio de taille effectif du premier élément, lisibilité
 gants/plein soleil — logique de résolution (palette/paysage/hiérarchie) couverte par les tests
 unitaires, le rendu visuel reste entièrement à valider par le propriétaire.
+
+### Vérification sur device physique réel (même session, plus tard dans it25)
+
+Un iPhone 13 Pro réel (device de référence du projet) a finalement été branché et rendu
+accessible EN COURS de session — captures d'écran obtenues via `pymobiledevice3 developer dvt
+screenshot` (élevé en privilèges via `osascript ... with administrator privileges`, popup Touch
+ID natif macOS plutôt qu'un mot de passe en clair dans le terminal), `devicectl` pour build/
+install/launch. Confirmé visuellement sur device réel : palette sombre automatique correcte
+(après le coucher du soleil réel au moment du test), badge Valhalla visible et vert (point 4),
+liste scrollable au-delà de 2 éléments en mode Assisté GPS (point 1), hiérarchie ~4× en Roadbook
+classique (point 3, mesuré directement sur la capture). PAS vérifié dans cette session : rendu
+paysage (nécessite une rotation physique, pas simulable via `devicectl device orientation` —
+capacité refusée explicitement pour un device réel, "not supported by this device"),
+pictogrammes rond-point/fourche/fusion (aucun rencontré sur la trace testée). Pas
+d'automatisation tactile disponible : chaque navigation dans l'app a nécessité un tap réel du
+propriétaire, `devicectl`/`pymobiledevice3` ne permettent que build/install/launch/screenshot/
+logs, jamais un geste simulé sur un device physique.
+
+## Écran maintenu allumé (spec "roadbook-keep-screen-awake", it25)
+
+Retour terrain pendant la vérification device ci-dessus : "l'écran doit rester allumé dans road
+book, il a tendance à s'arrêter". `RoadBookTabView` active `IdleTimerCoordinator.setActive(true,
+for: .roadBook)` à l'apparition, `false` à la disparition — INCONDITIONNEL (pas de réglage séparé
+comme `RideSettingsStore.keepScreenAwakeInRide`, contrairement à Ride) : un roadbook papier ne
+s'éteint jamais tout seul, esprit assumé pour cet écran précisément.
+
+`IdleTimerCoordinator` (Services/, nouveau) : `UIApplication.shared.isIdleTimerDisabled` était
+auparavant écrit DIRECTEMENT par `RideSessionManager` (`stop()`/`applyIdleTimerSetting()`) — un
+flag global unique. Root cause évitée avant même d'exister : si Road Book avait fait de même
+directement, quitter le Road Book pendant qu'un Ride tourne toujours en arrière-plan (le Ride
+n'est PAS lié à la visibilité de l'onglet, voir `RideSessionManager.isActive`) aurait coupé à tort
+le maintien réveillé du Ride. `IdleTimerCoordinator` tient un `Set<IdleTimerReason>` plutôt qu'un
+flag — le timer ne se réactive que quand PLUS AUCUNE raison n'est active. `RideSessionManager`
+passe maintenant par ce coordinateur au lieu d'écrire `UIApplication.shared` directement.

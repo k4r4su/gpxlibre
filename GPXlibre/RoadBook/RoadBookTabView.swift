@@ -124,9 +124,15 @@ struct RoadBookTabView: View {
                 locationManager.startUpdating()
             }
             updateResolvedPalette()
+            // Spec "roadbook-keep-screen-awake" (it25, retour terrain : "l'écran doit rester
+            // allumé dans road book, il a tendance à s'arrêter") — un roadbook papier ne s'éteint
+            // jamais tout seul ; inconditionnel tant que cet écran est affiché, aucun réglage
+            // séparé (contrairement à Ride, où certains préfèrent économiser la batterie).
+            IdleTimerCoordinator.setActive(true, for: .roadBook)
         }
         .onDisappear {
             locationManager.stopUpdating()
+            IdleTimerCoordinator.setActive(false, for: .roadBook)
         }
         .onChange(of: settings.roadbookReadingMode) { mode in
             if mode == .gpsAssisted {

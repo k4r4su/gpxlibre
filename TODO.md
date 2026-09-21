@@ -30,6 +30,17 @@ de coupé/chevauché ; ratio de taille réel du premier élément en Roadbook cl
 distinctif rond-point/fourche/demi-tour visible dans les 2 modes et 2 palettes ; badge de service
 cohérent avec Réglages au même instant.
 
+**Suite, même session** : un iPhone 13 Pro réel a été branché et rendu accessible (voir
+RoadBook/CLAUDE.md, "Vérification sur device physique réel") — confirmé visuellement sur device :
+palette sombre auto correcte, badge Valhalla visible, liste scrollable (+1 à +6 vus), hiérarchie
+~4× en Roadbook classique. Paysage et pictogrammes rond-point/fourche pas rencontrés faute de
+rotation physique/trace adaptée testée. Retour terrain additionnel pendant ce test : "l'écran
+doit rester allumé dans road book, il a tendance à s'arrêter" →
+**`fix:"roadbook-keep-screen-awake"`** : nouveau `IdleTimerCoordinator` (Services/, ensemble de
+raisons actives plutôt qu'un flag `UIApplication.shared.isIdleTimerDisabled` unique) — évite
+qu'un Ride actif en arrière-plan perde son maintien réveillé quand on quitte le Road Book, et
+vice-versa. `RoadBookTabView` l'active inconditionnellement tant que l'écran est affiché.
+
 ## Itération 24 (roadbook route-aware + diagnostic Valhalla)
 
 Trois points indépendants : (0) diagnostic + indicateur de service de routage actif, retour
