@@ -557,13 +557,25 @@ private struct RoadbookHeroRow: View {
     /// hero du mode Assisté GPS, jamais corrigé ici puisque `RoadbookHeroRow` n'avait reçu aucune
     /// variante paysage jusqu'ici.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// Spec "roadbook-jump-to-map" — retour terrain : "clic sur un virage dans la liste... aller
+    /// dans l'onglet Ride pour voir de quel virage on parle". Jamais un accès à
+    /// `RideSessionManager` depuis ce module (invariant "découplé de l'état de Ride actif") —
+    /// `AppNavigationState.focusRideMap(on:)` est le SEUL point de passage.
+    @EnvironmentObject private var navigationState: AppNavigationState
 
     var body: some View {
-        if verticalSizeClass == .compact {
-            landscapeBody
-        } else {
-            portraitBody
+        Button {
+            navigationState.focusRideMap(on: maneuver.checkpoint.coordinate)
+        } label: {
+            Group {
+                if verticalSizeClass == .compact {
+                    landscapeBody
+                } else {
+                    portraitBody
+                }
+            }
         }
+        .buttonStyle(.plain)
     }
 
     private var portraitBody: some View {
@@ -662,7 +674,20 @@ private struct RoadbookTableRow: View {
     let infoColumnWidth: CGFloat
     let ruleColor: Color
 
+    /// Spec "roadbook-jump-to-map" — voir `RoadbookHeroRow` pour le détail du pourquoi
+    /// (`AppNavigationState` reste le seul point de passage vers l'onglet Ride).
+    @EnvironmentObject private var navigationState: AppNavigationState
+
     var body: some View {
+        Button {
+            navigationState.focusRideMap(on: maneuver.checkpoint.coordinate)
+        } label: {
+            rowContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 0) {
             // Bloc distances : cumulée en grand (ce qu'on lit sur son compteur), partielle en
             // dessous dans un badge avec le n° de manœuvre — même hiérarchie visuelle que la

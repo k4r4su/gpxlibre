@@ -56,6 +56,21 @@ extension EnvironmentValues {
     }
 }
 
+/// Spec "roadbook-jump-to-map" — même contrainte `MapProvider` (signature d'init fixe) que
+/// les clés ci-dessus : porte la demande de focus caméra + marqueur depuis `RoadBookTabView`
+/// (via `AppNavigationState.focusRideMap(on:)`), lue une seule fois par jeton (voir
+/// `Coordinator.updateRoadBookFocus`, jamais re-déclenchée à chaque rafraîchissement).
+private struct RoadBookFocusRequestKey: EnvironmentKey {
+    static let defaultValue: RoadBookFocusRequest? = nil
+}
+
+extension EnvironmentValues {
+    var roadBookFocusRequest: RoadBookFocusRequest? {
+        get { self[RoadBookFocusRequestKey.self] }
+        set { self[RoadBookFocusRequestKey.self] = newValue }
+    }
+}
+
 /// Implémentation MapLibre (moteur actif par défaut, voir MapEngineConstants) : tuiles
 /// raster OSM, trace + détour + route Nav en sources vectorielles stylées localement,
 /// checkpoints/waypoints en annotations. Même contrat que RideMapView (MapKit), conservé
@@ -181,6 +196,16 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             coordinate: context.environment.isDebugReplayMarkerActive ? currentLocation?.coordinate : nil,
             on: mapView
         )
+
+        // Spec "roadbook-jump-to-map" — `updateRoadBookFocus` ne retourne `true` qu'une SEULE
+        // fois par jeton (retaper la même ligne dans le Road Book en génère un nouveau) : sans
+        // cette garde, la caméra reviendrait sur ce point à CHAQUE rafraîchissement (chaque fix
+        // GPS), jamais juste une fois au moment du tap.
+        let focusRequest = context.environment.roadBookFocusRequest
+        if context.coordinator.updateRoadBookFocus(request: focusRequest, on: mapView), let target = focusRequest?.coordinate {
+            let camera = MLNMapCamera(lookingAtCenter: target, acrossDistance: RideConstants.roadBookFocusCameraDistanceMeters, pitch: 0, heading: 0)
+            mapView.setCamera(camera, withDuration: RideConstants.cameraAnimationDurationSeconds, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+        }
         context.coordinator.updateContentInset(
             UIEdgeInsets(top: cameraContentInsetTop, left: cameraContentInsetLeft, bottom: cameraContentInsetBottom, right: cameraContentInsetRight),
             on: mapView
@@ -920,6 +945,64 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             }
         }
 
+        /// Spec "roadbook-jump-to-map" — retire/repose plutôt que de muter `.coordinate` en
+        /// place (contrairement au marqueur replay debug ci-dessus, qui se déplace en continu
+        /// pendant tout un trajet) : ce marqueur saute d'un point FIXE à un autre point FIXE de
+        /// façon discrète à chaque tap, jamais besoin d'un déplacement fluide entre les deux.
+        private var roadBookFocusAnnotation: RoadBookFocusMLNAnnotation?
+        private var lastHandledRoadBookFocusToken: UUID?
+
+        /// Retourne `true` seulement pour une demande RÉELLEMENT NOUVELLE (jamais traitée) —
+        /// pilote le saut de caméra dans `updateUIView`, qui ne doit jamais se redéclencher à
+        /// chaque rafraîchissement (chaque fix GPS), seulement au moment du tap dans le Road Book.
+        func updateRoadBookFocus(request: RoadBookFocusRequest?, on mapView: MLNMapView) -> Bool {
+            guard let request else {
+                if let existing = roadBookFocusAnnotation {
+                    mapView.removeAnnotation(existing)
+                    roadBookFocusAnnotation = nil
+                }
+                lastHandledRoadBookFocusToken = nil
+                return false
+            }
+            guard request.token != lastHandledRoadBookFocusToken else { return false }
+            lastHandledRoadBookFocusToken = request.token
+
+            if let existing = roadBookFocusAnnotation {
+                mapView.removeAnnotation(existing)
+            }
+            let marker = RoadBookFocusMLNAnnotation(coordinate: request.coordinate)
+            mapView.addAnnotation(marker)
+            roadBookFocusAnnotation = marker
+            return true
+        }
+
+        /// Losange violet à bord blanc (spec "roadbook-jump-to-map", retour terrain explicite :
+        /// "un point, un carré, un truc différent de ce qu'on a déjà") — volontairement ni un
+        /// cercle (checkpoints/waypoints/blocages, `annotationView(on:...)` ci-dessous) ni un
+        /// rond blanc uni (marqueur replay debug ci-dessus) : une forme ET une couleur qu'aucun
+        /// autre marqueur de cette carte n'utilise, pour être identifiable au premier coup d'œil.
+        private func roadBookFocusMarkerView(on mapView: MLNMapView) -> MLNAnnotationView {
+            let size: CGFloat = 24
+            let identifier = "roadBookFocus"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MLNAnnotationView(reuseIdentifier: identifier)
+            view.frame = CGRect(x: 0, y: 0, width: size, height: size)
+            view.subviews.forEach { $0.removeFromSuperview() }
+
+            let diamond = UIView(frame: view.bounds.insetBy(dx: 3, dy: 3))
+            diamond.backgroundColor = .systemPurple
+            diamond.layer.cornerRadius = 3
+            diamond.layer.borderWidth = 2
+            diamond.layer.borderColor = UIColor.white.cgColor
+            diamond.layer.shadowColor = UIColor.black.cgColor
+            diamond.layer.shadowOpacity = 0.4
+            diamond.layer.shadowRadius = 3
+            diamond.layer.shadowOffset = CGSize(width: 0, height: 1)
+            diamond.transform = CGAffineTransform(rotationAngle: .pi / 4)
+            view.addSubview(diamond)
+
+            return view
+        }
+
         /// Rond blanc 16 pt, léger contour + ombre portée (spec : "14 à 18 pt, contour discret")
         /// — volontairement PAS le style icône-dans-cercle-coloré des checkpoints/waypoints
         /// (`annotationView(on:...)` ci-dessous) : un simple marqueur de position, pas un point
@@ -948,6 +1031,9 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             if annotation is MLNPointAnnotation {
                 return debugReplayMarkerView(on: mapView)
+            }
+            if annotation is RoadBookFocusMLNAnnotation {
+                return roadBookFocusMarkerView(on: mapView)
             }
             if let checkpointAnnotation = annotation as? CheckpointMLNAnnotation {
                 // Icône par PALIER (spec "roadbook-angle-buckets-replay", it14) — cohérente
@@ -1032,5 +1118,16 @@ final class RollingWaypointMLNAnnotation: NSObject, MLNAnnotation {
 
     init(waypoint: RollingWaypoint) {
         self.waypoint = waypoint
+    }
+}
+
+/// Spec "roadbook-jump-to-map" — un point FIXE par demande de focus (voir `Coordinator.
+/// updateRoadBookFocus`, retire/repose plutôt que de muter cette instance).
+final class RoadBookFocusMLNAnnotation: NSObject, MLNAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    var title: String? = "Virage Road Book"
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
     }
 }

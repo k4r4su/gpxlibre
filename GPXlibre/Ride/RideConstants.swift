@@ -49,6 +49,11 @@ enum RideConstants {
     /// Durée d'animation de la caméra lors d'un changement de palier de zoom.
     static let cameraAnimationDurationSeconds: Double = 1.2
 
+    /// Distance caméra (m) au saut vers un point Road Book (spec "roadbook-jump-to-map") — assez
+    /// serrée pour identifier clairement LE virage visé (pas la trace entière), assez large
+    /// pour garder un peu de contexte routier autour.
+    static let roadBookFocusCameraDistanceMeters: Double = 300
+
     // MARK: - Override zoom manuel (pinch)
 
     /// Durée pendant laquelle le zoom manuel (pinch) prend le pas sur le zoom auto.

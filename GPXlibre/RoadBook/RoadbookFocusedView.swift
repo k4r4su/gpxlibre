@@ -113,7 +113,22 @@ private struct RoadbookBigManeuverCard: View {
     let unit: DistanceUnit
     let landmark: RoadbookLandmarkInfo?
 
+    /// Spec "roadbook-jump-to-map" — retour terrain : "clic sur un virage... aller dans l'onglet
+    /// Ride pour voir de quel virage on parle". `AppNavigationState` reste le SEUL point de
+    /// passage vers l'onglet Ride (jamais un accès direct à `RideSessionManager` depuis ce
+    /// module, invariant "découplé de l'état de Ride actif").
+    @EnvironmentObject private var navigationState: AppNavigationState
+
     var body: some View {
+        Button {
+            navigationState.focusRideMap(on: maneuver.checkpoint.coordinate)
+        } label: {
+            cardContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var cardContent: some View {
         VStack(spacing: 16) {
             // Pictogramme emoji du repère À CÔTÉ de la flèche (retour terrain it23sexies :
             // "à côté de la flèche il y ait des pictogrammes afin d'augmenter l'aide au niveau
@@ -165,7 +180,19 @@ private struct RoadbookBigManeuverCardLandscape: View {
     /// Cf. `RoadbookFocusedView.landscapeMiniMapReservedWidth`.
     let trailingReservedWidth: CGFloat
 
+    /// Spec "roadbook-jump-to-map" — voir `RoadbookBigManeuverCard` (portrait) pour le détail.
+    @EnvironmentObject private var navigationState: AppNavigationState
+
     var body: some View {
+        Button {
+            navigationState.focusRideMap(on: maneuver.checkpoint.coordinate)
+        } label: {
+            cardContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var cardContent: some View {
         HStack(spacing: 24) {
             VStack(spacing: 4) {
                 RoadbookManeuverIcon(checkpoint: maneuver.checkpoint, size: 120)
@@ -222,7 +249,19 @@ private struct RoadbookUpcomingRow: View {
     let rank: Int
     let landmark: RoadbookLandmarkInfo?
 
+    /// Spec "roadbook-jump-to-map" — voir `RoadbookBigManeuverCard` pour le détail.
+    @EnvironmentObject private var navigationState: AppNavigationState
+
     var body: some View {
+        Button {
+            navigationState.focusRideMap(on: maneuver.checkpoint.coordinate)
+        } label: {
+            rowContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 16) {
             Text("+\(rank - 1)")
                 .font(.caption.bold().monospacedDigit())

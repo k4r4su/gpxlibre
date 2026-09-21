@@ -678,6 +678,16 @@ struct RideView: View {
                 session.stop()
             }
         }
+        // Spec "roadbook-jump-to-map" — sans ça, le suivi GPS live (actif dès qu'une position
+        // existe et qu'aucun override manuel n'est en cours, voir RideMapLibreView.updateUIView)
+        // re-centrerait la caméra sur la position réelle au fix suivant, annulant quasi
+        // instantanément le saut vers le point ciblé. Même fenêtre de grâce qu'un pan/pinch
+        // manuel (`registerManualGesture`) — pas une suspension indéfinie dédiée : le pilote
+        // reste libre d'interagir normalement avec la carte pendant qu'il regarde ce point.
+        .onChange(of: navigationState.roadBookFocusRequest) { request in
+            guard request != nil else { return }
+            session.registerManualGesture()
+        }
         .onChange(of: modeStore.mode) { newMode in
             switch newMode {
             case .trace:
@@ -818,6 +828,10 @@ struct RideView: View {
             // besoin de parité sur cette distinction visuelle, comme les autres features
             // avancées (chevrons, fond vectoriel, pente).
             .environment(\.navRouteTraveledCoordinateCount, session.navRouteTraveledCoordinateCount)
+            // Spec "roadbook-jump-to-map" — même raison (conformité MapProvider) ; MapKit
+            // (comparaison) n'a pas besoin de parité sur ce marqueur, comme les autres features
+            // avancées ci-dessus.
+            .environment(\.roadBookFocusRequest, navigationState.roadBookFocusRequest)
         case .mapKit:
             RideMapView(
                 track: track,

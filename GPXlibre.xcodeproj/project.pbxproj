@@ -81,6 +81,7 @@
 		5B19B65A57ED92B278F4D135 /* RideConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */; };
 		5B4FAD4F0735C445282B2D53 /* NavRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DF6CFFE4D380DE8F08D661 /* NavRoute.swift */; };
 		5D45EA6CF9B130033DF4C52C /* ValhallaMapMatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98BBCDE9EBD660B55186D802 /* ValhallaMapMatchingService.swift */; };
+		5E0A598334BCA8C8C0D3855D /* AppNavigationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393CA7245CEC91E03972D181 /* AppNavigationStateTests.swift */; };
 		5E57530D16A95DC2A8A5E048 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4522C8B8D6C94F45CA721316 /* Assets.xcassets */; };
 		5EDAAE9C4224FB45AF482FAD /* ColorFlavorPatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452BFFBCAD9CA02542C898A1 /* ColorFlavorPatcherTests.swift */; };
 		6013F1024380286242B859C1 /* TrackMetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B6C982C37D4CB998593005 /* TrackMetricsCalculator.swift */; };
@@ -286,6 +287,7 @@
 		3770827C4F6309E842D1ECE7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		3850C3C410BAB86CA35E1B21 /* RideMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideMapView.swift; sourceTree = "<group>"; };
 		386B4A3FD4C3AE15FC1769DB /* RideModeSegmentedControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideModeSegmentedControl.swift; sourceTree = "<group>"; };
+		393CA7245CEC91E03972D181 /* AppNavigationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationStateTests.swift; sourceTree = "<group>"; };
 		3C4238BB6C30539D2B38ABC4 /* SpeedFreezeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedFreezeTests.swift; sourceTree = "<group>"; };
 		3D9AA167DA94D002713658DB /* RejoinBearingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RejoinBearingTests.swift; sourceTree = "<group>"; };
 		3F7C7F5A57FCF97BDA2DDDC5 /* NavGoToMutualExclusionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavGoToMutualExclusionTests.swift; sourceTree = "<group>"; };
@@ -721,6 +723,7 @@
 		ADED49BD30AA9E2CE76EA416 /* GPXlibreTests */ = {
 			isa = PBXGroup;
 			children = (
+				393CA7245CEC91E03972D181 /* AppNavigationStateTests.swift */,
 				966971BA6D9B5789CD05889E /* AppVersionTests.swift */,
 				EA96F8862986B1C89C94522E /* AutoRecomputeTests.swift */,
 				452BFFBCAD9CA02542C898A1 /* ColorFlavorPatcherTests.swift */,
@@ -965,6 +968,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5E0A598334BCA8C8C0D3855D /* AppNavigationStateTests.swift in Sources */,
 				B9B09EC378184DFA7C63100E /* AppVersionTests.swift in Sources */,
 				E36953BD52237F0F8F151C6E /* AutoRecomputeTests.swift in Sources */,
 				5EDAAE9C4224FB45AF482FAD /* ColorFlavorPatcherTests.swift in Sources */,
