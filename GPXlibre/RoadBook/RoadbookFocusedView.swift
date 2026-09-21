@@ -176,19 +176,27 @@ private struct RoadbookBigManeuverCardLandscape: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            // Fix "roadbook-landscape-tier-label-truncated" (it25, retour terrain avec capture :
+            // "Virage prononcé" tronqué en "Virage pr...") — agrandi une seconde fois par erreur
+            // en même temps que le pictogramme/la distance ; la demande portait explicitement sur
+            // "la flèche" et "la distance", pas ce texte. Revenu à sa taille d'origine
+            // (`.headline`, qui tenait déjà correctement) + `minimumScaleFactor` en filet de
+            // sécurité plutôt qu'une troncature "..." si jamais l'espace redevient juste.
+            VStack(alignment: .leading, spacing: 2) {
                 Text(maneuver.checkpoint.tier.label)
-                    .font(.title2.bold())
+                    .font(.headline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 if let landmark {
                     Text(landmark.label)
-                        .font(.subheadline.bold())
+                        .font(.caption.bold())
                         .foregroundStyle(.orange)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 Text("Cap \(Int(maneuver.headingDegrees.rounded()))°")
-                    .font(.subheadline.monospacedDigit())
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
