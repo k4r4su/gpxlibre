@@ -158,6 +158,17 @@ avec un provider qui réussit une fois puis échoue systématiquement, exactemen
   `NavGuidancePanelView` redécoupée en deux zones cloisonnées par un séparateur vertical : GAUCHE
   proéminente (icône + distance + badge sortie), DROITE en retrait, texte plus petit (instruction
   puis nom de rue sur sa PROPRE ligne, jamais accolés).
+- **`nav-roundabout-badge-overlay`** (retour terrain, après premier test réel du guidage riche :
+  "beaucoup trop d'info [...] si on arrive sur un rond-point et prendre la 3e sortie, il faut
+  mettre l'icône d'un rond-point avec le numéro 3, de façon à optimiser l'affichage") — le
+  numéro de sortie (`roundaboutExitCount`) était déjà affiché mais comme un second élément TEXTE
+  empilé SOUS l'icône (deux lignes à lire). Devenu un badge numéroté en `.overlay(alignment:
+  .bottomTrailing)` directement SUR l'icône rond-point (`arrow.triangle.2.circlepath`) — une
+  seule unité visuelle icône+chiffre. Aucun SF Symbol natif de rond-point directionnel avec
+  numéro n'existe (vérifié) ; si un futur besoin demande plus de fidélité visuelle (vrai
+  rond-point avec flèche d'entrée/sortie à N heures), réutiliser le patron Canvas déjà établi
+  dans `RoadbookPictogramGeometry.swift` (RoadBook/) plutôt qu'inventer un nouveau mécanisme de
+  dessin.
 - **`nav-goto-mutual-exclusion`** (bug réel trouvé via le retour "je vois pas de diff" en testant
   le repli sans Valhalla) : `startNav`/`startGoTo` ne s'excluaient jamais mutuellement — changer
   de destination sans que Valhalla ne soit disponible pouvait démarrer `startGoTo` SANS jamais

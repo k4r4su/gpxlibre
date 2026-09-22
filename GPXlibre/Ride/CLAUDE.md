@@ -229,6 +229,21 @@ contrôle Ride derrière `modeStore.mode == .nav`** sans vérifier d'abord qu'il
 appelée que par `updateNavProgress`) — invisible tant que ce calcul n'est pas branché sur Mode
 Trace, sans risque de régression.
 
+**Fix "ride-landscape-overlap"** (retour terrain : "en mode paysage y a des instructions qui se
+chevauchent") — `leftMiddleLayer` se centrait verticalement sur TOUTE la hauteur de l'écran
+(`Spacer()`/contenu/`Spacer()` non borné), jamais sur la zone réellement libre entre le haut
+(attribution + bannière + `NavGuidancePanelView`) et le bas (marge caméra). Invisible en
+portrait (écran assez haut), mais chevauche le panneau de guidage en paysage (écran court)
+quand bannière + panneau sont actifs en même temps. `leftMiddleLayer` prend désormais
+`insets: RideOverlayLayout.MapInsets` en paramètre (plus une simple `var`) et se borne dans
+`insets.uiTop`/`insets.uiBottom` avant de centrer son contenu — LA MÊME zone déjà utilisée pour
+cadrer la caméra/le point GPS (`computeMapInsets`), jamais un second calcul indépendant. Si un
+futur overlay vertical-centré est ajouté dans `rideContentBody`, lui donner les mêmes bornes
+plutôt que le laisser se centrer sur l'écran entier — c'est cette omission qui a causé le bug.
+Non vérifié visuellement sur device (pas de repro tactile pour forcer bannière+panneau+paysage
+simultanément dans cet environnement) — raisonnement géométrique seulement, à confirmer au
+prochain test terrain.
+
 ## Routage Valhalla optionnel (spec "valhalla-client-toggle", it19)
 
 Backend de routage ALTERNATIF à OSRM, désactivé par défaut (`RideSettingsStore.valhallaEnabled`) —
