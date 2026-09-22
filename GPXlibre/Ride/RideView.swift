@@ -335,8 +335,23 @@ struct RideView: View {
     /// au bas de l'écran (contrairement à l'ancien layout). Vide en Trace depuis la
     /// suppression du POI rapide (chore "remove-poi", itération 10) : rien ne remplace le
     /// bouton "Point", conformément à la philosophie "moins de boutons".
+    ///
+    /// Fix "ride-landscape-overlap" (retour terrain : "en mode ride en mode paysage y a des
+    /// instructions qui se chevauchent") — root cause : ce bloc se centrait verticalement sur
+    /// TOUTE la hauteur de l'écran (`Spacer()`/contenu/`Spacer()` dans une VStack sans borne),
+    /// jamais sur la zone RÉELLEMENT libre entre le haut (attribution + bannière + panneau de
+    /// guidage) et le bas (marge caméra). En portrait, l'écran est assez haut pour que ce
+    /// centre tombe largement sous la zone haute réservée — invisible. En paysage (hauteur
+    /// écran ~390-430 pt), ce même centre (~200 pt depuis le haut) tombe SOUS le bas du
+    /// panneau de guidage Valhalla quand celui-ci ET une bannière sont actifs en même temps
+    /// (zone haute réservée jusqu'à ~250-290 pt, voir `RideOverlayLayout.computeMapInsets`) —
+    /// chevauchement visuel direct entre le bouton cap/nord (+ badge limite de vitesse) et le
+    /// texte d'instruction. Fix : borner ce bloc dans `insets.uiTop`/`insets.uiBottom`, LA MÊME
+    /// zone déjà calculée pour cadrer la caméra/le point GPS — cohérent par construction avec
+    /// où le point bleu apparaît réellement, jamais un second calcul indépendant à
+    /// resynchroniser.
     @ViewBuilder
-    private var leftMiddleLayer: some View {
+    private func leftMiddleLayer(insets: RideOverlayLayout.MapInsets) -> some View {
         // Fix "orientation-toggle-nav-only-unreachable" (it19, retour terrain : "dans l'onglet
         // Ride, toujours pas de boussole") — ce bloc était restreint à `modeStore.mode == .nav`,
         // OR le Mode Nav est masqué de l'UI depuis it12 (spec "hide-nav-tab", plus de
@@ -381,6 +396,8 @@ struct RideView: View {
                 }
                 Spacer()
             }
+            .padding(.top, insets.uiTop)
+            .padding(.bottom, insets.uiBottom)
             .padding(.leading, 20)
             Spacer()
         }
@@ -588,7 +605,7 @@ struct RideView: View {
                 .ignoresSafeArea()
 
             topStackLayer(track: track)
-            leftMiddleLayer
+            leftMiddleLayer(insets: insets)
             bottomControlsColumn
             speedoBadgeLayer
 
