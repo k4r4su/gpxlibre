@@ -44,25 +44,31 @@ struct NavGuidancePanelView: View {
         HStack(alignment: .center, spacing: 14) {
             // Zone GAUCHE (proéminente) : direction + distance + sortie de rond-point — tout ce
             // qu'un coup d'œil rapide doit capter, rien d'autre.
+            //
+            // Fix "nav-roundabout-badge-overlay" (retour terrain : "beaucoup trop d'info [...]
+            // si on arrive sur un rond-point et prendre la 3e sortie, il faut mettre l'icône
+            // d'un rond-point avec le numéro 3, de façon à optimiser l'affichage sans avoir
+            // trop à lire") — le numéro de sortie était affiché comme un second élément texte
+            // EMPILÉ sous l'icône (deux lignes à lire) ; il devient un badge numéroté superposé
+            // EN OVERLAY sur l'icône elle-même (une seule unité visuelle icône+chiffre).
             VStack(spacing: 4) {
                 Image(systemName: maneuver?.systemImageName ?? "location.north.line.fill")
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(.white)
+                    .overlay(alignment: .bottomTrailing) {
+                        if let exitCount = maneuver?.roundaboutExitCount, maneuver?.type.isRoundabout == true {
+                            Text("\(exitCount)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.blue)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(.white, in: Circle())
+                                .offset(x: 6, y: 4)
+                        }
+                    }
                 Text(distanceText)
                     .font(.system(.title3, design: .rounded).bold())
                     .foregroundStyle(.white)
                     .monospacedDigit()
-                // "roundabout_exit_count → Numéro de sortie affiché dans l'icône rond-point" —
-                // reste dans la zone GAUCHE (fait partie de "la direction"), pas dans le texte.
-                if let exitCount = maneuver?.roundaboutExitCount, maneuver?.type.isRoundabout == true {
-                    Text("Sortie \(exitCount)")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.white.opacity(0.25))
-                        .clipShape(Capsule())
-                }
             }
             .frame(minWidth: 76)
 
