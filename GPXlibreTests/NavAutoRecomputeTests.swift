@@ -92,31 +92,39 @@ final class NavAutoRecomputeTests: XCTestCase {
         await session.navRoutingTask?.value
         XCTAssertEqual(provider.callCount, 1, "calcul initial")
 
+        // Bornes exprimées à partir des constantes réelles (jamais des littéraux codés en dur)
+        // — reste correct si `NavConstants.offRouteToleranceSeconds`/`navRecomputeCooldownSeconds`
+        // sont retouchées plus tard (fix "nav-recompute-faster" les a déjà réduites une fois).
+        let tolerance = NavConstants.offRouteToleranceSeconds
+        let cooldown = NavConstants.navRecomputeCooldownSeconds
+
         let offRoute = offsetEast(routeCoordinates[2], meters: 200)
-        // Sous le seuil de durée (offRouteToleranceSeconds = 30 s) : pas encore de recalcul.
+        // Sous le seuil de durée : pas encore de recalcul.
         session.handle(location: location(offRoute, at: t0.addingTimeInterval(1)))
         XCTAssertEqual(provider.callCount, 1, "écart tout juste détecté, pas encore soutenu assez longtemps")
 
-        // Écart soutenu > 30 s : un recalcul est demandé (celui-ci échoue, voir le provider).
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(31)))
+        // Écart soutenu au-delà de la tolérance : un recalcul est demandé (celui-ci échoue, voir
+        // le provider).
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(tolerance + 1)))
         await session.navRoutingTask?.value
-        XCTAssertEqual(provider.callCount, 2, "écart soutenu > 30 s : un recalcul doit être demandé")
+        XCTAssertEqual(provider.callCount, 2, "écart soutenu au-delà de la tolérance : un recalcul doit être demandé")
         XCTAssertNotNil(session.navRoutingError)
 
-        // Toujours hors-trace, dans la fenêtre de cooldown (30 s depuis CE recalcul) : ne doit
-        // PAS redéclencher à chaque fix suivant, même répété plusieurs fois.
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(35)))
+        // Toujours hors-trace, dans la fenêtre de cooldown (depuis CE recalcul, à t0+tolerance+1)
+        // : ne doit PAS redéclencher à chaque fix suivant, même répété plusieurs fois.
+        let recomputeDate = tolerance + 1
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(recomputeDate + cooldown * 0.3)))
         await session.navRoutingTask?.value
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(45)))
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(recomputeDate + cooldown * 0.6)))
         await session.navRoutingTask?.value
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(59)))
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(recomputeDate + cooldown - 1)))
         await session.navRoutingTask?.value
         XCTAssertEqual(provider.callCount, 2, "cooldown actif : aucun nouvel appel réseau tant qu'il n'est pas écoulé, malgré l'échec précédent")
 
-        // Cooldown écoulé (> 30 s depuis le recalcul de t0+31) ET toujours hors-trace : un
+        // Cooldown écoulé (depuis le recalcul de t0+tolerance+1) ET toujours hors-trace : un
         // nouvel essai est permis — le rider reste hors-route, ce n'est pas une boucle
         // ininterrompue mais un nouvel essai périodique borné.
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(65)))
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(recomputeDate + cooldown + 1)))
         await session.navRoutingTask?.value
         XCTAssertEqual(provider.callCount, 3, "le cooldown expiré autorise un nouvel essai")
     }
@@ -136,22 +144,26 @@ final class NavAutoRecomputeTests: XCTestCase {
         await session.navRoutingTask?.value
         XCTAssertEqual(provider.callCount, 1)
 
+        let tolerance = NavConstants.offRouteToleranceSeconds
+        let returnDate = 20.0
+
         let offRoute = offsetEast(routeCoordinates[2], meters: 200)
         session.handle(location: location(offRoute, at: t0.addingTimeInterval(1)))
-        // Revenu proche de la trace avant les 30 s — minuteur remis à zéro.
+        // Revenu proche de la trace avant la tolérance — minuteur remis à zéro.
         session.handle(location: location(routeCoordinates[2], at: t0.addingTimeInterval(10)))
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(20)))
-        // 25 s après CE retour (t0+20), donc t0+45 : sans le reset, l'écart serait soutenu
-        // depuis t0+1 (44 s, ≥ 30 s) et aurait déjà déclenché un recalcul ; avec le reset,
-        // seulement 25 s se sont écoulées depuis t0+20 — pas encore de recalcul.
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(45)))
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(returnDate)))
+        // Juste SOUS la tolérance depuis CE retour (t0+returnDate) : sans le reset, l'écart
+        // serait soutenu depuis t0+1 (largement au-delà de la tolérance) et aurait déjà
+        // déclenché un recalcul ; avec le reset, la tolérance n'est pas encore écoulée depuis
+        // t0+returnDate — pas encore de recalcul.
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(returnDate + tolerance - 1)))
         await session.navRoutingTask?.value
-        XCTAssertEqual(provider.callCount, 1, "25 s depuis le dernier retour sur trace (t0+20), sous le seuil de 30 s : le minuteur a bien été remis à zéro")
+        XCTAssertEqual(provider.callCount, 1, "sous la tolérance depuis le dernier retour sur trace : le minuteur a bien été remis à zéro")
 
-        // Poursuite au-delà de 30 s depuis CE MÊME retour (t0+20 + 31 = t0+51) : le recalcul
-        // finit par se déclencher normalement, le minuteur n'est pas resté bloqué.
-        session.handle(location: location(offRoute, at: t0.addingTimeInterval(51)))
+        // Poursuite au-delà de la tolérance depuis CE MÊME retour : le recalcul finit par se
+        // déclencher normalement, le minuteur n'est pas resté bloqué.
+        session.handle(location: location(offRoute, at: t0.addingTimeInterval(returnDate + tolerance + 1)))
         await session.navRoutingTask?.value
-        XCTAssertEqual(provider.callCount, 2, "30 s après le dernier retour sur trace : le recalcul doit maintenant se déclencher")
+        XCTAssertEqual(provider.callCount, 2, "tolérance dépassée depuis le dernier retour sur trace : le recalcul doit maintenant se déclencher")
     }
 }

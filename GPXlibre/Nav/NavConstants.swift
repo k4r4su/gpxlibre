@@ -30,13 +30,23 @@ enum NavConstants {
     /// Écart à la route calculée au-delà duquel un recalcul est envisagé.
     static let offRouteDistanceThresholdMeters: Double = 30
     /// Durée de tolérance avant de recalculer réellement (silencieux, pas de notification).
-    static let offRouteToleranceSeconds: Double = 30
+    /// Réduite de 30 s à 8 s (fix "nav-recompute-faster", retour terrain : "parfois il ne prend
+    /// pas en compte les checkpoints et décide de nous dire qu'on s'éloigne du point de
+    /// passage... on veut aller d'un point A à un point B, on n'est pas sur un rallye avec
+    /// checkpoint obligatoire") — pendant toute cette fenêtre, la bannière continue d'afficher
+    /// la manœuvre de l'ANCIEN itinéraire (de plus en plus hors sujet une fois qu'on s'en
+    /// écarte), ce qui donne l'impression d'une instruction fausse/"retourne en arrière" tant
+    /// qu'un nouvel itinéraire n'a pas été calculé depuis la position actuelle.
+    static let offRouteToleranceSeconds: Double = 8
 
     /// Spec "nav-classic-rebuild" (it21, test attendu "sans boucle de recalcul infinie") —
     /// délai minimum entre deux recalculs automatiques, EN PLUS des gardes isRecalculatingRoute/
     /// isRoutingInProgress (celles-ci empêchent un recalcul CONCURRENT ; celui-ci empêche un
-    /// recalcul IMMÉDIAT si le nouvel itinéraire laisse quand même le rider hors-route).
-    static let navRecomputeCooldownSeconds: Double = 30
+    /// recalcul IMMÉDIAT si le nouvel itinéraire laisse quand même le rider hors-route). Réduite
+    /// de 30 s à 12 s (fix "nav-recompute-faster", même retour terrain que ci-dessus) — laisse
+    /// toujours un délai raisonnable entre deux appels réseau après un échec, sans faire
+    /// attendre le rider aussi longtemps qu'avant si Valhalla redevient joignable entre-temps.
+    static let navRecomputeCooldownSeconds: Double = 12
 
     // MARK: - Favoris
 
