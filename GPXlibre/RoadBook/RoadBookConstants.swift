@@ -8,10 +8,15 @@ import Foundation
 enum RoadBookConstants {
     // MARK: - Lecture Assisté GPS
 
-    /// Rayon de "manœuvre atteinte" — au-delà, la ligne courante avance à la suivante. Généreux
-    /// (pas besoin de la précision "vraie arrivée" du guidage riche Ride) : le Road Book est un
-    /// filet de lecture, pas un second moteur de guidage.
-    static let liveManeuverReachedRadiusMeters: Double = 40
+    /// Distance (m) après avoir ATTEINT une manœuvre pendant laquelle elle reste affichée
+    /// (figée à "0 m") avant de basculer sur la suivante — fix "roadbook-live-progress-hold",
+    /// retour terrain : "j'ai l'impression que la direction change 15/20 m avant le virage,
+    /// j'aimerais qu'une fois arrivé à zéro, la direction reste encore 10/20 m après le virage".
+    /// Root cause de l'ancien comportement (anticiper le changement 40 m AVANT d'arriver,
+    /// `liveManeuverReachedRadiusMeters` ci-avant) : voir `RoadbookLiveProgress.nextManeuver`,
+    /// qui bascule désormais sur la manœuvre atteinte elle-même puis la maintient cette durée —
+    /// SAUF virages enchaînés (voir ce même fichier), où le maintien serait contre-productif.
+    static let liveManeuverHoldAfterMeters: Double = 15
 
     /// Portée de la mini-carte en mode Assisté GPS — PAS la trace complète, juste de quoi
     /// confirmer visuellement qu'on est au bon endroit localement (spec "roadbook-focused-next-
