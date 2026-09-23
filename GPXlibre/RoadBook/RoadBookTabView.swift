@@ -11,6 +11,17 @@ import CoreLocation
 struct RoadBookTabView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var settings: RideSettingsStore
+    /// Fix "roadbook-reversed-direction-broken" (retour terrain : "Assisté GPS fonctionne en
+    /// sens A→B mais affiche immédiatement 'Toutes les manœuvres ont été passées' en sens
+    /// inversé") — root cause : cet écran n'appliquait JAMAIS le sens de parcours par trace
+    /// (`TrackRideSettings.isReversed`, spec "per-track-settings", it13), contrairement à
+    /// `RideView.swift` (`track.reordered(using: trackRideSettings.settings(for: track.id))`,
+    /// voir son `rideContent`). Les manœuvres/la projection GPS restaient donc calculées sur
+    /// l'ordre CANONIQUE A→B stocké quel que soit le sens choisi dans Réglages de trace — en
+    /// sens inversé, la position réelle (proche du point B canonique) projette une distance
+    /// cumulée déjà supérieure à celle de TOUTES les manœuvres dès le premier point, d'où
+    /// "tout est déjà passé". Voir `selectedTrack` ci-dessous.
+    @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
 
     @State private var selectedTrackID: UUID?
     @State private var showExportOptions = false
@@ -45,11 +56,23 @@ struct RoadBookTabView: View {
     /// palette du moment de l'ouverture.
     @State private var resolvedPalette: RoadbookPalette = .paper
 
-    private var selectedTrack: GPXTrack? {
+    /// Trace CANONIQUE (ordre d'origine du fichier GPX) — utilisée uniquement pour la sélection
+    /// (comparaison d'id dans le picker) ; jamais passée directement à l'extraction de
+    /// manœuvres/la projection GPS, voir `selectedTrack` ci-dessous.
+    private var rawSelectedTrack: GPXTrack? {
         if let selectedTrackID, let track = library.tracks.first(where: { $0.id == selectedTrackID }) {
             return track
         }
         return library.activeTrack ?? library.tracks.first
+    }
+
+    /// Trace dans le sens RÉELLEMENT affiché/parcouru (fix "roadbook-reversed-direction-broken")
+    /// — même patron que `RideView.rideContent` : `reordered(using:)` préserve `id` (voir
+    /// `GPXTrack.reordered`), donc le cache map matching (`RoadbookMapMatchCache`, clé =
+    /// `track.id`) reste valide quel que soit le sens choisi. TOUJOURS utiliser CETTE propriété
+    /// (jamais `rawSelectedTrack`) pour tout calcul de distance cumulée/manœuvre/projection GPS.
+    private var selectedTrack: GPXTrack? {
+        rawSelectedTrack.map { $0.reordered(using: trackRideSettings.settings(for: $0.id)) }
     }
 
     private var maneuvers: [RoadbookManeuver] {

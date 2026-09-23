@@ -407,6 +407,56 @@ d'automatisation tactile disponible : chaque navigation dans l'app a nécessité
 propriétaire, `devicectl`/`pymobiledevice3` ne permettent que build/install/launch/screenshot/
 logs, jamais un geste simulé sur un device physique.
 
+## Sens de parcours inversé cassé en Assisté GPS (fix "roadbook-reversed-direction-broken")
+
+Retour terrain : "Road Book Assisté GPS fonctionne normalement en sens A→B, mais affiche
+immédiatement 'Toutes les manœuvres de cette trace ont été passées' en sens inversé, alors que
+le trajet vient de commencer."
+
+Root cause confirmée par lecture de code (pas de correction à l'aveugle) : `RoadBookTabView`
+n'appliquait JAMAIS `GPXTrack.reordered(using:)` (spec "per-track-settings", it13,
+`TrackRideSettings.isReversed`) — contrairement à `RideView.rideContent`
+(`track.reordered(using: trackRideSettings.settings(for: track.id))`). `selectedTrack`
+retournait donc TOUJOURS la trace dans l'ordre CANONIQUE stocké, quel que soit le sens choisi
+par l'utilisateur pour cette trace. Les trois consommateurs (`RoadbookExtractor.maneuvers`,
+`triggerMapMatchingIfNeeded`, la projection GPS de `liveProgress` via `TrackProjector`)
+travaillaient donc tous sur l'ordre canonique. En sens inversé, la position physique de départ
+(proche du point B canonique) se projette sur une distance cumulée déjà proche du TOTAL de la
+trace — supérieure à celle de TOUTES les manœuvres (elles-mêmes mesurées en ordre canonique,
+petites valeurs près de A) — d'où "tout est déjà passé" dès le premier point.
+
+**Important** : l'onglet Ride (`RideSessionManager`) n'était PAS concerné, ni avant ni après le
+branchement route-aware du Road Book (`00325fc`) — `RideView.swift` réordonne la trace EN AMONT,
+avant tout appel à `session.start(track:)`/`switchMode(track:)`, donc son propre map matching et
+ses checkpoints ont toujours travaillé sur l'ordre effectivement affiché. Le bug était strictement
+localisé à `RoadBookTabView`.
+
+Fix : `RoadBookTabView` reçoit `@EnvironmentObject private var trackRideSettings:
+TrackRideSettingsStore` (déjà injecté à la racine par `GPXlibreApp`, aucune plomberie
+supplémentaire nécessaire). `selectedTrack` (utilisé PARTOUT dans ce fichier — extraction,
+map matching, projection GPS, mini-carte) devient une trace DÉRIVÉE : `rawSelectedTrack.map {
+$0.reordered(using: trackRideSettings.settings(for: $0.id)) }` — `rawSelectedTrack` (la trace
+canonique, préexistante sous ce nom) ne sert plus qu'à la comparaison d'id dans le picker de
+trace. `GPXTrack.reordered(using:)` préserve `id` (voir `GPXTrack.swift`), donc
+`RoadbookMapMatchCache` (clé = `track.id`) reste partagé et valide quel que soit le sens — aucun
+changement nécessaire côté cache, cohérent avec le fait que `mergingMapMatchedDirectionChanges`
+(RoadbookAnalyzer) recale déjà les manœuvres map-matchées par COORDONNÉES absolues, jamais par
+index positionnel.
+
+Tests : `RoadbookReversedDirectionTests` (nouveau fichier) reproduit le pipeline exact de
+`RoadBookTabView` (`reordered(using:)` → `RoadbookExtractor.maneuvers` → `TrackProjector.project`
+→ `RoadbookLiveProgress.nextManeuver`) plutôt que d'instancier la vue SwiftUI elle-même (non
+testable directement, mêmes contraintes qu'ailleurs dans ce module) — un test positif (sens
+inversé, première manœuvre bien à venir), un test de non-régression (sens normal inchangé), et un
+test qui reproduit VOLONTAIREMENT le mécanisme du bug d'origine (manœuvres calculées sur l'ordre
+canonique + projection au point de départ physique du sens inversé → `nil`) comme garde-fou si
+un futur changement réintroduisait `rawSelectedTrack` par erreur sur l'un des trois usages.
+
+Vérification manuelle terrain (le trajet test refait en sens inversé, confirmant un comportement
+symétrique au sens normal) : **pas encore faite** — à confirmer par le propriétaire au prochain
+test roulant, aucun device physique disponible pour reproduire ce scénario précis dans cette
+session.
+
 ## Écran maintenu allumé (spec "roadbook-keep-screen-awake", it25)
 
 Retour terrain pendant la vérification device ci-dessus : "l'écran doit rester allumé dans road
