@@ -30,7 +30,10 @@ GPXlibre/
                    `sources:` dans project.yml — si ce dossier disparaît d'un futur `xcodegen
                    generate`, vérifier que project.yml le liste toujours.
   Models/         GPXPoint, GPXTrack (struct value type, reordered() pur — voir Trace sacrée ;
-                   `contentDate: Date?` depuis it15, voir section horodatage Biblio ci-dessous)
+                   `contentDate: Date?` depuis it15, voir section horodatage Biblio ci-dessous ;
+                   `traversalKey` depuis it26 : id + deux premiers points — `reordered(using:)`
+                   préserve `id`, donc TOUT cache dérivé de l'ordre des points (map matching,
+                   entrées de commune) est indexé par `traversalKey`, JAMAIS par `id` seul)
   Services/       GPXParser (XMLParser maison), LibraryStore (source de vérité des traces,
                    voir section dédiée), LocationManager, NetworkMonitor
   Ride/           Le cœur du produit — RideView (orchestrateur SwiftUI de l'onglet Ride),
@@ -42,6 +45,9 @@ GPXlibre/
                    RejoinGuidanceBannerView (it18, colonne latérale, voir Ride/CLAUDE.md),
                    RidePanelStyle (styles partagés), RideConstants (constantes Ride hors
                    roadbook), DebugReplayDriver (#if DEBUG, voir plus bas).
+                   RideCameraFollowPolicy (it26, fix "roadbook-jump-to-map-sticky" : décision
+                   caméra pure de RideMapLibreView — suivi GPS / rien / commande autour du centre
+                   écran ; une étape Road Book affichée suspend le suivi jusqu'à "Me recentrer"),
                    GuidanceTarget (it22, spec "manual-point-guidance-exclusivity" : état calculé
                    trace/point-manuel/aucun, "un seul guidage actif à la fois" — voir
                    Ride/CLAUDE.md),
@@ -228,7 +234,8 @@ GPXlibre/
                    RideSessionManager/l'invariant trace unique it10 (voir RoadBook/CLAUDE.md).
                    RoadbookExtractor (réutilise RoadbookAnalyzer/TrackProjector, aucune nouvelle
                    détection), RoadbookPDFExporter (export PDF natif UIGraphicsPDFRenderer,
-                   même source de données que l'écran).
+                   même source de données que l'écran). RoadbookLocality/Service/Cache (it26,
+                   checkpoints d'entrée de commune via Overpass — voir RoadBook/CLAUDE.md).
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    SlopeAnalyzer (it19 : détection NATIVE de pente forte le long d'une trace —
                    décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,
@@ -407,6 +414,25 @@ version.
   ignoré. Parfois `simctl location set` doit être appelé deux fois (coordonnées différentes)
   pour forcer un vrai `didUpdateLocations`. `simctl location start --speed=N` avec plusieurs
   points est plus fiable pour simuler un trajet continu.
+- **iPhone 13 Pro réel (depuis it25/it26), quand le propriétaire le branche** — méthode qui
+  fonctionne (it26) : `xcrun devicectl list devices` (identifiant CoreDevice) et
+  `xcrun xctrace list devices` (UDID pour xcodebuild, différent) ; build signé
+  `xcodebuild ... -destination 'id=<UDID>' -allowProvisioningUpdates DEVELOPMENT_TEAM=5X72C94C94
+  -derivedDataPath <scratchpad>` (équipe du compte Xcode du propriétaire, en SURCHARGE de ligne
+  de commande — ne jamais la commiter sans son accord, voir TODO.md) ; puis `devicectl device
+  install app` / `device process launch` (échoue si le téléphone est verrouillé : le
+  propriétaire ouvre l'app lui-même). Données réelles en LECTURE SEULE : `devicectl device copy
+  from --domain-type appDataContainer --domain-identifier com.olivier.gpxlibre --source
+  Documents/Tracks` (+ `Library/Preferences/com.olivier.gpxlibre.plist`) vers le scratchpad —
+  `Tracks/index.json` se décode directement en `[GPXTrack]` : rejouer un algorithme sur les
+  traces réelles via un test TEMPORAIRE (jamais commité) a identifié les vraies causes en it26.
+  Captures : `pymobiledevice3 developer dvt screenshot` via `osascript ... with administrator
+  privileges` (voir RoadBook/CLAUDE.md it25).
+- Simulateur avec des données réelles : copier `Tracks/` dans `simctl get_app_container ...
+  data` + `simctl spawn <udid> defaults write com.olivier.gpxlibre <clé> <valeur>`
+  (`settings.hasSeenOnboarding`, `settings.roadbookReadingMode`, `library.activeTrackID`) ;
+  l'onglet de départ, lui, via une modification de code TEMPORAIRE (`AppNavigationState.
+  selectedTab`) — vérification visuelle sans tap possible.
 - Pas d'automatisation tactile (AppleScript/Accessibility) disponible dans cet environnement
   — impossible de taper à travers l'UI. Vérification honnête : soit forcer un état via une
   modification de code TEMPORAIRE (annulée juste après, jamais commitée), soit documenter la

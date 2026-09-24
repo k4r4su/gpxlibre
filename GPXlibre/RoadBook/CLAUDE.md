@@ -121,10 +121,10 @@ pas seulement par convention de code.
 `TrackProjector.cumulativeDistances` — il ne fait qu'assembler les distances partielle/cumulée
 autour de la liste de `Checkpoint` déjà produite ailleurs. Les seuils/fenêtre utilisés sont les
 MÊMES réglages Roadbook que Ride (`RideSettingsStore.roadbookWindowBeforeMeters` etc.) — aucun
-réglage de détection dupliqué pour cet onglet. Le map matching Valhalla (it20,
-`mapMatchedDirectionChangeCoordinates`) n'est PAS branché ici — délibérément, pour rester
-découplé de tout appel réseau/cache lié à une session Ride ; scope potentiel d'une itération
-future si le besoin se confirme.
+réglage de détection dupliqué pour cet onglet. Le map matching Valhalla n'était PAS branché ici
+à l'origine (it23) ; il l'est depuis it25 (fix "roadbook-valhalla-route-aware", mécanisme
+dupliqué dans `RoadBookTabView` pour rester découplé de `RideSessionManager`, cache disque
+partagé avec Ride).
 
 **Deux modes de lecture, une seule liste de données** (`RoadbookReadingMode`) :
 - `.classic` : affiche directement `[RoadbookManeuver]` telle quelle (distances fixes).
@@ -437,11 +437,10 @@ supplémentaire nécessaire). `selectedTrack` (utilisé PARTOUT dans ce fichier 
 map matching, projection GPS, mini-carte) devient une trace DÉRIVÉE : `rawSelectedTrack.map {
 $0.reordered(using: trackRideSettings.settings(for: $0.id)) }` — `rawSelectedTrack` (la trace
 canonique, préexistante sous ce nom) ne sert plus qu'à la comparaison d'id dans le picker de
-trace. `GPXTrack.reordered(using:)` préserve `id` (voir `GPXTrack.swift`), donc
-`RoadbookMapMatchCache` (clé = `track.id`) reste partagé et valide quel que soit le sens — aucun
-changement nécessaire côté cache, cohérent avec le fait que `mergingMapMatchedDirectionChanges`
-(RoadbookAnalyzer) recale déjà les manœuvres map-matchées par COORDONNÉES absolues, jamais par
-index positionnel.
+trace. ⚠️ Ce fix affirmait aussi que `RoadbookMapMatchCache` (clé = `track.id`) restait valide
+quel que soit le sens : FAUX, corrigé en it26 ("mapmatch-cache-direction-aware") — vrai pour les
+coordonnées, pas pour les TYPES de manœuvre (gauche/droite, rang de sortie de rond-point),
+propres au sens de parcours. Clé désormais `GPXTrack.traversalKey`, voir section it26.
 
 Tests : `RoadbookReversedDirectionTests` (nouveau fichier) reproduit le pipeline exact de
 `RoadBookTabView` (`reordered(using:)` → `RoadbookExtractor.maneuvers` → `TrackProjector.project`
@@ -473,3 +472,59 @@ n'est PAS lié à la visibilité de l'onglet, voir `RideSessionManager.isActive`
 le maintien réveillé du Ride. `IdleTimerCoordinator` tient un `Set<IdleTimerReason>` plutôt qu'un
 flag — le timer ne se réactive que quand PLUS AUCUNE raison n'est active. `RideSessionManager`
 passe maintenant par ce coordinateur au lieu d'écrire `UIApplication.shared` directement.
+
+## Itération 26 — précision, demi-tours, checkpoints de commune, saut carte
+
+Causes réelles identifiées en rejouant les algorithmes sur les traces RÉELLES du propriétaire
+(copiées depuis l'iPhone en lecture seule, voir CLAUDE.md racine "Device de référence") — pas
+supposées. Détail des trois premiers points côté détection : Ride/CLAUDE.md, section it26.
+
+- **Cache par sens** ("mapmatch-cache-direction-aware") : `RoadBookTabView.task(id:)` indexé sur
+  `selectedTrack?.traversalKey` (le sens peut changer depuis Réglages de trace pendant que
+  l'onglet reste vivant dans le TabView, sans que `id` ne change).
+- **Position exacte du carrefour** ("roadbook-maneuver-position-from-route") : `RoadbookExtractor`
+  lit `Checkpoint.cumulativeDistanceMeters(using:)` — la distance interpolée du VRAI carrefour
+  Valhalla, plus celle du point GPX voisin. `Checkpoint.id` est dérivé de cette position
+  (décimètres), plus de `sourcePointIndex` seul.
+- **Plus de faux demi-tours** ("roadbook-no-false-uturn") : nouveau palier `.veryHard`
+  "Virage très serré" (flèche à 140°, avec son sens) ; `.uTurn` seulement si la trace repart sur
+  la même route. Réglage "Très serré dès" (ex-"Demi-tour dès", même clé persistée).
+- **Saut carte** ("roadbook-jump-to-map-sticky") : taper une étape met la carte Ride en mode
+  étape, sans minuteur, jusqu'à "Me recentrer" — voir `RideCameraFollowPolicy`.
+
+### Checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", point 3)
+
+`RoadbookLocality.swift` (pur) : `RoadbookLocalityCheckpoint` (nom, coordonnée, distance
+cumulée, source `.boundary`/`.citySign`/`.place`), `RoadbookLocalityArea` (anneaux en
+pair-impair, enclaves comprises), `RoadbookLocalityGeometry` (recollage des chemins de limite en
+anneaux, point dans polygone), `RoadbookLocalityDetector`, `RoadbookEntry` (manœuvres +
+checkpoints dans l'ordre de progression — SEULE façon dont écrans et PDF les mêlent ; la
+numérotation affichée reste celle des seules manœuvres).
+
+- **Jamais un `Checkpoint`** (type partagé avec les pins/la bannière Ride) et **jamais dans
+  `RoadbookLiveProgress`** : la carte hero du mode Assisté GPS reste le prochain VIRAGE, les
+  checkpoints s'intercalent dans la liste des étapes à venir (distance depuis la position
+  actuelle projetée, `RoadBookTabView.liveCumulativeDistanceMeters`).
+- **Source** : UNE requête Overpass (`RoadbookLocalityService.query`) — polyligne `around:`
+  échantillonnée (250 m, plafond 600 points, rayon = pas), communes `admin_level=8` en `out geom`,
+  plus panneaux `city_limit` et lieux pour les replis. Priorité : limites si Overpass en renvoie
+  au moins une, sinon panneaux (premier rencontré de chaque village dans le sens de parcours),
+  sinon lieux (point de la trace le plus proche).
+- **Détection** : trace déjà dans son sens de parcours, sondée tous les 20 m, franchissements
+  affinés par dichotomie ; jamais la commune de départ. Filtrage : passage < 300 m dans une
+  commune ignoré (route qui SUIT une limite, coin de commune) — si encadré par la même commune,
+  le retour non plus ; ré-entrée < 2 km dans la même commune ignorée. Seuils calés sur de vraies
+  réponses Overpass pour les traces du propriétaire (150 m/1 km laissaient des entrées à 100 m
+  d'écart et des alternances de communes le long d'une route-limite).
+- **Réseau** : l'instance publique renvoie par intermittence 504/429 — 3 essais (pauses 5 puis
+  15 s), et la requête des communes passe AVANT les repères OSM (`loadLandmarksIfNeeded`), jamais
+  en parallèle : la rafale de requêtes de repères occupait les créneaux Overpass par IP et faisait
+  échouer (504) l'unique requête des communes, constaté sur simulateur.
+- **Cache** : `RoadbookLocalityCache`, clé `traversalKey` (par trace ET par sens), résultat vide
+  mis en cache, échec jamais (nouvel essai à la prochaine ouverture).
+- **Affichage** : `RoadbookLocalitySignIcon` (panneau blanc à bordure rouge, jamais une flèche),
+  lignes à fond teinté dans la table classique (`RoadbookLocalityTableRow`) et la liste Assisté
+  GPS (`RoadbookUpcomingLocalityRow`), ligne dédiée dans le PDF (panneau portant le nom de la
+  commune, distance cumulée). Tap → carte Ride sur le checkpoint.
+- Vérifié sur simulateur avec les vraies traces et Overpass en direct (captures) ; pas encore
+  sur l'iPhone (débranché avant l'install du point 3).

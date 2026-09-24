@@ -438,3 +438,54 @@ complet, root cause et les 3 call sites mis à jour : voir `GPXlibre/RoadBook/CL
 `rotationDegrees(direction:)` plutôt qu'un nouveau nom de glyphe — c'est cette règle qui manquait
 et a permis au bug d'origine.
 
+## Itération 26 — précision du roadbook et saut carte
+
+Toutes les causes ci-dessous ont été confirmées par lecture de code PUIS en rejouant les
+algorithmes sur les traces réelles du propriétaire (test temporaire, jamais commité) — voir
+CLAUDE.md racine "Device de référence" pour la méthode.
+
+**Cache map matching par sens (fix "mapmatch-cache-direction-aware")** — `RoadbookMapMatchCache`
+et les gardes anti-relance (`mapMatchedTraversalKey`, ici ET dans `RoadBookTabView`) sont indexés
+par `GPXTrack.traversalKey`, plus par `id` : les types Valhalla (gauche/droite, fourche/fusion,
+rang de sortie de rond-point) dépendent du sens de parcours, et `reordered(using:)` préserve
+`id` — une trace map-matchée en A→B réutilisait ces types tels quels en B→A.
+
+**Position du vrai carrefour (fix "roadbook-maneuver-position-from-route", it26 point 1)** —
+`begin_shape_index` était correctement lu dans la géométrie Valhalla ; la précision était perdue
+dans `RoadbookAnalyzer.mergingMapMatchedDirectionChanges` (`nearestPointIndex` → point GPX le
+plus proche, 15-120 m d'erreur selon la densité). Désormais :
+- `Checkpoint.trackCumulativeDistanceMeters` (distance INTERPOLÉE sur le segment, renseignée
+  aussi pour les événements géométriques) et `Checkpoint.cumulativeDistanceMeters(using:)`, SEUL
+  point de lecture (Ride `roadbookEventCumulativeDistanceMeters` ET Road Book). Coordonnée
+  affichée = carrefour réel. `Checkpoint.id`/`==` dérivés de cette position (décimètres).
+- Choix du PASSAGE de trace (boucle qui traverse deux fois un carrefour, aller-retour) :
+  `MapMatchedManeuver.routeProgressFraction` (progression le long de la route recalée, depuis
+  `begin_shape_index`, tous tronçons confondus) départage les `TrackProjector.passes` ; repli
+  sans cette donnée : projection monotone dans l'ordre des manœuvres.
+- Carrefour à plus de `NavigationConstants.roadbookMapMatchMaxOffTrackMeters` (60 m) : ignoré.
+- Doublon mesuré LE LONG de la trace (plus à vol d'oiseau).
+
+**Demi-tour = même route (fix "roadbook-no-false-uturn", it26 point 2)** — sources réelles sur
+12 traces : palier géométrique à 135° (24 faux demi-tours sur une sortie de 110 km, tous des
+lacets ; le seuil de 175° demandé en laissait encore 5, angles cumulés 182-435°), un seul demi-tour
+Valhalla (à 20 m du départ : stationnement), bruit GPS de départ, et un téléport GPS enregistré
+(voir TODO.md). Règle :
+- nouveau palier `RoadbookTier.veryHard` "Virage très serré" AVEC son sens ;
+- géométrique : `.uTurn` seulement si angle ≥ `roadbookUTurnMinDegrees` (175°) ET la trace
+  repart sur son propre tracé (`roadbookUTurnSamePathMaxMeters`, 12 m, positions interpolées) ;
+- Valhalla : `.uTurn` seulement si `MapMatchedManeuver.isSameRoadUTurn` (même `street_names`
+  avant/après, désormais décodé) ; sinon `.veryHard` du côté du type ;
+- tout demi-tour dans les `roadbookUTurnEndpointGuardMeters` (200 m) du départ/de l'arrivée :
+  ignoré (stationnement).
+- `veryHardThresholdDegrees` remplace `uTurnThresholdDegrees` partout (réglage "Très serré
+  dès", clé persistée `settings.roadbookUTurnThresholdDegrees` INCHANGÉE).
+
+**Saut carte depuis le Road Book (fix "roadbook-jump-to-map-sticky", it26 point 4)** — une seule
+cause aux deux symptômes ("une fois sur deux", "revient tout seul sur le GPS") : le saut ne
+suspendait le suivi que via la fenêtre de 5 s d'un geste manuel, posée par un `.onChange` APRÈS
+le rendu qui applique le saut — le bloc de suivi de `updateUIView` recentrait dans la même passe.
+`RideCameraFollowPolicy` (pur, testé) : `roadBookFocusRequest != nil` = mode étape, suivi GPS
+suspendu sans minuteur ; la passe qui saute ne recentre jamais ; +/- zoome autour de l'étape.
+"Me recentrer" (visible pendant tout le mode) appelle `AppNavigationState.endRoadBookFocus()` +
+`recenterCamera()` — seule sortie. Le changement d'onglet ne force jamais la caméra (seuls +/-
+et "Me recentrer" changent `cameraCommandToken`), vérifié.

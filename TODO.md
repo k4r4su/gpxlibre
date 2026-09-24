@@ -1,5 +1,43 @@
 # TODO
 
+## Itération 26 (précision du Road Book, checkpoints villages, saut carte) — v0.0.26
+
+Commits : `mapmatch-cache-direction-aware` (trouvé en route : types Valhalla gauche/droite
+réutilisés tels quels en sens inverse), `roadbook-maneuver-position-from-route` (point 1),
+`roadbook-no-false-uturn` (point 2), `roadbook-jump-to-map-sticky` (point 4),
+`roadbook-locality-checkpoints` (point 3). Détails et causes réelles : Ride/CLAUDE.md et
+RoadBook/CLAUDE.md, sections it26. Les points 1/2/3 ont été validés sur les traces RÉELLES du
+propriétaire (copiées depuis l'iPhone en lecture seule) et, pour le point 3, avec de vraies
+réponses Overpass.
+
+Checklist manuelle restant à faire par le propriétaire :
+- [ ] Trajet réel connu : l'annonce tombe au niveau du vrai carrefour (point 1).
+- [ ] Trajet avec un virage très serré / une épingle : jamais annoncé "Demi-tour" (point 2).
+- [ ] Trajet traversant plusieurs villages, en A→B PUIS en B→A : checkpoints dans le bon ordre
+      (point 3) — la version installée sur l'iPhone le 24/09 ne contient PAS encore ce point.
+- [ ] Tap sur 10 étapes différentes du Road Book : la carte arrive au bon endroit à chaque fois
+      et y reste ; "Me recentrer" ramène sur le GPS (point 4).
+- [ ] Première ouverture après mise à jour : les caches map matching sont recalculés (format
+      changé), vérifier que les manœuvres route-aware réapparaissent.
+
+Identifié, volontairement NON traité (hors périmètre de la fiche) :
+- **Téléports GPS enregistrés** : "Travail maison fin" contient 5 allers-retours entre deux
+  positions à 290 m en < 16 s (vitesses de 170 à 1000 km/h). Ce sont de vrais retours sur le
+  même tracé, donc encore classés "demi-tour" par la nouvelle règle. Piste : filtrer les sauts
+  à vitesse impossible à l'enregistrement (RideSessionManager) et/ou à l'import.
+- **Demi-tour de départ/arrivée** : ignoré dans les 200 m (stationnement) ; un vrai demi-tour de
+  parcours dans ces 200 m serait donc aussi ignoré — accepté.
+- **Aller-retour : carrefour à < 60 m du point de demi-tour** : les deux passages sont contigus,
+  fusionnés en un seul candidat par `TrackProjector.passes` — une des deux manœuvres disparaît.
+- **Checkpoints de commune et Overpass public** : l'instance renvoie par intermittence 504/429
+  (constaté plusieurs fois pendant l'itération). 3 essais puis abandon propre, nouvel essai à
+  la prochaine ouverture. Si ça reste fréquent sur le terrain : auto-héberger Overpass sur le
+  NAS (déjà envisagé pour Photon, voir Nav/CLAUDE.md).
+- **Signature Xcode** : `project.yml` déclare `DEVELOPMENT_TEAM: V9Q4V3W2RZ`, mais le build device
+  ne signe qu'avec l'équipe 5X72C94C94 (celle du compte Xcode du propriétaire, qui réécrit
+  `project.pbxproj` localement à chaque build GUI). Décision au propriétaire : mettre à jour
+  `project.yml` si V9Q4V3W2RZ n'est plus utilisée.
+
 ## Itération 25 (refonte UI/UX du Road Book)
 
 Retour terrain avec captures à l'appui, sur la livraison it24 : "aucun pictogramme visible,
