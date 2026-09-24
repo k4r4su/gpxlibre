@@ -202,7 +202,8 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         // cette garde, la caméra reviendrait sur ce point à CHAQUE rafraîchissement (chaque fix
         // GPS), jamais juste une fois au moment du tap.
         let focusRequest = context.environment.roadBookFocusRequest
-        if context.coordinator.updateRoadBookFocus(request: focusRequest, on: mapView), let target = focusRequest?.coordinate {
+        let didJumpToRoadBookFocus = context.coordinator.updateRoadBookFocus(request: focusRequest, on: mapView)
+        if didJumpToRoadBookFocus, let target = focusRequest?.coordinate {
             let camera = MLNMapCamera(lookingAtCenter: target, acrossDistance: RideConstants.roadBookFocusCameraDistanceMeters, pitch: 0, heading: 0)
             mapView.setCamera(camera, withDuration: RideConstants.cameraAnimationDurationSeconds, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
         }
@@ -213,9 +214,19 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
 
         let isForcedCommand = context.coordinator.lastCameraCommandToken != cameraCommandToken
         context.coordinator.lastCameraCommandToken = cameraCommandToken
-        guard let currentLocation, isForcedCommand || !isManualOverrideActive else { return }
+        // Fix "roadbook-jump-to-map-sticky" (it26 point 4) — voir `RideCameraFollowPolicy` : une
+        // étape Road Book affichée suspend le suivi GPS jusqu'à "Me recentrer", sans minuteur.
+        let decision = RideCameraFollowPolicy.decide(
+            isForcedCommand: isForcedCommand,
+            isManualOverrideActive: isManualOverrideActive,
+            isRoadBookFocusActive: focusRequest != nil,
+            didJumpToRoadBookFocus: didJumpToRoadBookFocus
+        )
+        guard let currentLocation, decision != .keepCamera else { return }
 
-        let heading = (northUp || is2DNorthUp) ? 0 : headingDegrees
+        // Zoom +/- sur une étape Road Book : garde l'orientation nord de l'étape plutôt que de
+        // faire tourner la carte vers le cap GPS.
+        let heading = (northUp || is2DNorthUp || focusRequest != nil) ? 0 : headingDegrees
         // Fix "explore-zoom-anchoring" (it14, Bloc 11, bug terrain confirmé : "pan carte puis
         // tap +/- revient sur la position GPS au lieu de zoomer le secteur") : un tap +/- (ou
         // recentrage) pendant l'exploration (drag actif, isManualOverrideActive) doit zoomer
@@ -225,7 +236,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         // donc cette branche ne le concerne jamais. En suivi normal (non exploré),
         // `mapView.camera.centerCoordinate` vaut de toute façon déjà `currentLocation.coordinate`
         // (dernière caméra appliquée) : comportement inchangé dans ce cas.
-        let lookingAtCenter = (isForcedCommand && isManualOverrideActive)
+        let lookingAtCenter = decision == .applyCommandAroundScreenCenter
             ? mapView.camera.centerCoordinate
             : currentLocation.coordinate
         // Spec "2d-only" (it11) : la vue reste TOUJOURS plate, plus de pitch pilotable — la

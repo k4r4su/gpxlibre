@@ -127,7 +127,9 @@
 		9186CC65C11B9307FA2EE5E1 /* GPXExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BAC69A3811CBFC850CF11EC /* GPXExporter.swift */; };
 		9259B77B102FFC4F9894D494 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43D5A279C088967478654857 /* AppVersion.swift */; };
 		92811067A6507B4E9CCD7070 /* RoadbookMiniMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 663B0B704D955CEA6513E4CE /* RoadbookMiniMapView.swift */; };
+		94997A72986E3A857B1C1B4F /* RideCameraFollowPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B39BD639208A6018348E2C /* RideCameraFollowPolicyTests.swift */; };
 		9777446AC1061F4F3384265E /* TrackFicheMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3815B29C1CCDA521FA21D62 /* TrackFicheMapView.swift */; };
+		994CE1784EB7991778CF0F8F /* RideCameraFollowPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2E64265E838E6A33C6A85D /* RideCameraFollowPolicy.swift */; };
 		99A66F44AC26ECB625498587 /* SharedBlockageCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */; };
 		9B050D7F71F0CB24959A5BC5 /* RecordingDensityPresetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3E83F7EB8F43F1B9039714 /* RecordingDensityPresetTests.swift */; };
 		9D3F41FDAB5DBBF96D3A0357 /* RollingWaypoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80F0D27D6D77CD532EF2F94 /* RollingWaypoint.swift */; };
@@ -248,6 +250,7 @@
 		021C7FF6070BE9A600FAA2D7 /* SlopeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlopeAnalyzer.swift; sourceTree = "<group>"; };
 		03C9982DF08E6E5670EC5DFB /* SharedBlockageAlertPillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageAlertPillView.swift; sourceTree = "<group>"; };
 		07085FFDE42708E45905658C /* FlashOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashOverlayView.swift; sourceTree = "<group>"; };
+		0B2E64265E838E6A33C6A85D /* RideCameraFollowPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideCameraFollowPolicy.swift; sourceTree = "<group>"; };
 		0C72422FDA5096B79DE70CA5 /* RideStopButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideStopButton.swift; sourceTree = "<group>"; };
 		0F171EFD64B6DBD10BBDF4F2 /* ValhallaKeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValhallaKeychainStore.swift; sourceTree = "<group>"; };
 		10DC18BE9B3DFF2E711F17E7 /* SharedBlockageCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBlockageCodingTests.swift; sourceTree = "<group>"; };
@@ -447,6 +450,7 @@
 		E8DF6CFFE4D380DE8F08D661 /* NavRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavRoute.swift; sourceTree = "<group>"; };
 		E9325001021D82793B44F803 /* RoadbookExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookExtractorTests.swift; sourceTree = "<group>"; };
 		E9A2639AA8ABC9AC21CB14B2 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		E9B39BD639208A6018348E2C /* RideCameraFollowPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideCameraFollowPolicyTests.swift; sourceTree = "<group>"; };
 		E9B6C982C37D4CB998593005 /* TrackMetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMetricsCalculator.swift; sourceTree = "<group>"; };
 		EA367A3EE73A3BBE788A6EF5 /* GoToStatusPillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToStatusPillView.swift; sourceTree = "<group>"; };
 		EA96F8862986B1C89C94522E /* AutoRecomputeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRecomputeTests.swift; sourceTree = "<group>"; };
@@ -513,6 +517,7 @@
 				24B172E0EAF6A217BF489C60 /* RejoinGuidanceBannerView.swift */,
 				01B82842449B56CC93E5EE4B /* ResumeGuidance.swift */,
 				A8C0D10C0B8B572A8B761630 /* ResumeGuidanceCardView.swift */,
+				0B2E64265E838E6A33C6A85D /* RideCameraFollowPolicy.swift */,
 				FFB7F31AE92AEDE0BB2D32B9 /* RideConstants.swift */,
 				A02F17CE2FFA7298E276CE0F /* RideGlovedControlsView.swift */,
 				DA5E442D451D59A98BD29B65 /* RideGuidanceToggleButton.swift */,
@@ -749,6 +754,7 @@
 				DF3E83F7EB8F43F1B9039714 /* RecordingDensityPresetTests.swift */,
 				3D9AA167DA94D002713658DB /* RejoinBearingTests.swift */,
 				CBADE4549E3D786C75142BD1 /* ResumeGuidanceTests.swift */,
+				E9B39BD639208A6018348E2C /* RideCameraFollowPolicyTests.swift */,
 				7FA6A2B929E41AD13369933C /* RideSessionManagerMapMatchingTests.swift */,
 				96CD9BA5BA65F63F5BF39E1B /* RideSessionManagerPurgeTests.swift */,
 				8215A98B95CB8E1200CD0DA3 /* RideSessionManagerUnsavedRideTests.swift */,
@@ -995,6 +1001,7 @@
 				9B050D7F71F0CB24959A5BC5 /* RecordingDensityPresetTests.swift in Sources */,
 				D3740B9C2B00A6B2467CF16D /* RejoinBearingTests.swift in Sources */,
 				8F083529F93487A6C0C7A02F /* ResumeGuidanceTests.swift in Sources */,
+				94997A72986E3A857B1C1B4F /* RideCameraFollowPolicyTests.swift in Sources */,
 				F15F9B4B4DED4600C4DD3FB9 /* RideSessionManagerMapMatchingTests.swift in Sources */,
 				CB05C80A305A3C453E8525FF /* RideSessionManagerPurgeTests.swift in Sources */,
 				45C6D009BF00915BA59950CE /* RideSessionManagerUnsavedRideTests.swift in Sources */,
@@ -1108,6 +1115,7 @@
 				31F1CAC2794C5DD15516B339 /* RejoinGuidanceBannerView.swift in Sources */,
 				1998ED957CCE1BF7FD49C762 /* ResumeGuidance.swift in Sources */,
 				3C218C6758F9CB63343BE646 /* ResumeGuidanceCardView.swift in Sources */,
+				994CE1784EB7991778CF0F8F /* RideCameraFollowPolicy.swift in Sources */,
 				5B19B65A57ED92B278F4D135 /* RideConstants.swift in Sources */,
 				87BF38FF464E39C9472B5A8C /* RideGlovedControlsView.swift in Sources */,
 				7CB20A314E34B886B4D4E534 /* RideGuidanceToggleButton.swift in Sources */,

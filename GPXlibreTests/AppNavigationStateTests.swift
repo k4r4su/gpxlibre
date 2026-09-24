@@ -39,4 +39,16 @@ final class AppNavigationStateTests: XCTestCase {
 
         XCTAssertNotEqual(firstRequest, secondRequest)
     }
+
+    /// Fix "roadbook-jump-to-map-sticky" (it26 point 4) : l'étape reste affichée (requête non
+    /// nil) jusqu'à la sortie EXPLICITE du mode — jamais effacée par le simple passage du temps.
+    func testTheFocusStaysUntilItIsExplicitlyEnded() {
+        let state = AppNavigationState()
+        state.focusRideMap(on: CLLocationCoordinate2D(latitude: 45.1, longitude: 5.2))
+        XCTAssertNotNil(state.roadBookFocusRequest)
+
+        state.endRoadBookFocus()
+
+        XCTAssertNil(state.roadBookFocusRequest)
+    }
 }

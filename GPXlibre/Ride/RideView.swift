@@ -418,8 +418,13 @@ struct RideView: View {
             if settings.controlsSide == .right { Spacer() }
             VStack(spacing: RideOverlayLayout.rightStackSpacing) {
                 Spacer()
-                if session.isManualOverrideActive {
-                    RideRecenterButton { session.recenterCamera() }
+                // Fix "roadbook-jump-to-map-sticky" (it26 point 4) : visible pendant TOUT le mode
+                // étape Road Book (plus seulement les 5 s d'un geste manuel), seule sortie de ce mode.
+                if session.isManualOverrideActive || navigationState.roadBookFocusRequest != nil {
+                    RideRecenterButton {
+                        navigationState.endRoadBookFocus()
+                        session.recenterCamera()
+                    }
                 }
                 // Spec "stop-guidance-semantics" (it14, Bloc 3), comportement à 2 boutons
                 // empilés conservé derrière le feature-flag GUIDANCE_BUTTON_MODE (filet de
@@ -499,6 +504,7 @@ struct RideView: View {
             }
             .frame(width: 92)
             .animation(.easeInOut(duration: 0.2), value: session.isManualOverrideActive)
+            .animation(.easeInOut(duration: 0.2), value: navigationState.roadBookFocusRequest != nil)
             .animation(.easeInOut(duration: 0.2), value: session.isGuidanceStopped)
             .animation(.ridePanel, value: isLateralBannerVisible)
             .animation(.ridePanel, value: isOffTrackChipVisible)
@@ -694,16 +700,6 @@ struct RideView: View {
             } else {
                 session.stop()
             }
-        }
-        // Spec "roadbook-jump-to-map" — sans ça, le suivi GPS live (actif dès qu'une position
-        // existe et qu'aucun override manuel n'est en cours, voir RideMapLibreView.updateUIView)
-        // re-centrerait la caméra sur la position réelle au fix suivant, annulant quasi
-        // instantanément le saut vers le point ciblé. Même fenêtre de grâce qu'un pan/pinch
-        // manuel (`registerManualGesture`) — pas une suspension indéfinie dédiée : le pilote
-        // reste libre d'interagir normalement avec la carte pendant qu'il regarde ce point.
-        .onChange(of: navigationState.roadBookFocusRequest) { request in
-            guard request != nil else { return }
-            session.registerManualGesture()
         }
         .onChange(of: modeStore.mode) { newMode in
             switch newMode {

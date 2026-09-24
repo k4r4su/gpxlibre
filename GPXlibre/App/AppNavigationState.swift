@@ -37,4 +37,12 @@ final class AppNavigationState: ObservableObject {
         roadBookFocusRequest = RoadBookFocusRequest(coordinate: coordinate, token: UUID())
         selectedTab = .ride
     }
+
+    /// Fin du mode "étape Road Book" (fix "roadbook-jump-to-map-sticky", it26 point 4) : tant
+    /// que `roadBookFocusRequest` est non nil, la carte Ride reste sur l'étape (suivi GPS
+    /// suspendu, losange violet affiché, voir `RideCameraFollowPolicy`) — SEUL "Me recentrer"
+    /// l'appelle, jamais un minuteur.
+    func endRoadBookFocus() {
+        roadBookFocusRequest = nil
+    }
 }
