@@ -21,6 +21,19 @@ struct MapMatchedManeuver {
     let coordinate: CLLocationCoordinate2D
     let type: ValhallaManeuverType
     let roundaboutExitCount: Int?
+    /// Position de la manœuvre le long de la route recalée par Valhalla (0 = départ, 1 =
+    /// arrivée), calculée depuis `begin_shape_index` — fix "roadbook-maneuver-position-from-
+    /// route" (it26 point 1). Sert à choisir le BON passage quand la trace passe plusieurs fois
+    /// près du même carrefour (boucle, aller-retour) : la géométrie seule ne peut pas les
+    /// départager. `nil` = inconnue (fixture de test), repli sur une projection monotone.
+    let routeProgressFraction: Double?
+
+    init(coordinate: CLLocationCoordinate2D, type: ValhallaManeuverType, roundaboutExitCount: Int?, routeProgressFraction: Double? = nil) {
+        self.coordinate = coordinate
+        self.type = type
+        self.roundaboutExitCount = roundaboutExitCount
+        self.routeProgressFraction = routeProgressFraction
+    }
 }
 
 enum ValhallaMapMatchingService {
@@ -65,10 +78,29 @@ enum ValhallaMapMatchingService {
             throw ValhallaRoutingError.noRoute
         }
 
-        return decoded.trip.legs.flatMap { leg -> [MapMatchedManeuver] in
-            let legCoordinates = ValhallaRoutingService.decodePolyline6(leg.shape)
-            return intermediateManeuvers(maneuvers: leg.maneuvers ?? [], legCoordinates: legCoordinates)
+        return matchedManeuvers(legs: decoded.trip.legs.map { leg in
+            (maneuvers: leg.maneuvers ?? [], coordinates: ValhallaRoutingService.decodePolyline6(leg.shape))
+        })
+    }
+
+    /// Manœuvres retenues de TOUS les tronçons (`legs`) de la réponse, chacune avec sa
+    /// progression le long de la route recalée ENTIÈRE (tronçons précédents inclus) — pure,
+    /// testable sans réseau.
+    static func matchedManeuvers(legs: [(maneuvers: [ValhallaManeuver], coordinates: [CLLocationCoordinate2D])]) -> [MapMatchedManeuver] {
+        let legCumulativeDistances = legs.map { TrackProjector.cumulativeDistances(for: $0.coordinates.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) }) }
+        let totalRouteMeters = legCumulativeDistances.reduce(0) { $0 + ($1.last ?? 0) }
+
+        var legStartMeters: Double = 0
+        var result: [MapMatchedManeuver] = []
+        for (leg, cumulative) in zip(legs, legCumulativeDistances) {
+            let offset = legStartMeters
+            result += intermediateManeuvers(maneuvers: leg.maneuvers, legCoordinates: leg.coordinates) { shapeIndex in
+                guard totalRouteMeters > 0, cumulative.indices.contains(shapeIndex) else { return nil }
+                return (offset + cumulative[shapeIndex]) / totalRouteMeters
+            }
+            legStartMeters += cumulative.last ?? 0
         }
+        return result
     }
 
     /// Exclut la première ET la dernière manœuvre (Départ/Arrivée, toujours présentes dans une
@@ -80,7 +112,8 @@ enum ValhallaMapMatchingService {
     /// sans virage réel.
     static func intermediateManeuvers(
         maneuvers: [ValhallaManeuver],
-        legCoordinates: [CLLocationCoordinate2D]
+        legCoordinates: [CLLocationCoordinate2D],
+        routeProgressFractionAtShapeIndex: (Int) -> Double? = { _ in nil }
     ) -> [MapMatchedManeuver] {
         guard maneuvers.count > 2 else { return [] }
         return maneuvers.dropFirst().dropLast().compactMap { maneuver -> MapMatchedManeuver? in
@@ -90,7 +123,8 @@ enum ValhallaMapMatchingService {
             return MapMatchedManeuver(
                 coordinate: legCoordinates[maneuver.beginShapeIndex],
                 type: type,
-                roundaboutExitCount: maneuver.roundaboutExitCount
+                roundaboutExitCount: maneuver.roundaboutExitCount,
+                routeProgressFraction: routeProgressFractionAtShapeIndex(maneuver.beginShapeIndex)
             )
         }
     }

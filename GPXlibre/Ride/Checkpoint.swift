@@ -41,6 +41,13 @@ struct Checkpoint: Identifiable, Hashable {
     /// `direction`, déjà distinct du tier) : évite de casser tous les `switch tier` existants
     /// (map/table/PDF) pour une information optionnelle propre à UN SEUL palier.
     let roundaboutExitCount: Int?
+    /// Distance cumulée EXACTE de l'événement le long de la trace (fix "roadbook-maneuver-
+    /// position-from-route", it26 point 1). Pour une manœuvre Valhalla, c'est la position du VRAI
+    /// carrefour (géométrie recalée) projetée et INTERPOLÉE sur son segment de trace — pas la
+    /// distance du point GPX voisin, qui décalait l'annonce de 15 à 120 m selon la densité
+    /// d'enregistrement. `nil` = checkpoint construit hors `RoadbookAnalyzer` (tests) : repli
+    /// sur `trackCumulativeDistances[sourcePointIndex]`, voir `cumulativeDistanceMeters(using:)`.
+    let trackCumulativeDistanceMeters: Double?
 
     init(
         coordinate: CLLocationCoordinate2D,
@@ -49,7 +56,8 @@ struct Checkpoint: Identifiable, Hashable {
         tier: RoadbookTier,
         sequenceIndex: Int,
         sourcePointIndex: Int,
-        roundaboutExitCount: Int? = nil
+        roundaboutExitCount: Int? = nil,
+        trackCumulativeDistanceMeters: Double? = nil
     ) {
         self.coordinate = coordinate
         self.turnAngleDegrees = turnAngleDegrees
@@ -58,6 +66,14 @@ struct Checkpoint: Identifiable, Hashable {
         self.sequenceIndex = sequenceIndex
         self.sourcePointIndex = sourcePointIndex
         self.roundaboutExitCount = roundaboutExitCount
+        self.trackCumulativeDistanceMeters = trackCumulativeDistanceMeters
+    }
+
+    /// Seul point de lecture de la distance cumulée d'un événement (Ride ET Road Book) — jamais
+    /// `cumulativeDistances[sourcePointIndex]` directement, qui ignorerait la position exacte.
+    func cumulativeDistanceMeters(using trackCumulativeDistances: [Double]) -> Double? {
+        if let trackCumulativeDistanceMeters { return trackCumulativeDistanceMeters }
+        return trackCumulativeDistances.indices.contains(sourcePointIndex) ? trackCumulativeDistances[sourcePointIndex] : nil
     }
 
     /// Fix "roadbook-landmark-id-stability" (retour terrain, session it25 : "il n'y a que des
@@ -69,16 +85,25 @@ struct Checkpoint: Identifiable, Hashable {
     /// `RoadBookTabView.landmarks: [UUID: RoadbookLandmarkInfo?]` (rempli une fois avec les ids
     /// du PREMIER rendu) de la liste réellement affichée l'instant d'après.
     ///
-    /// `sourcePointIndex` est stable et UNIQUE PAR TRACE (`mergeNearby`/
-    /// `mergingMapMatchedDirectionChanges` ne produisent jamais deux checkpoints au même index)
-    /// tant que la trace/les réglages de détection ne changent pas — un id dérivé de cette seule
-    /// valeur reste donc identique d'un recalcul à l'autre. Deux traces DIFFÉRENTES peuvent
-    /// partager le même `sourcePointIndex` : voir `RoadBookTabView`, qui vide `landmarks` au
-    /// changement de trace pour ne jamais laisser un repère d'une autre trace s'y mélanger.
-    var id: UUID { Self.deterministicID(forSourcePointIndex: sourcePointIndex) }
+    /// Dérivé de la POSITION de l'événement le long de la trace (décimètres) quand elle est
+    /// connue — déterministe d'un recalcul à l'autre, et UNIQUE même si deux manœuvres Valhalla
+    /// tombent sur le même segment d'une trace peu dense (même point GPX voisin, donc même
+    /// `sourcePointIndex` — collision d'id possible avant it26). Repli sur `sourcePointIndex`
+    /// sinon, décalé hors de la plage des positions pour ne jamais collisionner avec elles. Deux
+    /// parcours DIFFÉRENTS (trace ou sens) peuvent produire le même id : voir `RoadBookTabView`,
+    /// qui vide `landmarks` à chaque changement de `traversalKey`.
+    var id: UUID { Self.deterministicID(forKey: identityKey) }
 
-    private static func deterministicID(forSourcePointIndex index: Int) -> UUID {
-        let hex = String(format: "%032x", max(index, 0))
+    private var identityKey: Int {
+        guard let trackCumulativeDistanceMeters else { return Self.indexKeyOffset + max(sourcePointIndex, 0) }
+        return Int((max(trackCumulativeDistanceMeters, 0) * 10).rounded())
+    }
+
+    /// 2^40 décimètres ≈ 110 millions de km — aucune position réelle n'atteint cette plage.
+    private static let indexKeyOffset = 1 << 40
+
+    private static func deterministicID(forKey index: Int) -> UUID {
+        let hex = String(format: "%032lx", max(index, 0))
         let last32 = String(hex.suffix(32))
         let uuidString = [
             last32.prefix(8),
@@ -90,6 +115,6 @@ struct Checkpoint: Identifiable, Hashable {
         return UUID(uuidString: uuidString) ?? UUID()
     }
 
-    static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.sourcePointIndex == rhs.sourcePointIndex }
-    func hash(into hasher: inout Hasher) { hasher.combine(sourcePointIndex) }
+    static func == (lhs: Checkpoint, rhs: Checkpoint) -> Bool { lhs.identityKey == rhs.identityKey }
+    func hash(into hasher: inout Hasher) { hasher.combine(identityKey) }
 }

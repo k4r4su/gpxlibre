@@ -112,4 +112,28 @@ final class ValhallaMapMatchingServiceTests: XCTestCase {
 
         XCTAssertTrue(ValhallaMapMatchingService.intermediateManeuvers(maneuvers: maneuvers, legCoordinates: coordinates).isEmpty)
     }
+
+    /// Fix "roadbook-maneuver-position-from-route" (it26 point 1) : chaque manœuvre porte sa
+    /// progression le long de la route recalée ENTIÈRE — tronçons (`legs`) précédents inclus,
+    /// jamais relative à son seul tronçon. Deux tronçons de ~3,3 km (points tous les ~1,1 km),
+    /// manœuvre au 2e point du SECOND tronçon : ~4,4 km sur ~6,7 km.
+    func testRouteProgressFractionSpansAllLegsOfTheMatchedRoute() {
+        let firstLeg = coordinates
+        let secondLeg = coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude + 0.03, longitude: $0.longitude) }
+        let turnInSecondLeg = [
+            ValhallaManeuver(type: ValhallaManeuverType.start.rawValue, beginShapeIndex: 0),
+            ValhallaManeuver(type: ValhallaManeuverType.right.rawValue, beginShapeIndex: 1),
+            ValhallaManeuver(type: ValhallaManeuverType.destination.rawValue, beginShapeIndex: 3),
+        ]
+
+        let result = ValhallaMapMatchingService.matchedManeuvers(legs: [
+            (maneuvers: [], coordinates: firstLeg),
+            (maneuvers: turnInSecondLeg, coordinates: secondLeg),
+        ])
+
+        let legLength = TrackProjector.cumulativeDistances(for: firstLeg.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) }).last ?? 0
+        let expected = (legLength + legLength / 3) / (2 * legLength)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.routeProgressFraction ?? -1, expected, accuracy: 0.001)
+    }
 }

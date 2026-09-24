@@ -48,6 +48,42 @@ enum TrackProjector {
         return Projection(nearestSegmentIndex: bestIndex, distanceToTrackMeters: bestDistance, cumulativeDistanceMeters: bestCumulative)
     }
 
+    /// Tous les PASSAGES de la trace à moins de `maxDistanceMeters` de `coordinate`, dans l'ordre
+    /// du trajet — un passage = une suite de segments consécutifs tous à portée, représentée par
+    /// sa meilleure projection. Une boucle ou un aller-retour qui repasse au même carrefour en
+    /// produit plusieurs ; une trace qui ne l'approche qu'une fois, un seul.
+    static func passes(
+        of coordinate: CLLocationCoordinate2D,
+        onto points: [GPXPoint],
+        cumulativeDistances: [Double],
+        maxDistanceMeters: Double,
+        minimumCumulativeDistanceMeters: Double = 0
+    ) -> [Projection] {
+        guard points.count > 1, points.count == cumulativeDistances.count else { return [] }
+
+        var result: [Projection] = []
+        var currentPassBest: Projection?
+
+        for i in 0..<(points.count - 1) {
+            guard cumulativeDistances[i + 1] >= minimumCumulativeDistanceMeters else { continue }
+            let segmentLength = cumulativeDistances[i + 1] - cumulativeDistances[i]
+            let minT = segmentLength > 0 ? max((minimumCumulativeDistanceMeters - cumulativeDistances[i]) / segmentLength, 0) : 0
+            let (distance, t) = distanceFromPointToSegment(coordinate, points[i].coordinate, points[i + 1].coordinate, minT: minT)
+
+            guard distance <= maxDistanceMeters else {
+                if let best = currentPassBest { result.append(best) }
+                currentPassBest = nil
+                continue
+            }
+            let candidate = Projection(nearestSegmentIndex: i, distanceToTrackMeters: distance, cumulativeDistanceMeters: cumulativeDistances[i] + segmentLength * t)
+            if distance < (currentPassBest?.distanceToTrackMeters ?? .greatestFiniteMagnitude) {
+                currentPassBest = candidate
+            }
+        }
+        if let best = currentPassBest { result.append(best) }
+        return result
+    }
+
     /// Premier point de la trace situé au-delà de `afterCumulativeDistance` dans la fenêtre
     /// [min, max] donnée (essais par pas de `stepMeters`), utilisé comme candidat de ralliement
     /// après une zone bloquée.
@@ -114,11 +150,14 @@ enum TrackProjector {
     }
 
     /// Distance (m) point → segment, et position relative `t` (0 = début du segment, 1 = fin),
-    /// via une projection locale équirectangulaire (précise pour des segments courts).
+    /// via une projection locale équirectangulaire (précise pour des segments courts). `minT`
+    /// restreint le segment à [minT, 1] — la distance étant convexe en `t`, borner l'optimum
+    /// non contraint donne directement l'optimum contraint.
     private static func distanceFromPointToSegment(
         _ p: CLLocationCoordinate2D,
         _ a: CLLocationCoordinate2D,
-        _ b: CLLocationCoordinate2D
+        _ b: CLLocationCoordinate2D,
+        minT: Double = 0
     ) -> (distance: Double, t: Double) {
         let metersPerDegreeLat = 111_320.0
         let metersPerDegreeLon = 111_320.0 * cos(a.latitude * .pi / 180)
@@ -130,7 +169,7 @@ enum TrackProjector {
         let (px, py) = toXY(p)
         let (bx, by) = toXY(b)
         let abLenSq = bx * bx + by * by
-        let t = abLenSq > 0 ? max(0, min(1, (px * bx + py * by) / abLenSq)) : 0
+        let t = abLenSq > 0 ? max(min(max(minT, 0), 1), min(1, (px * bx + py * by) / abLenSq)) : 0
         let closestX = bx * t
         let closestY = by * t
         let dx = px - closestX

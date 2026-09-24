@@ -974,9 +974,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     private func roadbookEventCumulativeDistanceMeters(_ event: Checkpoint) -> Double {
-        trackCumulativeDistances.indices.contains(event.sourcePointIndex)
-            ? trackCumulativeDistances[event.sourcePointIndex]
-            : .infinity
+        event.cumulativeDistanceMeters(using: trackCumulativeDistances) ?? .infinity
     }
 
     /// Bannière latérale roadbook (spec "lateral-cap-banner-countdown" it12, détection

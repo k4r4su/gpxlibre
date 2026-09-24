@@ -26,6 +26,22 @@ enum NavigationConstants {
     static let roadbookHardThresholdDegreesDefault: Double = 90
     static let roadbookUTurnThresholdDegreesDefault: Double = 135
 
+    // MARK: - Manœuvres route-aware (map matching Valhalla)
+
+    /// Distance max (m) entre un carrefour Valhalla et la trace GPX pour qu'il soit retenu (fix
+    /// "roadbook-maneuver-position-from-route", it26 point 1) — la position affichée du virage
+    /// est désormais celle du VRAI carrefour, plus le point GPX voisin : un carrefour plus loin
+    /// que ça signifie que Valhalla a recalé une route qui n'est pas celle de la trace (route
+    /// parallèle), jamais un virage à annoncer. Assez large pour une trace planifiée simplifiée
+    /// qui coupe légèrement les courbes entre deux points.
+    static let roadbookMapMatchMaxOffTrackMeters: Double = 60
+    /// Aller-retour par la même route : un carrefour repassé au retour est aussi proche de
+    /// l'aller que du retour. Si sa meilleure projection retombe sur la manœuvre précédente
+    /// (doublon), un passage PLUS LOIN de la trace est retenu à la place — seulement s'il n'est
+    /// pas plus éloigné du carrefour que de cette marge (m), pour ne jamais repousser à tort un
+    /// vrai second carrefour rapproché sur une route parcourue une seule fois.
+    static let roadbookMapMatchRepassToleranceMeters: Double = 15
+
     // MARK: - Flash / mise en avant
 
     /// ROADBOOK_FLASH_M : distance (m) sous laquelle le prochain virage déclenche une brève

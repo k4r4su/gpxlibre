@@ -205,9 +205,10 @@ struct RoadBookTabView: View {
         // sans que `id` ne change) — jamais besoin de gérer l'annulation à la main (voir
         // RoadBook/CLAUDE.md pour le détail du fonctionnement best-effort, point par point).
         .task(id: selectedTrack?.traversalKey) {
-            // `Checkpoint.id` est dérivé de `sourcePointIndex` SEUL (fix
-            // "roadbook-landmark-id-stability") — deux traces/sens différents peuvent partager le
-            // même index, donc jamais réutiliser les entrées d'un parcours précédent ici.
+            // `Checkpoint.id` est dérivé de la POSITION de l'événement le long de la trace (fix
+            // "roadbook-landmark-id-stability", affiné it26) — deux traces/sens différents
+            // peuvent produire le même id, donc jamais réutiliser les entrées d'un parcours
+            // précédent ici.
             landmarks = [:]
             if let track = selectedTrack {
                 triggerMapMatchingIfNeeded(for: track)

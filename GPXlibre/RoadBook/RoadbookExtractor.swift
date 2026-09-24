@@ -54,13 +54,10 @@ enum RoadbookExtractor {
         let cumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
         var previousCumulative: Double = 0
         return checkpoints.map { checkpoint in
-            // `sourcePointIndex` est toujours un index valide de `track.points` (produit par
-            // `RoadbookAnalyzer` lui-même à partir de la même trace) — le repli sur
-            // `previousCumulative` ne sert qu'à ne jamais planter si cette garantie venait à
-            // changer un jour, jamais un cas attendu en usage normal.
-            let cumulative = cumulativeDistances.indices.contains(checkpoint.sourcePointIndex)
-                ? cumulativeDistances[checkpoint.sourcePointIndex]
-                : previousCumulative
+            // Position EXACTE de l'événement (carrefour réel projeté sur la trace pour une
+            // manœuvre Valhalla, fix "roadbook-maneuver-position-from-route") — le repli sur
+            // `previousCumulative` ne sert qu'à ne jamais planter, jamais un cas attendu.
+            let cumulative = checkpoint.cumulativeDistanceMeters(using: cumulativeDistances) ?? previousCumulative
             let partial = max(cumulative - previousCumulative, 0)
             previousCumulative = cumulative
             return RoadbookManeuver(

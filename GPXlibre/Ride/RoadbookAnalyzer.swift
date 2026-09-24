@@ -83,13 +83,15 @@ enum RoadbookAnalyzer {
             raw.append((points[i].coordinate, windowed.absAngle, direction, tier, i))
         }
 
-        let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters)
+        let cumulativeDistances = TrackProjector.cumulativeDistances(for: points)
+        let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters, cumulativeDistances: cumulativeDistances)
         guard !mapMatchedManeuvers.isEmpty else { return geometricEvents }
 
         return mergingMapMatchedDirectionChanges(
             mapMatchedManeuvers,
             into: geometricEvents,
             points: points,
+            cumulativeDistances: cumulativeDistances,
             segmentBearings: segmentBearings,
             segmentLengths: segmentLengths,
             windowBeforeMeters: windowBeforeMeters,
@@ -99,13 +101,30 @@ enum RoadbookAnalyzer {
     }
 
     /// Fusionne les points de map matching dans la liste géométrique déjà produite, DANS
-    /// L'ORDRE de progression le long de la trace (`sourcePointIndex`), quelle que soit la
+    /// L'ORDRE de progression le long de la trace (distance cumulée exacte), quelle que soit la
     /// source — la bannière latérale/la liste roadbook lisent cette liste séquentiellement, un
     /// événement mal ordonné y apparaîtrait au mauvais moment du trajet.
+    ///
+    /// Fix "roadbook-maneuver-position-from-route" (it26 point 1, retour terrain : "certains
+    /// changements de direction sont annoncés avec un décalage par rapport au vrai carrefour").
+    /// `maneuver.coordinate` est déjà le VRAI carrefour (`shape[begin_shape_index]` de la
+    /// géométrie recalée par Valhalla, voir `ValhallaMapMatchingService`) — la précision était
+    /// perdue ICI : l'ancien `nearestPointIndex` le remplaçait par le point GPX le plus proche à
+    /// vol d'oiseau (coordonnée ET distance cumulée), soit un décalage jusqu'à l'espacement des
+    /// points GPX (15 m en préset "précis", 120 m en "ultra léger", davantage sur une trace
+    /// planifiée peu dense). Désormais projeté sur son segment de trace (`TrackProjector.project`,
+    /// distance cumulée INTERPOLÉE) — la trace GPX reste la référence de progression (Trace
+    /// sacrée), seule la POSITION du virage vient de la route réelle.
+    ///
+    /// Choix du PASSAGE de trace : voir `placement(of:...)` — une trace qui repasse près d'un
+    /// carrefour (boucle, aller-retour) ne fait plus retomber une manœuvre tardive sur le premier
+    /// passage (l'ancienne recherche globale les y plaçait toutes, puis la seconde disparaissait
+    /// comme "doublon").
     private static func mergingMapMatchedDirectionChanges(
         _ matchedManeuvers: [MapMatchedManeuver],
         into geometricEvents: [Checkpoint],
         points: [GPXPoint],
+        cumulativeDistances: [Double],
         segmentBearings: [Double],
         segmentLengths: [Double],
         windowBeforeMeters: Double,
@@ -113,6 +132,7 @@ enum RoadbookAnalyzer {
         mergeMinDistanceMeters: Double
     ) -> [Checkpoint] {
         var combined = geometricEvents
+        var previousMatchedCumulative: Double?
 
         for maneuver in matchedManeuvers {
             // Filtrage route-aware déjà appliqué en amont (voir `ValhallaMapMatchingService.
@@ -120,8 +140,27 @@ enum RoadbookAnalyzer {
             // défensif plutôt que de force-unwrap une donnée qui a transité par un cache disque
             // (voir `RoadbookMapMatchCache`, format qui peut évoluer).
             guard let tier = maneuver.type.roadbookTier else { continue }
-            guard !combined.contains(where: { distanceMeters($0.coordinate, maneuver.coordinate) < mergeMinDistanceMeters }) else { continue }
-            guard let pointIndex = nearestPointIndex(to: maneuver.coordinate, in: points) else { continue }
+            guard let projection = placement(
+                of: maneuver,
+                points: points,
+                cumulativeDistances: cumulativeDistances,
+                previousMatchedCumulative: previousMatchedCumulative,
+                mergeMinDistanceMeters: mergeMinDistanceMeters
+            ) else { continue }
+            previousMatchedCumulative = projection.cumulativeDistanceMeters
+
+            // Doublon mesuré LE LONG DE LA TRACE (plus à vol d'oiseau) : sur un aller-retour, le
+            // même carrefour repassé au retour n'est pas un doublon de l'aller.
+            let exactCumulative = projection.cumulativeDistanceMeters
+            guard !combined.contains(where: { abs(($0.cumulativeDistanceMeters(using: cumulativeDistances) ?? .infinity) - exactCumulative) < mergeMinDistanceMeters }) else { continue }
+
+            // Point GPX le plus proche SUR LE SEGMENT projeté — ne sert plus qu'au cap sortant
+            // (`RoadbookExtractor`) et à l'angle affiché, jamais à la position/distance.
+            let segmentStart = projection.nearestSegmentIndex
+            let segmentEnd = min(segmentStart + 1, points.count - 1)
+            let pointIndex = exactCumulative - cumulativeDistances[segmentStart] <= cumulativeDistances[segmentEnd] - exactCumulative
+                ? segmentStart
+                : segmentEnd
 
             let windowed = windowedTurn(
                 at: pointIndex,
@@ -132,18 +171,19 @@ enum RoadbookAnalyzer {
             )
 
             combined.append(Checkpoint(
-                coordinate: points[pointIndex].coordinate,
+                coordinate: maneuver.coordinate,
                 turnAngleDegrees: windowed?.absAngle ?? 0,
                 direction: maneuver.type.roadbookDirection,
                 tier: tier,
                 sequenceIndex: 0, // renuméroté ci-dessous une fois l'ordre final connu
                 sourcePointIndex: pointIndex,
-                roundaboutExitCount: maneuver.roundaboutExitCount
+                roundaboutExitCount: maneuver.roundaboutExitCount,
+                trackCumulativeDistanceMeters: exactCumulative
             ))
         }
 
         return combined
-            .sorted { $0.sourcePointIndex < $1.sourcePointIndex }
+            .sorted { ($0.cumulativeDistanceMeters(using: cumulativeDistances) ?? 0) < ($1.cumulativeDistanceMeters(using: cumulativeDistances) ?? 0) }
             .enumerated()
             .map { index, checkpoint in
                 Checkpoint(
@@ -153,9 +193,52 @@ enum RoadbookAnalyzer {
                     tier: checkpoint.tier,
                     sequenceIndex: index + 1,
                     sourcePointIndex: checkpoint.sourcePointIndex,
-                    roundaboutExitCount: checkpoint.roundaboutExitCount
+                    roundaboutExitCount: checkpoint.roundaboutExitCount,
+                    trackCumulativeDistanceMeters: checkpoint.trackCumulativeDistanceMeters
                 )
             }
+    }
+
+    /// Position d'une manœuvre Valhalla sur la trace : parmi les PASSAGES de la trace à moins de
+    /// `roadbookMapMatchMaxOffTrackMeters` du carrefour (aucun = carrefour hors du parcours,
+    /// ignoré), celui qui correspond à la progression de la manœuvre le long de la route recalée
+    /// (`routeProgressFraction` × longueur de trace) — la géométrie seule ne peut pas départager
+    /// deux passages au même carrefour (boucle qui le traverse tout droit puis y tourne plus
+    /// tard, aller-retour par la même route).
+    ///
+    /// Repli sans cette progression (fixture de test) : le premier passage plausible AU-DELÀ de
+    /// la manœuvre précédente (ordre du trajet), en sautant celui qui retomberait sur elle
+    /// (doublon) si un passage ultérieur est aussi proche du carrefour
+    /// (`roadbookMapMatchRepassToleranceMeters`).
+    private static func placement(
+        of maneuver: MapMatchedManeuver,
+        points: [GPXPoint],
+        cumulativeDistances: [Double],
+        previousMatchedCumulative: Double?,
+        mergeMinDistanceMeters: Double
+    ) -> TrackProjector.Projection? {
+        let maxOffTrack = NavigationConstants.roadbookMapMatchMaxOffTrackMeters
+
+        if let fraction = maneuver.routeProgressFraction, let totalMeters = cumulativeDistances.last, totalMeters > 0 {
+            let expectedCumulative = fraction * totalMeters
+            return TrackProjector.passes(of: maneuver.coordinate, onto: points, cumulativeDistances: cumulativeDistances, maxDistanceMeters: maxOffTrack)
+                .min { abs($0.cumulativeDistanceMeters - expectedCumulative) < abs($1.cumulativeDistanceMeters - expectedCumulative) }
+        }
+
+        let candidates = TrackProjector.passes(
+            of: maneuver.coordinate,
+            onto: points,
+            cumulativeDistances: cumulativeDistances,
+            maxDistanceMeters: maxOffTrack,
+            minimumCumulativeDistanceMeters: previousMatchedCumulative ?? 0
+        )
+        guard let bestDistance = candidates.map(\.distanceToTrackMeters).min() else { return nil }
+        let plausible = candidates.filter { $0.distanceToTrackMeters <= bestDistance + NavigationConstants.roadbookMapMatchRepassToleranceMeters }
+        if let previousMatchedCumulative, plausible.count > 1,
+           plausible[0].cumulativeDistanceMeters - previousMatchedCumulative < mergeMinDistanceMeters {
+            return plausible[1]
+        }
+        return plausible.first
     }
 
     /// Angle de virage sur fenêtre AVANT/APRÈS le point `i` (extrait de `buildRoadbookEvents`
@@ -200,31 +283,14 @@ enum RoadbookAnalyzer {
         return (abs(totalTurn), totalTurn)
     }
 
-    /// Point de la trace le plus proche à VOL D'OISEAU (parcours linéaire, trace de taille
-    /// raisonnable pour un roadbook — pas besoin d'index spatial) — retrouve l'index d'origine
-    /// (`sourcePointIndex`) d'une coordonnée de map matching, qui ne coïncide pas forcément
-    /// EXACTEMENT avec un point de `points` (coordonnées Valhalla arrondies au 1e6).
-    private static func nearestPointIndex(to coordinate: CLLocationCoordinate2D, in points: [GPXPoint]) -> Int? {
-        guard !points.isEmpty else { return nil }
-        var bestIndex = 0
-        var bestDistance = Double.greatestFiniteMagnitude
-        for (index, point) in points.enumerated() {
-            let distance = distanceMeters(coordinate, point.coordinate)
-            if distance < bestDistance {
-                bestDistance = distance
-                bestIndex = index
-            }
-        }
-        return bestIndex
-    }
-
     /// Fusionne les points de virage trop rapprochés (même épingle détectée sur plusieurs
     /// points consécutifs de la trace, ou piste qui zigzague) en gardant celui à l'angle le
     /// plus marqué — le total affiché (X/Y) reflète donc toujours la liste FUSIONNÉE, jamais
     /// le nombre brut de candidats détectés.
     private static func mergeNearby(
         _ raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)],
-        minDistanceMeters: Double
+        minDistanceMeters: Double,
+        cumulativeDistances: [Double]
     ) -> [Checkpoint] {
         var merged: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
 
@@ -240,7 +306,15 @@ enum RoadbookAnalyzer {
         }
 
         return merged.enumerated().map { index, item in
-            Checkpoint(coordinate: item.coordinate, turnAngleDegrees: item.angle, direction: item.direction, tier: item.tier, sequenceIndex: index + 1, sourcePointIndex: item.pointIndex)
+            Checkpoint(
+                coordinate: item.coordinate,
+                turnAngleDegrees: item.angle,
+                direction: item.direction,
+                tier: item.tier,
+                sequenceIndex: index + 1,
+                sourcePointIndex: item.pointIndex,
+                trackCumulativeDistanceMeters: cumulativeDistances[item.pointIndex]
+            )
         }
     }
 

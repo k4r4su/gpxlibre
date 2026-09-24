@@ -110,14 +110,183 @@ final class RoadbookMapMatchingTests: XCTestCase {
 
         let result = events(for: track, mapMatched: [unrelatedCoordinate])
 
-        // Le point le plus proche de `unrelatedCoordinate` reste un point DE CETTE trace (voir
-        // `nearestPointIndex`, parcours linéaire sans seuil de distance maximal — en pratique un
-        // vrai résultat Valhalla est toujours proche de la trace d'origine, `shape_match:
-        // "map_snap"`) : un événement `.lightDirectionChange` est donc quand même produit, sur
-        // le point le plus proche disponible, jamais un crash ni un événement fantôme "nulle
-        // part". Ce test documente ce comportement de repli plutôt que d'en supposer un autre.
+        // Avant it26, la coordonnée était ramenée sur le point GPX le plus proche (sans seuil) et
+        // produisait quand même un événement. Depuis "roadbook-maneuver-position-from-route", la
+        // position affichée est celle du VRAI carrefour Valhalla : un carrefour à des centaines
+        // de km (au-delà de `roadbookMapMatchMaxOffTrackMeters`) n'est pas sur le parcours de
+        // cette trace, jamais un virage à annoncer.
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    // MARK: - Position exacte du carrefour (fix "roadbook-maneuver-position-from-route", it26 point 1)
+
+    /// Test demandé par la fiche it26 : une manœuvre au MILIEU d'un segment GPX long doit obtenir
+    /// la distance cumulée du vrai carrefour (interpolée), jamais celle du point GPX voisin.
+    /// Trace droite peu dense (points à 0/500/1000 m), carrefour Valhalla à 300 m, 5 m à côté de
+    /// la trace (géométrie recalée sur la route réelle) — l'ancien `nearestPointIndex` le plaçait
+    /// sur le point à 500 m, soit 200 m de décalage dans l'annonce.
+    func testManeuverInTheMiddleOfALongGPXSegmentGetsTheInterpolatedCumulativeDistanceOfTheRealJunction() {
+        let track = track(segments: [(500, 0), (500, 0)])
+        let junction = destination(from: destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 300), bearingDegrees: 90, distanceMeters: 5)
+
+        let result = events(for: track, mapMatched: [junction])
+
         XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result.first?.tier, .lightDirectionChange)
+        let cumulative = result.first?.trackCumulativeDistanceMeters ?? -1
+        XCTAssertEqual(cumulative, 300, accuracy: 1, "distance cumulée du vrai carrefour, pas celle du point GPX voisin (500 m)")
+        XCTAssertEqual(result.first?.coordinate.latitude ?? 0, junction.latitude, accuracy: 1e-9, "coordonnée affichée = carrefour réel Valhalla")
+        XCTAssertEqual(result.first?.coordinate.longitude ?? 0, junction.longitude, accuracy: 1e-9)
+    }
+
+    /// Même vérification au niveau de ce que le Road Book affiche réellement
+    /// (`RoadbookExtractor`), et du maintien 10-20 m après le virage (`RoadbookLiveProgress`,
+    /// fix "roadbook-live-progress-hold") qui doit se caler sur la position CORRIGÉE.
+    func testRoadbookManeuverAndLiveHoldAreBasedOnTheCorrectedJunctionPosition() {
+        let track = track(segments: [(500, 0), (500, 0)])
+        let junction = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 300)
+        let maneuvers = RoadbookExtractor.maneuvers(
+            for: track,
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: 150,
+            mapMatchedManeuvers: [MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil)]
+        )
+        XCTAssertEqual(maneuvers.count, 1)
+        XCTAssertEqual(maneuvers[0].cumulativeDistanceMeters, 300, accuracy: 1)
+        XCTAssertEqual(maneuvers[0].partialDistanceMeters, 300, accuracy: 1)
+
+        let cumulativeDistances = TrackProjector.cumulativeDistances(for: track.points)
+        let tenMetersBefore = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 290)
+        let tenMetersAfter = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 310)
+        let beyondHold = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 300 + RoadBookConstants.liveManeuverHoldAfterMeters + 5)
+
+        func live(at coordinate: CLLocationCoordinate2D) -> (index: Int, distanceRemainingMeters: Double)? {
+            guard let projection = TrackProjector.project(coordinate, onto: track.points, cumulativeDistances: cumulativeDistances) else { return nil }
+            return RoadbookLiveProgress.nextManeuver(maneuvers: maneuvers, currentCumulativeDistanceMeters: projection.cumulativeDistanceMeters)
+        }
+
+        XCTAssertEqual(live(at: tenMetersBefore)?.distanceRemainingMeters ?? -1, 10, accuracy: 1, "compte à rebours calé sur le vrai carrefour (300 m), pas sur le point GPX à 500 m")
+        XCTAssertEqual(live(at: tenMetersAfter)?.index, 0, "maintenu juste après le vrai carrefour")
+        XCTAssertEqual(live(at: tenMetersAfter)?.distanceRemainingMeters ?? -1, 0, accuracy: 0.01)
+        XCTAssertNil(live(at: beyondHold), "maintien terminé au-delà de la fenêtre, comptée depuis le vrai carrefour")
+    }
+
+    private func buildEvents(_ track: GPXTrack, maneuvers: [MapMatchedManeuver]) -> [Checkpoint] {
+        RoadbookAnalyzer.buildRoadbookEvents(
+            for: track,
+            windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
+            windowAfterMeters: NavigationConstants.roadbookWindowAfterMetersDefault,
+            lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
+            markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
+            hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
+            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            mergeMinDistanceMeters: 150,
+            mapMatchedManeuvers: maneuvers
+        )
+    }
+
+    /// 500 m vers le nord (points tous les 100 m), demi-tour, 500 m retour vers le sud par la
+    /// même route — carrefour à 200 m, 5 m à côté : aussi proche de l'aller (200 m) que du retour
+    /// (800 m). Hors de portée (`mergeMinDistanceMeters`) du demi-tour géométrique détecté vers
+    /// 400 m, pour que seul le choix du passage soit testé ici.
+    private func outAndBack() -> (track: GPXTrack, junction: CLLocationCoordinate2D, outbound: Double, back: Double) {
+        let track = track(segments: [(100, 0), (100, 0), (100, 0), (100, 0), (100, 180), (100, 0), (100, 0), (100, 0), (100, 0), (100, 0)])
+        let junction = destination(from: destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 200), bearingDegrees: 90, distanceMeters: 5)
+        let cumulative = TrackProjector.cumulativeDistances(for: track.points)
+        return (track, junction, cumulative[2], cumulative[8])
+    }
+
+    /// Aller-retour par la MÊME route, avec la progression le long de la route recalée que
+    /// fournit Valhalla (cas réel) : chaque manœuvre tombe sur SON passage — avant it26, la
+    /// recherche globale plaçait celle du retour sur l'aller, où elle disparaissait comme doublon.
+    func testOnAnOutAndBackEachManeuverIsPlacedOnItsOwnPassUsingTheValhallaRouteProgress() {
+        let (track, junction, outbound, back) = outAndBack()
+        let total = TrackProjector.cumulativeDistances(for: track.points).last ?? 1
+        let result = buildEvents(track, maneuvers: [
+            MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil, routeProgressFraction: outbound / total),
+            MapMatchedManeuver(coordinate: junction, type: .left, roundaboutExitCount: nil, routeProgressFraction: back / total),
+        ])
+        let matched = result.filter { $0.tier == .lightDirectionChange }
+
+        XCTAssertEqual(matched.count, 2, "un événement à l'aller, un au retour — jamais fusionnés en un seul")
+        XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, outbound, accuracy: 1)
+        XCTAssertEqual(matched.first?.direction, .right)
+        XCTAssertEqual(matched.last?.trackCumulativeDistanceMeters ?? -1, back, accuracy: 1)
+        XCTAssertEqual(matched.last?.direction, .left)
+    }
+
+    /// Boucle qui traverse le MÊME carrefour deux fois — tout droit au km 0,2, puis en y
+    /// revenant au km 1,4. La manœuvre Valhalla appartient au second passage : la géométrie seule
+    /// la placerait au premier (le plus tôt), là où le pilote va tout droit — seule la
+    /// progression le long de la route recalée départage les deux.
+    func testOnALoopThroughTheSameJunctionTwiceTheRouteProgressPicksTheRightPass() {
+        // Nord 400 m (carrefour X à 200 m), est 400 m, sud 200 m, ouest 400 m (retour sur X au
+        // km 1,4), ouest encore 400 m.
+        let loop = track(segments: [(200, 0), (200, 90), (400, 90), (200, 90), (200, 0), (200, 0), (400, 0)])
+        let junctionX = loop.points[1].coordinate
+        let cumulative = TrackProjector.cumulativeDistances(for: loop.points)
+        let secondPass = cumulative[6]
+        XCTAssertLessThan(RoadbookAnalyzer.distanceMeters(loop.points[6].coordinate, junctionX), 1, "précondition : la boucle repasse bien sur X")
+
+        let result = buildEvents(loop, maneuvers: [
+            MapMatchedManeuver(coordinate: junctionX, type: .right, roundaboutExitCount: nil, routeProgressFraction: secondPass / (cumulative.last ?? 1)),
+        ])
+        let matched = result.filter { $0.tier == .lightDirectionChange }
+
+        XCTAssertEqual(matched.count, 1)
+        XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, secondPass, accuracy: 2, "second passage (km 1,4), pas le premier (km 0,2) où le pilote va tout droit")
+    }
+
+    /// Repli SANS progression Valhalla (fixture/format ancien) : projection monotone dans l'ordre
+    /// des manœuvres — l'aller-retour reste correctement réparti, même quand l'arrondi flottant
+    /// rend le retour marginalement plus proche du carrefour que l'aller.
+    func testOnAnOutAndBackWithoutRouteProgressTheMonotonicFallbackStillSplitsBothPasses() {
+        let (track, junction, outbound, back) = outAndBack()
+        let result = buildEvents(track, maneuvers: [
+            MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil),
+            MapMatchedManeuver(coordinate: junction, type: .left, roundaboutExitCount: nil),
+        ])
+        let matched = result.filter { $0.tier == .lightDirectionChange }
+
+        XCTAssertEqual(matched.count, 2, "un événement à l'aller, un au retour — jamais fusionnés en un seul")
+        XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, outbound, accuracy: 1)
+        XCTAssertEqual(matched.first?.direction, .right)
+        XCTAssertEqual(matched.last?.trackCumulativeDistanceMeters ?? -1, back, accuracy: 1)
+        XCTAssertEqual(matched.last?.direction, .left)
+    }
+
+    /// Garde-fou symétrique : deux VRAIS carrefours à 100 m l'un de l'autre sur une route
+    /// parcourue une seule fois — le second (plus proche que `mergeMinDistanceMeters`) reste
+    /// écarté comme avant, jamais repoussé plus loin sur la trace à une position fausse.
+    func testASecondCloseJunctionOnASingleRoadIsNeverPushedFurtherAlongTheTrack() {
+        let track = track(segments: [(500, 0), (500, 0)])
+        let first = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 300)
+        let second = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 400)
+
+        let result = events(for: track, mapMatched: [first, second])
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.trackCumulativeDistanceMeters ?? -1, 300, accuracy: 1)
+    }
+
+    /// Deux carrefours éloignés sur le MÊME segment GPX (trace planifiée peu dense) partagent le
+    /// même point GPX voisin — ils doivent quand même rester deux événements distincts, avec des
+    /// identités distinctes (l'id dérivait du seul `sourcePointIndex` avant it26 : collision).
+    func testTwoJunctionsOnTheSameSparseSegmentStayDistinctEvents() {
+        let track = track(segments: [(2000, 0), (2000, 0)])
+        let first = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 1500)
+        let second = destination(from: track.points[0].coordinate, bearingDegrees: 0, distanceMeters: 1800)
+
+        let result = events(for: track, mapMatched: [first, second])
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0].sourcePointIndex, result[1].sourcePointIndex, "précondition : même point GPX voisin")
+        XCTAssertNotEqual(result[0].id, result[1].id)
+        XCTAssertNotEqual(result[0], result[1])
     }
 
     /// "pas de sur-détection" : un point de map matching qui coïncide avec un virage géométrique
