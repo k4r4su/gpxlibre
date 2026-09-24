@@ -93,9 +93,12 @@ enum RoadBookConstants {
     /// Durée d'affichage de l'état "Terminé" avant que l'indicateur ne disparaisse.
     static let landmarkProgressDoneDisplaySeconds: Double = 2
     static let landmarkRequestTimeoutSeconds: Double = 90
-    /// L'instance Overpass publique renvoie par intermittence 429/504 : nouveaux essais après ces
-    /// pauses, puis abandon propre (Road Book sans repères, cache existant conservé).
-    static let landmarkRetryDelaysSeconds: [Double] = [5, 15]
+    /// L'instance Overpass publique renvoie par intermittence 429/504 (mesuré au jalon it28 : un
+    /// tronçon sur quatre en 504 après ~9 s, le même accepté à l'essai suivant) : nouveaux essais
+    /// PAR TRONÇON après ces pauses, puis échec propre ("Réessayer" reprend à ce tronçon). Deux
+    /// autres instances publiques testées (private.coffee, kumi.systems) : plus lentes, autant de
+    /// 504 — pas de bascule d'instance.
+    static let landmarkRetryDelaysSeconds: [Double] = [5, 15, 30]
     /// Repli "entrée de localité" quand AUCUN panneau n'est cartographié : passage sur une route
     /// limitée à 50 km/h / `FR:urban`. DÉSACTIVÉ par défaut (ce n'est pas un repère visible en soi,
     /// seulement un indice) — un panneau cartographié gagne toujours.
