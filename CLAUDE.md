@@ -33,7 +33,7 @@ GPXlibre/
                    `contentDate: Date?` depuis it15, voir section horodatage Biblio ci-dessous ;
                    `traversalKey` depuis it26 : id + deux premiers points — `reordered(using:)`
                    préserve `id`, donc TOUT cache dérivé de l'ordre des points (map matching,
-                   entrées de commune) est indexé par `traversalKey`, JAMAIS par `id` seul)
+                   sélection des repères) est indexé par `traversalKey`, JAMAIS par `id` seul)
   Services/       GPXParser (XMLParser maison), LibraryStore (source de vérité des traces,
                    voir section dédiée), LocationManager, NetworkMonitor
   Ride/           Le cœur du produit — RideView (orchestrateur SwiftUI de l'onglet Ride),
@@ -234,8 +234,10 @@ GPXlibre/
                    RideSessionManager/l'invariant trace unique it10 (voir RoadBook/CLAUDE.md).
                    RoadbookExtractor (réutilise RoadbookAnalyzer/TrackProjector, aucune nouvelle
                    détection), RoadbookPDFExporter (export PDF natif UIGraphicsPDFRenderer,
-                   même source de données que l'écran). RoadbookLocality/Service/Cache (it26,
-                   checkpoints d'entrée de commune via Overpass — voir RoadBook/CLAUDE.md).
+                   même source de données que l'écran). RoadbookVisibleLandmarks/
+                   RoadbookLandmarkOverpassService/RoadbookLandmarkDataCache (it27 : repères
+                   VISIBLES uniquement — panneaux, marquages, bâtiments — via Overpass, voir
+                   RoadBook/CLAUDE.md ; les entrées de commune it26 ont été supprimées).
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    SlopeAnalyzer (it19 : détection NATIVE de pente forte le long d'une trace —
                    décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,

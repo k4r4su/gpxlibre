@@ -1,5 +1,22 @@
 # TODO
 
+## Itération bugfix — repères du Road Book = ce que le conducteur voit — v0.0.27
+
+Commit `roadbook-visible-landmarks-only` (détail : RoadBook/CLAUDE.md, "Repères visibles").
+Checklist manuelle (trace "wahlbach-moulin-bas-test-gpx", sens inversé comme sur l'iPhone) :
+- [ ] Plus aucune ligne "entrée de commune" issue d'une limite administrative.
+- [ ] Hundsbach : une ligne "Hundsbach" avec le panneau d'agglomération, du bon côté.
+- [ ] Églises/calvaires/mairie proches de la route : présents, avec "à gauche"/"à droite" cohérent.
+- [ ] Aucun stop/cédez-le-passage/passage piéton d'une rue latérale en ligne droite.
+- [ ] Ponts : libellé "Pont" (jamais le nom de la route).
+- [ ] Jamais deux repères dans le même tronçon entre deux virages ; aucun repère ne décale la
+      numérotation des manœuvres.
+- [ ] Même contenu dans la table, le mode Assisté GPS (countdown), le paysage et le PDF.
+- [ ] Mode avion à la première ouverture d'une nouvelle trace : Road Book normal, sans repères.
+
+Identifié, NON traité : dépend d'OSM — un village sans panneau `city_limit` cartographié n'aura
+pas de ligne d'entrée (repli 50 km/h disponible derrière `landmarkUrbanEntryFallbackEnabled`).
+
 ## Itération corrective — fiabilité des checkpoints du Road Book
 
 Commits `roadbook-turn-angle-from-heading-chords` et `roadbook-valhalla-road-change-and-debug-dump`
@@ -44,7 +61,7 @@ Identifié, volontairement NON traité (hors périmètre de la fiche) :
   parcours dans ces 200 m serait donc aussi ignoré — accepté.
 - **Aller-retour : carrefour à < 60 m du point de demi-tour** : les deux passages sont contigus,
   fusionnés en un seul candidat par `TrackProjector.passes` — une des deux manœuvres disparaît.
-- **Checkpoints de commune et Overpass public** : l'instance renvoie par intermittence 504/429
+- **Overpass public** (checkpoints de commune it26, repères visibles depuis it27) : l'instance renvoie par intermittence 504/429
   (constaté plusieurs fois pendant l'itération). 3 essais puis abandon propre, nouvel essai à
   la prochaine ouverture. Si ça reste fréquent sur le terrain : auto-héberger Overpass sur le
   NAS (déjà envisagé pour Photon, voir Nav/CLAUDE.md).

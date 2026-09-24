@@ -6,6 +6,10 @@ ce fichier ne documente que ce qui est spécifique à ce dossier.
 
 ## Repères en pictogrammes emoji (spec "roadbook-mode", it23sexies)
 
+⚠️ **Remplacé en it27** ("roadbook-visible-landmarks-only") : le repère par manœuvre et son
+cache par coordonnée n'existent plus — voir la section "Repères visibles" en fin de fichier.
+Conservé pour l'historique des décisions.
+
 Retour terrain : "pour ces points je ne vois rien. J'aimerais que dans l'espace, à côté de la
 flèche il y ait des pictogrammes (je pense que niveau emoji on a ce qu'il faut) afin
 d'augmenter l'aide au niveau du prochain virage."
@@ -53,6 +57,10 @@ changer à la volée, comme une fenêtre qui s'affiche par dessus et qu'on peut 
   déclencher, un tap sans mouvement ne l'arme jamais.
 
 ## Cap en degrés + repères OSM à proximité (spec "roadbook-mode", it23quater)
+
+⚠️ **Remplacé en it27** ("roadbook-visible-landmarks-only") : le repère par manœuvre et son
+cache par coordonnée n'existent plus — voir la section "Repères visibles" en fin de fichier.
+Conservé pour l'historique des décisions.
 
 Retour terrain avec capture d'un vrai roadbook rallye : "les deux premières colonnes, distance
 section et distance cumulée, puis la direction, avec des indications si possible (église,
@@ -299,7 +307,7 @@ SF Symbol). `RoadbookPDFExporter.drawPictogram` bascule pareil côté Core Graph
 `RoadbookTier.systemImageName` (repli SF Symbol générique) ne sert plus QUE aux pins carte
 (`RideMapLibreView`, trop petits pour un pictogramme dessiné).
 
-**Liste de POI étendue à 50 tags OSM (point 3)** — `RoadbookLandmarkCategory` passe à
+**Liste de POI étendue à 50 tags OSM (point 3)** — [SUPPRIMÉ en it27, voir "Repères visibles"] `RoadbookLandmarkCategory` passe à
 `CaseIterable` (32 catégories), `RoadbookLandmark.bestLandmark` réécrit autour d'une table
 déclarative de `Matcher` (tier + catégorie + fonction de correspondance) plutôt que des `if let`
 empilés à la main — ajouter un tag revient à ajouter UNE ligne. Priorité INCHANGÉE pour les
@@ -492,39 +500,50 @@ supposées. Détail des trois premiers points côté détection : Ride/CLAUDE.md
 - **Saut carte** ("roadbook-jump-to-map-sticky") : taper une étape met la carte Ride en mode
   étape, sans minuteur, jusqu'à "Me recentrer" — voir `RideCameraFollowPolicy`.
 
-### Checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", point 3)
+### Checkpoints d'entrée de commune (point 3) — SUPPRIMÉS en it27
 
-`RoadbookLocality.swift` (pur) : `RoadbookLocalityCheckpoint` (nom, coordonnée, distance
-cumulée, source `.boundary`/`.citySign`/`.place`), `RoadbookLocalityArea` (anneaux en
-pair-impair, enclaves comprises), `RoadbookLocalityGeometry` (recollage des chemins de limite en
-anneaux, point dans polygone), `RoadbookLocalityDetector`, `RoadbookEntry` (manœuvres +
-checkpoints dans l'ordre de progression — SEULE façon dont écrans et PDF les mêlent ; la
-numérotation affichée reste celle des seules manœuvres).
+Limites administratives (`admin_level=8`) = donnée invisible sur le terrain : remplacées par les
+repères visibles ci-dessous (l'entrée de village n'apparaît plus que via un vrai panneau
+d'agglomération). `RoadbookLocality*` supprimés, `RoadbookEntry` déplacé dans
+`RoadbookVisibleLandmarks.swift`. Rien d'autre dans l'app n'utilisait ces données (vérifié).
 
-- **Jamais un `Checkpoint`** (type partagé avec les pins/la bannière Ride) et **jamais dans
-  `RoadbookLiveProgress`** : la carte hero du mode Assisté GPS reste le prochain VIRAGE, les
-  checkpoints s'intercalent dans la liste des étapes à venir (distance depuis la position
-  actuelle projetée, `RoadBookTabView.liveCumulativeDistanceMeters`).
-- **Source** : UNE requête Overpass (`RoadbookLocalityService.query`) — polyligne `around:`
-  échantillonnée (250 m, plafond 600 points, rayon = pas), communes `admin_level=8` en `out geom`,
-  plus panneaux `city_limit` et lieux pour les replis. Priorité : limites si Overpass en renvoie
-  au moins une, sinon panneaux (premier rencontré de chaque village dans le sens de parcours),
-  sinon lieux (point de la trace le plus proche).
-- **Détection** : trace déjà dans son sens de parcours, sondée tous les 20 m, franchissements
-  affinés par dichotomie ; jamais la commune de départ. Filtrage : passage < 300 m dans une
-  commune ignoré (route qui SUIT une limite, coin de commune) — si encadré par la même commune,
-  le retour non plus ; ré-entrée < 2 km dans la même commune ignorée. Seuils calés sur de vraies
-  réponses Overpass pour les traces du propriétaire (150 m/1 km laissaient des entrées à 100 m
-  d'écart et des alternances de communes le long d'une route-limite).
-- **Réseau** : l'instance publique renvoie par intermittence 504/429 — 3 essais (pauses 5 puis
-  15 s), et la requête des communes passe AVANT les repères OSM (`loadLandmarksIfNeeded`), jamais
-  en parallèle : la rafale de requêtes de repères occupait les créneaux Overpass par IP et faisait
-  échouer (504) l'unique requête des communes, constaté sur simulateur.
-- **Cache** : `RoadbookLocalityCache`, clé `traversalKey` (par trace ET par sens), résultat vide
-  mis en cache, échec jamais (nouvel essai à la prochaine ouverture).
-- **Affichage** : `RoadbookLocalitySignIcon` (panneau blanc à bordure rouge, jamais une flèche),
-  lignes à fond teinté dans la table classique (`RoadbookLocalityTableRow`) et la liste Assisté
-  GPS (`RoadbookUpcomingLocalityRow`), ligne dédiée dans le PDF (panneau portant le nom de la
-  commune, distance cumulée). Tap → carte Ride sur le checkpoint.
-- Vérifié sur simulateur avec les vraies traces et Overpass en direct (captures) ; pas encore
-  sur l'iPhone (débranché avant l'install du point 3).
+## Repères visibles (fix "roadbook-visible-landmarks-only", it27)
+
+Principe produit (fiche propriétaire) : **un repère n'apparaît que si le conducteur peut le VOIR
+en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerce, un arbre.
+
+- **Catégories autorisées** — `RoadbookLandmarkCategory` (RoadbookLandmark.swift), seule liste ;
+  `RoadbookLandmark.classify(tags)` (pur) renvoie `nil` pour tout le reste. Trois groupes :
+  panneaux (entrée d'agglomération `city_limit`/`FR:EB10` — sortie ignorée —, stop,
+  cédez-le-passage, feux, passage à niveau), au sol (passage piéton MARQUÉ, ralentisseur, pont,
+  tunnel ; le rond-point est déjà une manœuvre, jamais dupliqué), bâtiments/ouvrages (église/
+  chapelle/clocher, mairie, station-service, château d'eau, moulin, calvaire/oratoire, château/
+  phare/tour). Libellé : nom OSM, sinon `genericLabel` ; pont/tunnel : `bridge:name`/`tunnel:name`
+  seulement (le `name` d'un pont est presque toujours celui de la route → "Route de Kembs").
+- **Source** : UNE requête Overpass le long de la trace (`RoadbookLandmarkOverpassService`,
+  polyligne `around:` échantillonnée 250 m, plafond 600 points) + chaussées porteuses des nœuds
+  posés sur la route (`way(bn.onroad)["highway"]; out geom;`) → `roadAxes` (axe de la chaussée
+  au nœud) et sens réel d'un `direction=forward/backward`. 3 essais (5 s, 15 s).
+- **Cache** : `RoadbookLandmarkDataCache`, clé `track.id` (candidats = géométrie seule), vide mis
+  en cache, échec jamais. La SÉLECTION, elle, dépend du sens : refaite hors main thread à chaque
+  `traversalKey`/changement de manœuvres (`RoadBookTabView.refreshLandmarkSelection`).
+- **Sélection** (`RoadbookLandmarkSelector.select`, pur) : placement par passage
+  (`TrackProjector.passes`) dans le rayon de visibilité de la catégorie ; élément posé sur une
+  chaussée gardé seulement si l'axe de cette chaussée est à ±30° de la trajectoire d'arrivée
+  (cap sur 30 m) — sinon c'est le stop/passage piéton d'une rue LATÉRALE (bruit constaté sur les
+  vraies traces) ; panneau orienté : vu de dos (> 80° de la face) ignoré ; côté gauche/droite
+  seulement pour ce qui est à côté de la route (≥ 4 m latéral), jamais pour ce qui la traverse ;
+  à ≤ 40 m d'un virage → rattaché au virage (`attached`, le plus prioritaire) ; sinon ligne dédiée
+  (`standalone`), fusion < 150 m, au plus 1 par tronçon entre deux virages, priorité panneau >
+  au sol > bâtiment puis ordre de déclaration puis distance latérale.
+- **Jamais un `Checkpoint`** ni une manœuvre : numérotation inchangée, `RoadbookEntry.merge`
+  intercale les lignes dans la table, la liste Assisté GPS (distance depuis la position), le
+  paysage et le PDF (pictogramme `RoadbookLandmarkIcon`/emoji par catégorie).
+- **Repli "entrée de localité"** par route `maxspeed=50`/`FR:urban` : implémenté mais désactivé
+  (`RoadBookConstants.landmarkUrbanEntryFallbackEnabled = false`).
+- **Constantes** : toutes dans `RoadBookConstants` (`landmarkVisibilityRadiusMeters` par
+  catégorie, `landmarkGroupPriority`, `landmarkMergeMeters`, `landmarkMaxPerSegment`,
+  `landmarkJunctionRadiusMeters`, `landmarkRoadAlignmentToleranceDegrees`,
+  `landmarkSignFacingToleranceDegrees`, `landmarkApproachMeters`, `landmarkSideMinOffsetMeters`).
+- Validé sur deux traces réelles de l'iPhone avec de vraies réponses Overpass (test temporaire,
+  non commité) : wahlbach-moulin 191 candidats → 18 lignes + 10 repères de virage.
