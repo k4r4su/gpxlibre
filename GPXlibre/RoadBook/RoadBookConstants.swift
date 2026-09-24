@@ -34,59 +34,64 @@ enum RoadBookConstants {
     static let miniMapDefaultPositionXFraction: Double = 0.82
     static let miniMapDefaultPositionYFraction: Double = 0.82
 
-    // MARK: - Enrichissement par repères OSM (spec "roadbook-mode", it23quater)
+    // MARK: - Overpass (OSM public, gratuit, aucune clé)
 
-    /// Overpass API (OSM public, gratuit, aucune clé — même philosophie que Nominatim déjà
-    /// utilisé ailleurs dans l'app) : seul service permettant d'interroger des tags OSM
-    /// arbitraires (église, rond-point, revêtement...) autour d'un point — Nominatim (déjà
-    /// utilisé pour la recherche d'adresse) ne fait que du géocodage inverse d'adresse, pas une
-    /// recherche de tags à proximité.
+    /// Seul service permettant d'interroger des tags OSM arbitraires le long d'une trace —
+    /// Nominatim (recherche d'adresse) ne fait que du géocodage.
     static let overpassBaseURLString = "https://overpass-api.de/api/interpreter"
-    /// Rayon de recherche autour de chaque point de manœuvre — assez large pour capter un
-    /// repère visible depuis la route (église en léger retrait, rond-point dont le centre n'est
-    /// pas exactement sur le point détecté), assez restreint pour rester PERTINENT au virage
-    /// lui-même (pas un repère à 200 m qui n'a rien à voir avec CE virage précis).
-    static let landmarkSearchRadiusMeters: Double = 40
-    static let landmarkRequestTimeoutSeconds: Double = 8
-    /// ToS Overpass (instance publique partagée) : pas de limite stricte documentée comme
-    /// Nominatim (1 req/s), mais même discipline appliquée par précaution et pour éviter de
-    /// saturer un service gratuit partagé avec de nombreuses manœuvres à interroger d'un coup.
-    static let landmarkMinRequestIntervalSeconds: Double = 1.0
-    /// Nombre max d'éléments OSM renvoyés par requête — assez large pour que le décompte de
-    /// bâtiments à proximité (voir `RoadbookLandmark`, détection "maison isolée") reste fiable
-    /// même si d'autres tags (commerces, etc.) matchent aussi au même endroit.
-    static let landmarkResultLimit = 30
 
-    // MARK: - Checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", it26 point 3)
+    // MARK: - Repères visibles (itération "repères = uniquement ce que le conducteur voit")
 
-    /// Niveau administratif des communes dans OSM (`boundary=administrative`) — 8 en France
-    /// (et chez les voisins frontaliers : Gemeinde allemande, commune suisse).
-    static let localityAdminLevel = 8
-    /// La trace est échantillonnée tous les N m (au moins) pour la requête Overpass
-    /// `around:` — et ce même N sert de rayon, pour que la corde entre deux échantillons ne
-    /// sorte jamais de la zone interrogée. Plafonné en nombre de points pour une trace longue.
-    static let localityQuerySampleSpacingMeters: Double = 250
-    static let localityQueryMaxPolylinePoints = 600
-    /// Requête lourde (géométrie complète des communes) mais UNE seule par trace et par sens.
-    static let localityRequestTimeoutSeconds: Double = 90
-    /// L'instance Overpass publique renvoie par intermittence 429/504 (deux 504 d'affilée constatés
-    /// sur simulateur pendant le développement) : nouveaux essais après ces pauses croissantes, puis
-    /// abandon propre (rien en cache, nouvel essai à la prochaine ouverture).
-    static let localityRetryDelaysSeconds: [Double] = [5, 15]
-    /// Trace qui longe une limite (route qui SUIT la limite, GPS qui oscille de part et d'autre)
-    /// ou coupe un coin de commune : un passage plus court que ça dans une commune n'est pas une
-    /// entrée (ni le retour qui s'ensuit). 150 m laissait encore des entrées à 100 m d'écart sur
-    /// une trace réelle de 110 km du propriétaire.
-    static let localityMinStayMeters: Double = 300
-    /// Distance minimale entre deux checkpoints de la MÊME commune — une ré-entrée plus proche
-    /// que ça de la précédente est ignorée (trace qui sort et rentre aussitôt).
-    static let localityReentryMinDistanceMeters: Double = 2000
-    /// Repli "panneaux d'entrée d'agglomération" (`traffic_sign=city_limit`) : panneau retenu
-    /// s'il est à moins de cette distance de la trace.
-    static let localitySignMaxOffTrackMeters: Double = 40
-    /// Repli "lieux" (`place=village/town/city`) : lieu retenu s'il est à moins de cette
-    /// distance de la trace — un nœud `place` est au centre du village, pas sur la route.
-    static let localityPlaceMaxOffTrackMeters: Double = 800
+    /// Rayon de VISIBILITÉ par catégorie (m, distance à la trace) : petit pour ce qui est SUR la
+    /// route (panneau, marquage), large pour ce qui se voit de loin (clocher, château d'eau).
+    /// Catégorie absente : jamais retenue.
+    static let landmarkVisibilityRadiusMeters: [RoadbookLandmarkCategory: Double] = [
+        .citySign: 25, .stopSign: 20, .giveWaySign: 20, .trafficSignals: 25, .levelCrossing: 20,
+        .pedestrianCrossing: 12, .speedBump: 12, .bridge: 8, .tunnel: 8,
+        .church: 150, .townHall: 60, .fuel: 40, .waterTower: 200, .mill: 150, .waysideCross: 30,
+        .remarkableStructure: 150,
+    ]
+    /// Priorité FIXE entre familles, de la plus forte à la plus faible (le carrefour lui-même,
+    /// c'est-à-dire la manœuvre, passe avant tout repère). À famille égale : ordre de
+    /// `RoadbookLandmarkCategory.allCases` (l'entrée d'agglomération d'abord), puis le plus proche
+    /// de la trace.
+    static let landmarkGroupPriority: [RoadbookLandmarkCategory.Group] = [.sign, .ground, .building]
+    /// Un repère à moins de ça (le long de la trace) d'un changement de direction sert à
+    /// identifier CE carrefour : affiché avec la manœuvre (le plus prioritaire seulement), jamais
+    /// en ligne séparée.
+    static let landmarkJunctionRadiusMeters: Double = 40
+    /// Au plus N repères en ligne dédiée par tronçon entre deux changements de direction.
+    static let landmarkMaxPerSegment = 1
+    /// Deux repères à moins de ça l'un de l'autre : seul le plus prioritaire reste.
+    static let landmarkMergeMeters: Double = 150
+    /// Élément posé sur une chaussée (panneau, passage piéton, ralentisseur...) : retenu seulement si
+    /// sa route porteuse est dans l'axe de la trajectoire d'ARRIVÉE du pilote à cette tolérance près
+    /// (degrés, dans un sens ou l'autre). Validé sur une trace réelle : sans ce filtre, les stops et
+    /// cédez-le-passage des rues latérales ressortaient tout au long des lignes droites.
+    static let landmarkRoadAlignmentToleranceDegrees: Double = 30
+    /// Trajectoire d'arrivée = corde des N derniers mètres avant le repère (sens, côté, alignement).
+    static let landmarkApproachMeters: Double = 30
+    /// Sous cette distance latérale, le repère est SUR la route (passage piéton, pont) : pas de côté.
+    static let landmarkSideMinOffsetMeters: Double = 4
+    /// Panneau avec `direction=<cap>` : il FAIT FACE aux usagers concernés — retenu si le sens de
+    /// marche est opposé à ce cap à cette tolérance près (degrés).
+    static let landmarkSignFacingToleranceDegrees: Double = 80
+    /// Requête Overpass : trace échantillonnée tous les N m (au moins), plafonnée en points ; le
+    /// rayon interrogé = pas + rayon de visibilité max de la famille.
+    static let landmarkQuerySampleSpacingMeters: Double = 250
+    static let landmarkQueryMaxPolylinePoints = 600
+    static let landmarkRequestTimeoutSeconds: Double = 90
+    /// L'instance Overpass publique renvoie par intermittence 429/504 : nouveaux essais après ces
+    /// pauses, puis abandon propre (Road Book sans repères, cache existant conservé).
+    static let landmarkRetryDelaysSeconds: [Double] = [5, 15]
+    /// Repli "entrée de localité" quand AUCUN panneau n'est cartographié : passage sur une route
+    /// limitée à 50 km/h / `FR:urban`. DÉSACTIVÉ par défaut (ce n'est pas un repère visible en soi,
+    /// seulement un indice) — un panneau cartographié gagne toujours.
+    static let landmarkUrbanEntryFallbackEnabled = false
+    /// Repli ci-dessus : trace considérée "en zone urbaine" à moins de ça d'une route urbaine...
+    static let landmarkUrbanWayMatchMeters: Double = 12
+    /// ...après au moins ça hors zone urbaine, et jamais à moins de ça d'un panneau cartographié.
+    static let landmarkUrbanEntryMinGapMeters: Double = 300
 
     // MARK: - Export PDF
 

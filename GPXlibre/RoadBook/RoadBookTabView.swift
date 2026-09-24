@@ -27,13 +27,18 @@ struct RoadBookTabView: View {
     @State private var showExportOptions = false
     @State private var showTrackPicker = false
     @StateObject private var locationManager = LocationManager()
-    /// Repères OSM à proximité de chaque manœuvre (spec "roadbook-mode", it23quater) — clé
-    /// ABSENTE = pas encore résolu (en cours ou pas commencé), valeur `nil` = résolu, rien
-    /// trouvé à proximité, valeur non-nil = repère trouvé. Rempli progressivement par
-    /// `loadLandmarksIfNeeded()` (voir `.task(id:)` ci-dessous) — best-effort, ne bloque JAMAIS
-    /// l'affichage des manœuvres elles-mêmes.
-    @State private var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
-    @State private var landmarkCache = RoadbookLandmarkCache()
+    /// Repères VISIBLES (itération "repères = uniquement ce que le conducteur voit") : candidats
+    /// récupérés en UNE requête Overpass par trace (`landmarkData`, cache par trace), puis
+    /// sélectionnés pour le parcours affiché (`landmarkSelection`, recalculée à chaque changement
+    /// des manœuvres) — best-effort, ne bloque JAMAIS l'affichage des manœuvres elles-mêmes.
+    @State private var landmarkData: RoadbookLandmarkData?
+    @State private var landmarkDataCache = RoadbookLandmarkDataCache()
+    @State private var landmarkSelection: RoadbookLandmarkSelection = .empty
+
+    /// Repère affiché AVEC chaque changement de direction (clé = `RoadbookManeuver.id`).
+    private var landmarks: [UUID: RoadbookLandmarkInfo?] {
+        landmarkSelection.attached.mapValues { Optional($0) }
+    }
 
     /// Détection route-aware Valhalla (spec "roadbook-valhalla-route-aware", retour terrain :
     /// "le Road Book n'a jamais utilisé la détection route-aware de Valhalla, contrairement à
@@ -49,12 +54,6 @@ struct RoadBookTabView: View {
     @State private var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
     @State private var mapMatchingTask: Task<Void, Never>?
     @State private var mapMatchedTraversalKey: String?
-
-    /// Checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", it26 point 3) —
-    /// best-effort comme les repères OSM : vides tant que rien n'est résolu, jamais bloquants.
-    /// Calculés pour le parcours AFFICHÉ (trace + sens), cache par `traversalKey`.
-    @State private var localityCheckpoints: [RoadbookLocalityCheckpoint] = []
-    @State private var localityCache = RoadbookLocalityCache()
 
     /// Palette jour/nuit RÉSOLUE (spec "roadbook-ui-redesign", it25, point 0) — recalculée à
     /// l'apparition, à chaque mise à jour de position, à chaque changement du réglage manuel, ET
@@ -170,7 +169,7 @@ struct RoadBookTabView: View {
             }
             .sheet(isPresented: $showExportOptions) {
                 if let track = selectedTrack {
-                    RoadbookExportOptionsView(trackName: track.name, maneuvers: maneuvers, localities: localityCheckpoints, options: $settings.roadbookPDFOptions, landmarks: landmarks)
+                    RoadbookExportOptionsView(trackName: track.name, maneuvers: maneuvers, landmarkCheckpoints: landmarkSelection.standalone, options: $settings.roadbookPDFOptions, landmarks: landmarks)
                 }
             }
         }
@@ -215,12 +214,10 @@ struct RoadBookTabView: View {
         // sans que `id` ne change) — jamais besoin de gérer l'annulation à la main (voir
         // RoadBook/CLAUDE.md pour le détail du fonctionnement best-effort, point par point).
         .task(id: selectedTrack?.traversalKey) {
-            // `Checkpoint.id` est dérivé de la POSITION de l'événement le long de la trace (fix
-            // "roadbook-landmark-id-stability", affiné it26) — deux traces/sens différents
-            // peuvent produire le même id, donc jamais réutiliser les entrées d'un parcours
-            // précédent ici.
-            landmarks = [:]
-            localityCheckpoints = []
+            // Sélection propre à CE parcours (ids dérivés de la position le long de la trace) :
+            // jamais réutilisée d'un parcours précédent.
+            landmarkSelection = .empty
+            landmarkData = nil
             guard let track = selectedTrack else {
                 mapMatchedManeuvers = []
                 return
@@ -229,11 +226,10 @@ struct RoadBookTabView: View {
             #if DEBUG
             RoadbookDebugDump.log(trackName: track.name, maneuvers: maneuvers, mapMatched: mapMatchedManeuvers)
             #endif
-            // Communes AVANT les repères, jamais en parallèle : Overpass limite les requêtes
-            // simultanées par adresse IP, et la rafale de requêtes de repères faisait échouer
-            // (504) l'unique requête des communes (constaté sur simulateur).
-            await loadLocalityCheckpoints(for: track)
-            await loadLandmarksIfNeeded()
+            await loadVisibleLandmarks(for: track)
+        }
+        .onChange(of: maneuvers) { _ in
+            Task { await refreshLandmarkSelection() }
         }
     }
 
@@ -284,24 +280,36 @@ struct RoadBookTabView: View {
         }
     }
 
-    /// Checkpoints d'entrée de commune : cache (par trace ET sens) sinon une requête Overpass,
-    /// détection hors du fil principal (géométrie de dizaines de communes). Échec réseau : rien
-    /// en cache, rien d'affiché, nouvel essai à la prochaine ouverture ; succès vide (trace qui ne
-    /// quitte pas sa commune) : mis en cache.
-    private func loadLocalityCheckpoints(for track: GPXTrack) async {
-        let traversalKey = track.traversalKey
-        if let cached = localityCache.checkpoints(for: track) {
-            localityCheckpoints = cached
+    /// Repères visibles : cache (par trace) sinon UNE requête Overpass. Échec réseau : rien en
+    /// cache, Road Book sans repères, nouvel essai à la prochaine ouverture ; succès vide : mis en
+    /// cache.
+    private func loadVisibleLandmarks(for track: GPXTrack) async {
+        if let cached = landmarkDataCache.data(for: track.id) {
+            landmarkData = cached
+        } else {
+            guard let fetched = await RoadbookLandmarkOverpassService.shared.fetch(for: track.points), !Task.isCancelled else { return }
+            landmarkDataCache.store(fetched, for: track.id)
+            guard selectedTrack?.id == track.id else { return }
+            landmarkData = fetched
+        }
+        await refreshLandmarkSelection()
+    }
+
+    /// Sélection pour le parcours AFFICHÉ (sens, manœuvres) — hors du fil principal (projection de
+    /// centaines de candidats sur la trace).
+    private func refreshLandmarkSelection() async {
+        guard let data = landmarkData, let track = selectedTrack else {
+            landmarkSelection = .empty
             return
         }
-        guard let data = await RoadbookLocalityService.shared.fetch(for: track.points), !Task.isCancelled else { return }
+        let traversalKey = track.traversalKey
         let points = track.points
-        let checkpoints = await Task.detached(priority: .utility) {
-            RoadbookLocalityDetector.checkpoints(from: data, points: points)
+        let currentManeuvers = maneuvers
+        let selection = await Task.detached(priority: .utility) {
+            RoadbookLandmarkSelector.select(data, points: points, maneuvers: currentManeuvers)
         }.value
-        guard !Task.isCancelled, selectedTrack?.traversalKey == traversalKey else { return }
-        localityCache.store(checkpoints, traversalKey: traversalKey)
-        localityCheckpoints = checkpoints
+        guard selectedTrack?.traversalKey == traversalKey, currentManeuvers == maneuvers else { return }
+        landmarkSelection = selection
     }
 
     /// Sous-échantillonnage UNIFORME avant map matching — même patron que `RideSessionManager.
@@ -312,25 +320,6 @@ struct RoadBookTabView: View {
         guard coordinates.count > maxPoints, maxPoints > 1 else { return coordinates }
         let step = Double(coordinates.count - 1) / Double(maxPoints - 1)
         return (0..<maxPoints).map { coordinates[Int((Double($0) * step).rounded())] }
-    }
-
-    /// Résout les repères OSM manquants un par un (jamais en rafale concurrente — bonne conduite
-    /// vis-à-vis d'Overpass, service public gratuit partagé). Un point déjà en cache (positif OU
-    /// négatif, voir `RoadbookLandmarkLookup`) ne déclenche jamais de nouvel appel réseau.
-    private func loadLandmarksIfNeeded() async {
-        for maneuver in maneuvers {
-            guard !Task.isCancelled else { return }
-            guard landmarks[maneuver.id] == nil else { continue }
-            switch landmarkCache.lookup(for: maneuver.checkpoint.coordinate) {
-            case .cached(let info):
-                landmarks[maneuver.id] = info
-            case .notCached:
-                let info = await RoadbookLandmarkService.shared.nearbyLandmark(at: maneuver.checkpoint.coordinate)
-                guard !Task.isCancelled else { return }
-                landmarkCache.store(info: info, for: maneuver.checkpoint.coordinate)
-                landmarks[maneuver.id] = info
-            }
-        }
     }
 
     /// Retour terrain (it25, capture en paysage) : "essaye de caler [le sélecteur de mode] à
@@ -429,7 +418,7 @@ struct RoadBookTabView: View {
                 ZStack {
                     RoadbookFocusedView(
                         maneuvers: maneuvers,
-                        localities: localityCheckpoints,
+                        landmarkCheckpoints: landmarkSelection.standalone,
                         currentIndex: liveProgress?.index,
                         distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
                         currentCumulativeDistanceMeters: liveCumulativeDistanceMeters,
@@ -448,7 +437,7 @@ struct RoadBookTabView: View {
         } else {
             RoadbookTableView(
                 maneuvers: maneuvers,
-                localities: localityCheckpoints,
+                landmarkCheckpoints: landmarkSelection.standalone,
                 unit: settings.roadbookPDFOptions.distanceUnit,
                 currentIndex: nil,
                 liveDistanceRemainingMeters: nil,
@@ -595,9 +584,9 @@ private struct RoutingServiceBadge: View {
 /// "tableau imprimé" recherché).
 private struct RoadbookTableView: View {
     let maneuvers: [RoadbookManeuver]
-    /// Checkpoints d'entrée de commune (it26 point 3), intercalés dans l'ordre de progression —
-    /// la numérotation des manœuvres, elle, reste celle des seuls changements de direction.
-    let localities: [RoadbookLocalityCheckpoint]
+    /// Repères visibles en ligne dédiée, intercalés dans l'ordre de progression — la numérotation
+    /// des manœuvres, elle, reste celle des seuls changements de direction.
+    let landmarkCheckpoints: [RoadbookLandmarkCheckpoint]
     let unit: DistanceUnit
     let currentIndex: Int?
     let liveDistanceRemainingMeters: Double?
@@ -622,7 +611,7 @@ private struct RoadbookTableView: View {
                         headerRow(distanceWidth: distanceWidth, headingWidth: headingWidth, infoWidth: infoWidth)
                         Divider().background(palette.rule)
 
-                        ForEach(RoadbookEntry.merge(maneuvers: maneuvers, localities: localities)) { entry in
+                        ForEach(RoadbookEntry.merge(maneuvers: maneuvers, landmarks: landmarkCheckpoints)) { entry in
                             switch entry {
                             case .maneuver(let maneuver, let index) where index == 0:
                                 // Première MANŒUVRE = HERO (spec it25, point 3 : "au moins 3× plus
@@ -652,9 +641,9 @@ private struct RoadbookTableView: View {
                                     ruleColor: palette.rule
                                 )
                                 .id(index)
-                            case .locality(let locality):
-                                RoadbookLocalityTableRow(
-                                    locality: locality,
+                            case .landmark(let landmark):
+                                RoadbookLandmarkTableRow(
+                                    landmark: landmark,
                                     unit: unit,
                                     distanceColumnWidth: distanceWidth,
                                     headingColumnWidth: headingWidth,
@@ -765,7 +754,7 @@ private struct RoadbookHeroRow: View {
             .font(.subheadline.monospacedDigit())
             .foregroundStyle(.secondary)
             if let landmark {
-                Text(landmark.label)
+                Text(landmark.displayLabel)
                     .font(.headline)
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
@@ -807,7 +796,7 @@ private struct RoadbookHeroRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let landmark {
-                    Text(landmark.label)
+                    Text(landmark.displayLabel)
                         .font(.caption.bold())
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -829,7 +818,7 @@ private struct RoadbookTableRow: View {
     let isCurrent: Bool
     let liveDistanceRemainingMeters: Double?
     /// `nil` = pas encore résolu OU résolu sans résultat — les deux cas produisent le même
-    /// affichage (rien), la distinction ne sert qu'à `RoadBookTabView.loadLandmarksIfNeeded`
+    /// affichage (rien)
     /// pour éviter de réinterroger un point déjà négatif.
     let landmark: RoadbookLandmarkInfo?
     let distanceColumnWidth: CGFloat
@@ -902,7 +891,7 @@ private struct RoadbookTableRow: View {
                 Text(maneuver.checkpoint.tier.label)
                     .font(.headline)
                 if let landmark {
-                    Text(landmark.label)
+                    Text(landmark.displayLabel)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -920,12 +909,13 @@ private struct RoadbookTableRow: View {
     }
 }
 
-/// Ligne "entrée de commune" (spec "roadbook-locality-checkpoints", it26 point 3) — mêmes
+/// Ligne "repère visible" (itération "repères = uniquement ce que le conducteur voit") — mêmes
 /// colonnes que `RoadbookTableRow` pour rester alignée, mais visuellement distincte d'un
-/// changement de direction : panneau d'entrée d'agglomération au lieu d'une flèche, pas de
-/// numéro de manœuvre, fond teinté. Distance CUMULÉE seule (ce qu'on vérifie sur son compteur).
-private struct RoadbookLocalityTableRow: View {
-    let locality: RoadbookLocalityCheckpoint
+/// changement de direction : pictogramme de la catégorie au lieu d'une flèche, pas de numéro de
+/// manœuvre, fond teinté. Distance CUMULÉE (ce qu'on vérifie sur son compteur), nom puis
+/// catégorie et côté.
+private struct RoadbookLandmarkTableRow: View {
+    let landmark: RoadbookLandmarkCheckpoint
     let unit: DistanceUnit
     let distanceColumnWidth: CGFloat
     let headingColumnWidth: CGFloat
@@ -936,21 +926,21 @@ private struct RoadbookLocalityTableRow: View {
 
     var body: some View {
         Button {
-            navigationState.focusRideMap(on: locality.coordinate)
+            navigationState.focusRideMap(on: landmark.coordinate)
         } label: {
             HStack(spacing: 0) {
-                Text(unit.displayString(fromMeters: locality.cumulativeDistanceMeters))
+                Text(unit.displayString(fromMeters: landmark.cumulativeDistanceMeters))
                     .font(.title3.monospacedDigit().bold())
                     .frame(width: distanceColumnWidth)
                 Rectangle().fill(ruleColor).frame(width: 1)
-                RoadbookLocalitySignIcon(size: 24)
+                RoadbookLandmarkIcon(category: landmark.info.category, size: 24)
                     .frame(width: headingColumnWidth)
                 Rectangle().fill(ruleColor).frame(width: 1)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(locality.name)
+                    Text(landmark.info.label)
                         .font(.headline)
                         .lineLimit(2)
-                    Text("Entrée de commune")
+                    Text(RoadbookLandmarkRowText.detail(landmark.info))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -958,11 +948,24 @@ private struct RoadbookLocalityTableRow: View {
                 .padding(.leading, 10)
             }
             .padding(.vertical, 10)
-            .background(Color.red.opacity(0.06))
+            .background(Color.accentColor.opacity(0.06))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Entrée de commune : \(locality.name), \(unit.displayString(fromMeters: locality.cumulativeDistanceMeters))")
+        .accessibilityLabel("Repère : \(landmark.info.displayLabel), \(unit.displayString(fromMeters: landmark.cumulativeDistanceMeters))")
     }
+}
+
+/// Deuxième ligne d'un repère : catégorie (si le nom affiché n'est pas déjà le libellé
+/// générique) et côté — "Entrée d'agglomération · à droite".
+enum RoadbookLandmarkRowText {
+    static func detail(_ info: RoadbookLandmarkInfo) -> String {
+        let category = info.label == info.category.genericLabel ? nil : info.category.genericLabel
+        return [category, info.side?.label].compactMap { $0 }.joined(separator: " · ").ifEmpty(info.category.genericLabel)
+    }
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }
 
 /// État vide maison — `ContentUnavailableView` (SwiftUI natif) est iOS 17+, incompatible avec

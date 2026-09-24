@@ -227,10 +227,9 @@ struct RoadbookMergePictogram: View {
     }
 }
 
-/// Pictogramme des checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", it26
-/// point 3) — panneau d'entrée d'agglomération (fond blanc, bordure rouge), volontairement
-/// DISTINCT de toute flèche : un checkpoint n'est jamais un changement de direction.
-struct RoadbookLocalitySignIcon: View {
+/// Pictogramme de l'entrée d'agglomération (panneau blanc à bordure rouge, comme le vrai) —
+/// volontairement DISTINCT de toute flèche : un repère n'est jamais un changement de direction.
+struct RoadbookCitySignIcon: View {
     let size: CGFloat
 
     var body: some View {
@@ -245,5 +244,22 @@ struct RoadbookLocalitySignIcon: View {
         }
         .frame(width: size * 1.4, height: size)
         .accessibilityHidden(true)
+    }
+}
+
+/// Pictogramme d'un repère visible, par catégorie (itération "repères = uniquement ce que le
+/// conducteur voit") : panneau dessiné pour l'entrée d'agglomération, emoji pour les autres.
+struct RoadbookLandmarkIcon: View {
+    let category: RoadbookLandmarkCategory
+    let size: CGFloat
+
+    var body: some View {
+        if category == .citySign {
+            RoadbookCitySignIcon(size: size)
+        } else {
+            Text(category.emoji)
+                .font(.system(size: size))
+                .accessibilityHidden(true)
+        }
     }
 }

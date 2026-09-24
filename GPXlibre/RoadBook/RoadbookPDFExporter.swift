@@ -61,13 +61,13 @@ enum RoadbookPDFExporter {
         return ColumnLayout(partial: rects["partial"] ?? .zero, cumulative: rects["cumulative"], heading: rects["heading"] ?? .zero, note: rects["note"])
     }
 
-    /// - Parameter localities : checkpoints d'entrée de commune (spec "roadbook-locality-
-    ///   checkpoints", it26 point 3), intercalés dans l'ordre de progression — une ligne dédiée
-    ///   (panneau d'entrée d'agglomération portant le nom de la commune + distance cumulée).
+    /// - Parameter landmarkCheckpoints : repères visibles en ligne dédiée (itération "repères =
+    ///   uniquement ce que le conducteur voit"), intercalés dans l'ordre de progression — une ligne
+    ///   dédiée par repère (pictogramme de la catégorie, nom, côté, distance cumulée).
     static func generate(
         trackName: String,
         maneuvers: [RoadbookManeuver],
-        localities: [RoadbookLocalityCheckpoint] = [],
+        landmarkCheckpoints: [RoadbookLandmarkCheckpoint] = [],
         options: RoadbookPDFOptions,
         landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
     ) -> Data {
@@ -88,7 +88,7 @@ enum RoadbookPDFExporter {
 
         // Trace vide/sans manœuvre détectée : une seule page, message explicite plutôt qu'une
         // page blanche muette — jamais un crash (spec, tests attendus).
-        let entries = RoadbookEntry.merge(maneuvers: maneuvers, localities: localities)
+        let entries = RoadbookEntry.merge(maneuvers: maneuvers, landmarks: landmarkCheckpoints)
         let pages: [[RoadbookEntry]] = maneuvers.isEmpty
             ? [[]]
             : stride(from: 0, to: entries.count, by: rowsPerPage).map {
@@ -119,8 +119,8 @@ enum RoadbookPDFExporter {
                     switch entry {
                     case .maneuver(let maneuver, _):
                         drawRow(maneuver, layout: rowLayout, options: options, landmark: landmarks[maneuver.id] ?? nil)
-                    case .locality(let locality):
-                        drawLocalityRow(locality, layout: rowLayout, options: options)
+                    case .landmark(let landmark):
+                        drawLandmarkRow(landmark, layout: rowLayout, options: options)
                     }
                 }
             }
@@ -220,7 +220,7 @@ enum RoadbookPDFExporter {
                     .font: UIFont.italicSystemFont(ofSize: max(options.fontSize.points - 1, 6)),
                     .foregroundColor: UIColor.darkGray,
                 ]
-                (landmark.label as NSString).draw(
+                (landmark.displayLabel as NSString).draw(
                     in: CGRect(x: note.minX + 4, y: note.minY + 2, width: note.width - 8, height: note.height * 0.4),
                     withAttributes: landmarkAttributes
                 )
@@ -244,30 +244,41 @@ enum RoadbookPDFExporter {
         separatorPath.stroke()
     }
 
-    /// Ligne "entrée de commune" : distance cumulée (colonne cumulée si affichée, sinon colonne
-    /// partielle — c'est l'info qu'on vérifie sur son compteur) et, dans la colonne cap, un
-    /// panneau d'entrée d'agglomération (fond blanc, bordure rouge) portant le nom de la commune,
-    /// comme le vrai panneau — reste lisible imprimé en niveaux de gris (bordure foncée).
-    private static func drawLocalityRow(_ locality: RoadbookLocalityCheckpoint, layout: ColumnLayout, options: RoadbookPDFOptions) {
+    /// Ligne "repère visible" : distance cumulée (colonne cumulée si affichée, sinon colonne
+    /// partielle — c'est l'info qu'on vérifie sur son compteur). Entrée d'agglomération : panneau
+    /// (fond blanc, bordure rouge) portant son nom, comme le vrai panneau, sur les colonnes cap et
+    /// note. Autres repères : emoji de la catégorie dans la colonne cap, "nom · catégorie · côté"
+    /// dans la colonne note (ou sous l'emoji si la note est masquée).
+    private static func drawLandmarkRow(_ landmark: RoadbookLandmarkCheckpoint, layout: ColumnLayout, options: RoadbookPDFOptions) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.boldSystemFont(ofSize: options.fontSize.points),
             .foregroundColor: UIColor.black,
         ]
-        let distance = options.distanceUnit.displayString(fromMeters: locality.cumulativeDistanceMeters)
+        let distance = options.distanceUnit.displayString(fromMeters: landmark.cumulativeDistanceMeters)
         draw(distance, in: layout.cumulative ?? layout.partial, attributes: attributes, alignment: .center)
 
-        let signArea = layout.note.map { layout.heading.union($0) } ?? layout.heading
-        let sign = signArea.insetBy(dx: 4, dy: signArea.height * 0.14)
-        let path = UIBezierPath(roundedRect: sign, cornerRadius: min(sign.height * 0.18, 4))
-        UIColor.white.setFill()
-        path.fill()
-        UIColor(red: 0.85, green: 0.1, blue: 0.1, alpha: 1).setStroke()
-        path.lineWidth = 1.6
-        path.stroke()
-
-        var nameAttributes = attributes
-        nameAttributes[.font] = UIFont.boldSystemFont(ofSize: min(options.fontSize.points, sign.height * 0.55))
-        draw(locality.name, in: sign.insetBy(dx: 6, dy: 0), attributes: nameAttributes, alignment: .center)
+        if landmark.info.category == .citySign {
+            let signArea = layout.note.map { layout.heading.union($0) } ?? layout.heading
+            let sign = signArea.insetBy(dx: 4, dy: signArea.height * 0.14)
+            let path = UIBezierPath(roundedRect: sign, cornerRadius: min(sign.height * 0.18, 4))
+            UIColor.white.setFill()
+            path.fill()
+            UIColor(red: 0.85, green: 0.1, blue: 0.1, alpha: 1).setStroke()
+            path.lineWidth = 1.6
+            path.stroke()
+            var nameAttributes = attributes
+            nameAttributes[.font] = UIFont.boldSystemFont(ofSize: min(options.fontSize.points, sign.height * 0.55))
+            draw(landmark.info.displayLabel, in: sign.insetBy(dx: 6, dy: 0), attributes: nameAttributes, alignment: .center)
+        } else {
+            let emojiAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: options.fontSize.points + 4)]
+            let text = [landmark.info.label, RoadbookLandmarkRowText.detail(landmark.info)].joined(separator: " · ")
+            if let note = layout.note {
+                draw(landmark.info.category.emoji, in: layout.heading, attributes: emojiAttributes, alignment: .center)
+                draw(text, in: note.insetBy(dx: 4, dy: 0), attributes: attributes, alignment: .left)
+            } else {
+                draw(landmark.info.category.emoji + " " + text, in: layout.heading, attributes: attributes, alignment: .center)
+            }
+        }
 
         let separatorPath = UIBezierPath()
         separatorPath.move(to: CGPoint(x: layout.partial.minX, y: layout.partial.maxY))

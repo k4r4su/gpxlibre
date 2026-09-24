@@ -17,9 +17,9 @@ import SwiftUI
 /// gauche, distance à droite) plutôt que le portrait simplement compressé.
 struct RoadbookFocusedView: View {
     let maneuvers: [RoadbookManeuver]
-    /// Checkpoints d'entrée de commune (it26 point 3) — intercalés dans la liste des étapes À
-    /// VENIR, jamais dans la carte hero (qui reste le prochain changement de direction).
-    let localities: [RoadbookLocalityCheckpoint]
+    /// Repères visibles en ligne dédiée — intercalés dans la liste des étapes À VENIR, jamais
+    /// dans la carte hero (qui reste le prochain changement de direction).
+    let landmarkCheckpoints: [RoadbookLandmarkCheckpoint]
     let currentIndex: Int?
     let distanceRemainingMeters: Double?
     /// Position actuelle projetée sur la trace — distance "dans combien" des checkpoints.
@@ -47,18 +47,18 @@ struct RoadbookFocusedView: View {
 
     private enum UpcomingStep: Identifiable {
         case maneuver(RoadbookManeuver, rank: Int, distanceFromNowMeters: Double)
-        case locality(RoadbookLocalityCheckpoint, distanceFromNowMeters: Double)
+        case landmark(RoadbookLandmarkCheckpoint, distanceFromNowMeters: Double)
 
         var id: String {
             switch self {
             case .maneuver(let maneuver, _, _): return "maneuver-\(maneuver.id.uuidString)"
-            case .locality(let locality, _): return locality.id
+            case .landmark(let landmark, _): return landmark.id
             }
         }
 
         var distanceFromNowMeters: Double {
             switch self {
-            case .maneuver(_, _, let distance), .locality(_, let distance): return distance
+            case .maneuver(_, _, let distance), .landmark(_, let distance): return distance
             }
         }
     }
@@ -76,10 +76,10 @@ struct RoadbookFocusedView: View {
             UpcomingStep.maneuver(maneuver, rank: offset + 2, distanceFromNowMeters: maneuver.cumulativeDistanceMeters - currentCumulative + distanceRemainingMeters)
         }
         let position = currentCumulativeDistanceMeters ?? (currentCumulative - distanceRemainingMeters)
-        let upcomingLocalities = localities
+        let upcomingLandmarks = landmarkCheckpoints
             .filter { $0.cumulativeDistanceMeters > position }
-            .map { UpcomingStep.locality($0, distanceFromNowMeters: $0.cumulativeDistanceMeters - position) }
-        return (upcomingManeuvers + upcomingLocalities).sorted { $0.distanceFromNowMeters < $1.distanceFromNowMeters }
+            .map { UpcomingStep.landmark($0, distanceFromNowMeters: $0.cumulativeDistanceMeters - position) }
+        return (upcomingManeuvers + upcomingLandmarks).sorted { $0.distanceFromNowMeters < $1.distanceFromNowMeters }
     }
 
     var body: some View {
@@ -103,8 +103,8 @@ struct RoadbookFocusedView: View {
                                         rank: rank,
                                         landmark: landmarks[maneuver.id] ?? nil
                                     )
-                                case .locality(let locality, let distance):
-                                    RoadbookUpcomingLocalityRow(locality: locality, distanceFromNowMeters: distance, unit: unit)
+                                case .landmark(let landmark, let distance):
+                                    RoadbookUpcomingLandmarkRow(landmark: landmark, distanceFromNowMeters: distance, unit: unit)
                                 }
                                 Divider().padding(.leading, 16)
                             }
@@ -187,7 +187,7 @@ private struct RoadbookBigManeuverCard: View {
                 .font(.title3.bold())
                 .foregroundStyle(.secondary)
             if let landmark {
-                Text(landmark.label)
+                Text(landmark.displayLabel)
                     .font(.subheadline.bold())
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
@@ -250,7 +250,7 @@ private struct RoadbookBigManeuverCardLandscape: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let landmark {
-                    Text(landmark.label)
+                    Text(landmark.displayLabel)
                         .font(.caption.bold())
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -317,7 +317,7 @@ private struct RoadbookUpcomingRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 if let landmark {
-                    Text(landmark.label)
+                    Text(landmark.displayLabel)
                         .font(.caption2)
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -339,10 +339,10 @@ private struct RoadbookUpcomingRow: View {
     }
 }
 
-/// Checkpoint d'entrée de commune dans la liste des étapes à venir (it26 point 3) — panneau
-/// d'entrée d'agglomération + nom, fond teinté : jamais confondu avec un virage.
-private struct RoadbookUpcomingLocalityRow: View {
-    let locality: RoadbookLocalityCheckpoint
+/// Repère visible dans la liste des étapes à venir — pictogramme de la catégorie + nom, côté,
+/// fond teinté : jamais confondu avec un virage.
+private struct RoadbookUpcomingLandmarkRow: View {
+    let landmark: RoadbookLandmarkCheckpoint
     let distanceFromNowMeters: Double
     let unit: DistanceUnit
 
@@ -350,17 +350,17 @@ private struct RoadbookUpcomingLocalityRow: View {
 
     var body: some View {
         Button {
-            navigationState.focusRideMap(on: locality.coordinate)
+            navigationState.focusRideMap(on: landmark.coordinate)
         } label: {
             HStack(spacing: 16) {
                 Color.clear.frame(width: 28, height: 1)
-                RoadbookLocalitySignIcon(size: 22)
+                RoadbookLandmarkIcon(category: landmark.info.category, size: 22)
                     .frame(width: 60)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(locality.name)
+                    Text(landmark.info.label)
                         .font(.subheadline.bold())
                         .lineLimit(1)
-                    Text("Entrée de commune")
+                    Text(RoadbookLandmarkRowText.detail(landmark.info))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -370,10 +370,10 @@ private struct RoadbookUpcomingLocalityRow: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(Color.red.opacity(0.06))
+            .background(Color.accentColor.opacity(0.06))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Entrée de commune : \(locality.name), dans \(unit.displayString(fromMeters: distanceFromNowMeters))")
+        .accessibilityLabel("Repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceFromNowMeters))")
     }
 }
 
