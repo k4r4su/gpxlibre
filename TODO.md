@@ -1,5 +1,32 @@
 # TODO
 
+## Jalon stable it28 — repères = ce que le conducteur voit, catalogue, progression — v0.0.28
+
+Commits `roadbook-remove-minimap`, `roadbook-landmark-catalog-settings-progress`,
+`roadbook-stable-regression`, `roadbook-overpass-chunk-retries` ; tag `v0.0.28-roadbook-stable`.
+Checklist manuelle (trace "wahlbach-moulin-bas-test-gpx", sens inversé comme sur l'iPhone) :
+- [ ] Première ouverture : bandeau "Téléchargement des repères… 0/4" qui avance, repères qui
+      apparaissent au fur et à mesure, puis "Repères à jour" et le bandeau disparaît. Les
+      directions restent lisibles et défilables pendant tout ce temps.
+- [ ] Aucune ligne de limite de commune, aucun passage piéton.
+- [ ] Hundsbach (panneau), églises/chapelles, Mairie et Château de Ferrette, calvaires présents,
+      côté cohérent avec le sens de marche.
+- [ ] Stations Total/Auchan et borne de recharge présentes, avec côté et distance si en retrait.
+- [ ] Réglages > Repères du Road Book : désactiver "Église" puis revenir au Road Book : les
+      églises disparaissent SANS bandeau de téléchargement. Activer "Boulangerie" :
+      bandeau de téléchargement (complément), puis la boulangerie apparaît si elle est visible.
+- [ ] "Tout désactiver" : plus aucun repère ; "Réinitialiser" : retour aux défauts.
+- [ ] Mode avion avant d'ouvrir une trace jamais chargée : "Hors ligne — repères indisponibles",
+      directions normales ; sur une trace en cache : "Hors ligne — repères en cache".
+- [ ] Assisté GPS portrait ET paysage : plus aucune mini-carte, rien ne chevauche la tab bar.
+- [ ] Export PDF : repères avec pictogramme, dont les services.
+
+Identifié, NON traité :
+- **Overpass public lent** : ~5-15 s par tronçon, soit 30 à 60 s pour une trace de 30 km au
+  premier chargement (le cache évite de recommencer). Piste : Overpass auto-hébergé sur le NAS.
+- **"Chapelle · Église"** : la 2e ligne affiche la catégorie ("Église") quand le libellé est un
+  type plus précis (Chapelle, Clocher). Correct, mais redondant ; à affiner si ça gêne.
+
 ## Itération bugfix — repères du Road Book = ce que le conducteur voit — v0.0.27
 
 Commit `roadbook-visible-landmarks-only` (détail : RoadBook/CLAUDE.md, "Repères visibles").

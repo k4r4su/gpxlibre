@@ -186,7 +186,8 @@ GPXlibre/
                    voir "Réglages stagés" plus bas), SettingsView, ValhallaSettingsView (it19 :
                    Réglages > Avancé > "Routage Valhalla", voir Ride/CLAUDE.md pour le détail),
                    FavoriteAddressesView
-                   (Domicile/Travail, it13), NavigationSettingsView (it14 : Réglages >
+                   (Domicile/Travail, it13), RoadbookLandmarkSettingsView (it28 : Réglages >
+                   Repères du Road Book, un interrupteur par catégorie), NavigationSettingsView (it14 : Réglages >
                    Navigation, regroupe Position point bleu/Zoom par défaut/Zoom automatique
                    — les 3 réglages qui ont besoin d'un aperçu carte en direct,
                    CameraPreviewMapView), MapThemePreset (it19 : standard/hauteContraste/
@@ -235,9 +236,11 @@ GPXlibre/
                    RoadbookExtractor (réutilise RoadbookAnalyzer/TrackProjector, aucune nouvelle
                    détection), RoadbookPDFExporter (export PDF natif UIGraphicsPDFRenderer,
                    même source de données que l'écran). RoadbookVisibleLandmarks/
-                   RoadbookLandmarkOverpassService/RoadbookLandmarkDataCache (it27 : repères
-                   VISIBLES uniquement — panneaux, marquages, bâtiments — via Overpass, voir
-                   RoadBook/CLAUDE.md ; les entrées de commune it26 ont été supprimées).
+                   RoadbookLandmarkOverpassService/RoadbookLandmarkDataCache/
+                   RoadbookLandmarkLoader/RoadbookLandmarkProgressView (it27/it28 : repères
+                   VISIBLES uniquement, catalogue configurable par catégorie, téléchargement par
+                   tronçons avec progression — voir RoadBook/CLAUDE.md et "Jalon stable"
+                   ci-dessous). Plus de mini-carte depuis it28.
   Rendering/      TraceAppearance (couleur/épaisseur, override par trace possible) ;
                    SlopeAnalyzer (it19 : détection NATIVE de pente forte le long d'une trace —
                    décision tranchée avec le propriétaire plutôt que le package tiers GPXKit,
@@ -373,6 +376,33 @@ la règle à appliquer partout où une bbox arbitraire pilote une énumération 
    isolé, position fixe, jamais un sibling dans une VStack qui grandit avec son contenu (voir
    la règle documentée en tête de `RideOverlayLayout.swift`, fix "overlay-never-pushes").
    Préférer réutiliser le mécanisme de bannière déjà isolé plutôt qu'inventer une zone.
+
+## Jalon stable — Road Book (v0.0.28-roadbook-stable, tag git annoté)
+
+L'itération 28 est une **version de référence** du Road Book. Comportement validé :
+- **Détection des virages route-aware** : géométrie par cordes de cap (paliers léger → très
+  serré) plus map matching Valhalla (rond-point, fourche, fusion, demi-tour seulement sur la
+  même route), au vrai carrefour. Cache par `traversalKey`, fonctionne dans les deux sens.
+- **Repères visibles uniquement** : catalogue fermé (`RoadbookLandmarkCategory`), jamais de
+  limite administrative ni de passage piéton. Filtres de rayon par catégorie, de sens des
+  panneaux et d'axe de la route porteuse ; côté gauche/droite ; au plus 1 repère de repérage
+  par tronçon ; services à part.
+- **Repères configurables** : Réglages > Repères du Road Book ; aucun re-téléchargement pour
+  désactiver, complément seul pour activer.
+- **Barre de chargement** : tronçons N/M, puis Analyse, Terminé, Échec + Réessayer (reprise au
+  tronçon) et Hors ligne. Jamais bloquante.
+- **Plus de mini-carte**.
+
+Invariants à ne pas casser sans tests SPÉCIFIQUES qui justifient le changement :
+`RoadbookStableRegressionTests` (Road Book de référence ligne par ligne),
+`RoadbookVisibleLandmarkTests`, `RoadbookLandmarkLoaderTests`,
+`RoadbookCheckpointReliabilityTests`, `RoadbookReversedDirectionTests`, `RoadbookLayoutTests`,
+plus les invariants it10 (trace unique, découplage Road Book ↔ Ride), la Trace sacrée et la
+Caméra stable. **Toute itération suivante doit rester verte sur cette base** : run complet
+avant chaque livraison, sans test désactivé ni skip ajouté pour "faire passer". Le seul skip
+possible, `SharedBlockageLiveServerTests`, se lève en lançant `server/app.py` localement (copie
+hors dépôt : `python3 -m uvicorn app:app --port 8000`). Au jalon, le run était de 413 tests,
+0 échec, 0 skip.
 
 ## Écran de démarrage et numéro de version (spec "splash-screen", it22bis)
 

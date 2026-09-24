@@ -36,6 +36,9 @@ mise à jour (repli existant déjà prévu, `try?` sur le decode), le cache se r
 
 ## Mini-carte déplaçable + zoom réglable (spec "roadbook-mode", it23quinquies)
 
+⚠️ **Mini-carte SUPPRIMÉE au jalon it28** ("roadbook-remove-minimap", demande explicite) : plus
+aucune carte dans le Road Book, portrait comme paysage. Section conservée pour l'historique.
+
 Retour terrain : "zoomé beaucoup plus... qu'on voit les 400 mètres de chaque côté, peut-être
 même 300, ou fait que ce paramètre soit changeable. Et cette même map, il faudrait pouvoir la
 changer à la volée, comme une fenêtre qui s'affiche par dessus et qu'on peut déplacer".
@@ -148,6 +151,8 @@ partagé avec Ride).
 
 ## Vue "focus" prochain virage + mini-carte en coin (retour terrain it23ter)
 
+(La mini-carte en coin a été supprimée au jalon it28 ; la vue focus, elle, est inchangée.)
+
 Nouveau retour après it23bis ("le road book est pas mal") : "il faudrait clairement afficher le
 prochain virage qui prenne au moins la moitié de l'écran... la map doit être un aperçu, 2 km
 autour du point actuel, en bas dans un coin, 15% de l'écran max".
@@ -258,6 +263,9 @@ Seul exemple de ce patron JSON dans le store actuellement — si un futur régla
 (struct multi-champs cohérente), le réutiliser plutôt que d'inventer un 2e patron.
 
 ## Mini-carte (`RoadbookMiniMapView`)
+
+⚠️ **Mini-carte SUPPRIMÉE au jalon it28** ("roadbook-remove-minimap", demande explicite) : plus
+aucune carte dans le Road Book, portrait comme paysage. Section conservée pour l'historique.
 
 MapKit léger (comme `CameraPreviewMapView`, Settings/), fichier SÉPARÉ plutôt qu'un paramètre
 ajouté à `CameraPreviewMapView` — celle-ci est déjà partagée par 3 écrans Réglages avec un
@@ -509,6 +517,9 @@ d'agglomération). `RoadbookLocality*` supprimés, `RoadbookEntry` déplacé dan
 
 ## Repères visibles (fix "roadbook-visible-landmarks-only", it27)
 
+⚠️ Étendu au jalon it28 : catalogue configurable, services, chargement par tronçons — voir la
+section "Jalon it28" ci-dessous, qui prime en cas de divergence.
+
 Principe produit (fiche propriétaire) : **un repère n'apparaît que si le conducteur peut le VOIR
 en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerce, un arbre.
 
@@ -547,3 +558,31 @@ en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerc
   `landmarkSignFacingToleranceDegrees`, `landmarkApproachMeters`, `landmarkSideMinOffsetMeters`).
 - Validé sur deux traces réelles de l'iPhone avec de vraies réponses Overpass (test temporaire,
   non commité) : wahlbach-moulin 191 candidats → 18 lignes + 10 repères de virage.
+
+## Jalon it28 — catalogue configurable, services, progression (v0.0.28-roadbook-stable)
+
+- **Catalogue** : `RoadbookLandmarkCategory.definition` réunit, pour chaque catégorie, famille,
+  libellé, emoji, sélecteurs Overpass et règle de reconnaissance. `RoadbookLandmark.classify`
+  prend la PREMIÈRE catégorie du catalogue qui reconnaît l'élément : l'ordre des `case` compte
+  (antenne avant tour). Familles : Panneaux, Infrastructure, Bâtiments, Services (activées par
+  défaut, `RoadBookConstants.landmarkDefaultEnabledCategories`) et Autres (désactivée). Le passage
+  piéton est retiré, même quand il est marqué.
+- **Services** (carburant, recharge) : rayon de détour de 250 m. Ils suivent une voie à part dans
+  `RoadbookLandmarkSelector` : jamais rattachés à un virage, jamais soumis au 1 repère/tronçon,
+  seuls leurs doublons sont fusionnés. `RoadbookLandmarkInfo.lateralDistanceMeters` porte la
+  distance à la trace, affichée au-delà de 30 m ("Total à droite, 120 m").
+- **Réglages** : `RoadbookLandmarkSettingsView` (dans Settings/), persistance
+  `RideSettingsStore.roadbookLandmarkCategories` (liste de rawValue).
+- **`RoadbookLandmarkLoader`** : seul endroit qui décide QUAND télécharger. Cache par trace avec
+  `fetchedCategories` (format `index-v2.json`). Une catégorie désactivée est filtrée sans
+  requête ; une catégorie jamais téléchargée est demandée seule, en complément. Le
+  téléchargement se fait par tronçons de 8 km (barre N/M), les repères apparaissent au fur et à
+  mesure. En cas d'échec, les tronçons reçus sont gardés et "Réessayer" reprend au tronçon en
+  échec. Hors ligne (`NetworkMonitor`), aucune requête n'est faite. Seam de test : `fetchChunk`,
+  `isOnline`, cache à `directoryOverride`.
+- **Overpass public** : 504 intermittents mesurés (un tronçon sur quatre, accepté à l'essai
+  suivant), d'où 4 essais par tronçon. Deux autres instances testées ne font pas mieux.
+- **Garde-fou** : `RoadbookStableRegressionTests` (trace + réponse Overpass de référence,
+  Road Book attendu ligne par ligne, sens A→B, B→A et route-aware). Voir "Jalon stable" dans le
+  CLAUDE.md racine.
+
