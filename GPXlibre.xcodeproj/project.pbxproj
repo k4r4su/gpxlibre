@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		02E07B3DEEE5DD13C029CDE3 /* OfflineExplainerText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E068E9FC78377B3BBA88756 /* OfflineExplainerText.swift */; };
+		03C3A69DE104E4AB44763823 /* RoadbookCheckpointReliabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A01A125E48A23405466B13 /* RoadbookCheckpointReliabilityTests.swift */; };
 		0489B3D6A674C64A8E6C38CB /* TrackFicheCameraFitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126323316D9286597E37894D /* TrackFicheCameraFitTests.swift */; };
 		054518E1126BC415C198E197 /* RoadbookLandmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB40FEDD7F25BEE26C43099 /* RoadbookLandmarkTests.swift */; };
 		0604AAD384B3535EB6FFB9A8 /* DebugReplayDriverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96598B4741054EC42C27232 /* DebugReplayDriverTests.swift */; };
@@ -454,6 +455,7 @@
 		DEBE703B8E23D62CF1EE35C7 /* ValhallaKeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValhallaKeychainStoreTests.swift; sourceTree = "<group>"; };
 		DF3E83F7EB8F43F1B9039714 /* RecordingDensityPresetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDensityPresetTests.swift; sourceTree = "<group>"; };
 		E0B10B17A0FA684FA9864BD2 /* GuidanceTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceTarget.swift; sourceTree = "<group>"; };
+		E1A01A125E48A23405466B13 /* RoadbookCheckpointReliabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookCheckpointReliabilityTests.swift; sourceTree = "<group>"; };
 		E5BE32586E35B557CFF482FA /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		E8DF6CFFE4D380DE8F08D661 /* NavRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavRoute.swift; sourceTree = "<group>"; };
 		E9325001021D82793B44F803 /* RoadbookExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookExtractorTests.swift; sourceTree = "<group>"; };
@@ -769,6 +771,7 @@
 				7FA6A2B929E41AD13369933C /* RideSessionManagerMapMatchingTests.swift */,
 				96CD9BA5BA65F63F5BF39E1B /* RideSessionManagerPurgeTests.swift */,
 				8215A98B95CB8E1200CD0DA3 /* RideSessionManagerUnsavedRideTests.swift */,
+				E1A01A125E48A23405466B13 /* RoadbookCheckpointReliabilityTests.swift */,
 				E9325001021D82793B44F803 /* RoadbookExtractorTests.swift */,
 				7B7845E29E404A5D52E24239 /* RoadbookInflectionTests.swift */,
 				C5FFD0CD4E1C04A5C557796D /* RoadbookLandmarkCacheTests.swift */,
@@ -1017,6 +1020,7 @@
 				F15F9B4B4DED4600C4DD3FB9 /* RideSessionManagerMapMatchingTests.swift in Sources */,
 				CB05C80A305A3C453E8525FF /* RideSessionManagerPurgeTests.swift in Sources */,
 				45C6D009BF00915BA59950CE /* RideSessionManagerUnsavedRideTests.swift in Sources */,
+				03C3A69DE104E4AB44763823 /* RoadbookCheckpointReliabilityTests.swift in Sources */,
 				D2961BEDFCB678A187EA4970 /* RoadbookExtractorTests.swift in Sources */,
 				EDB478D489FAEEB7825928CA /* RoadbookInflectionTests.swift in Sources */,
 				C7436F6EFA2A4F156BD14965 /* RoadbookLandmarkCacheTests.swift in Sources */,

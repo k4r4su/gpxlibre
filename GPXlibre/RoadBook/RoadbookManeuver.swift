@@ -12,7 +12,9 @@ struct RoadbookManeuver: Identifiable, Hashable {
     let partialDistanceMeters: Double
     /// Distance cumulée depuis le départ de la trace.
     let cumulativeDistanceMeters: Double
-    /// Cap absolu (0-360°) du segment de trace juste APRÈS la manœuvre — spec "roadbook-mode"
+    /// Cap absolu (0-360°) MOYEN de la trace juste APRÈS la manœuvre (corde de la fenêtre après,
+    /// fix "roadbook-turn-angle-from-heading-chords" — plus le seul segment suivant, qui pouvait
+    /// mesurer 0 m et afficher un cap fictif de 0°) — spec "roadbook-mode"
     /// it23quater, retour terrain : référence rallye montrée par le propriétaire, chaque ligne
     /// affiche un cap absolu à suivre après le virage (ex. "304°"), pas seulement une flèche
     /// relative. Calculé dans `RoadbookExtractor` (bearing du segment sortant), jamais stocké

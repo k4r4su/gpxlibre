@@ -181,7 +181,9 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
             ],
             waypoints: []
         )
-        let provider = FakeMapMatchingProvider(coordinatesToReturn: [lightTurnTrack.points[1].coordinate])
+        // Une fourche (toujours conservée) : depuis "roadbook-turn-angle-from-heading-chords", un
+        // simple virage Valhalla là où la trace ne tourne que de 20° n'est plus un checkpoint.
+        let provider = FakeMapMatchingProvider(coordinatesToReturn: [lightTurnTrack.points[1].coordinate], type: .stayRight)
         session.mapMatchingProvider = provider
 
         session.start(track: lightTurnTrack)
@@ -189,6 +191,6 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
 
         await session.mapMatchingTask?.value
 
-        XCTAssertTrue(session.checkpoints.contains { $0.tier == .lightDirectionChange })
+        XCTAssertTrue(session.checkpoints.contains { $0.tier == .fork })
     }
 }

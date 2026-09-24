@@ -44,54 +44,39 @@ enum RoadbookAnalyzer {
         let points = track.points
         guard points.count > 2, windowBeforeMeters > 0, windowAfterMeters > 0 else { return [] }
 
-        // Cap par segment (bearing ET longueur), même patron que buildInflectionPoints (it12) —
-        // généralisé ici aux DEUX sens (avant ET après chaque point, pas seulement en avant).
-        var segmentBearings: [Double] = []
-        var segmentLengths: [Double] = []
-        segmentBearings.reserveCapacity(points.count - 1)
-        segmentLengths.reserveCapacity(points.count - 1)
-        for i in 0..<(points.count - 1) {
-            segmentBearings.append(bearing(from: points[i].coordinate, to: points[i + 1].coordinate))
-            segmentLengths.append(distanceMeters(points[i].coordinate, points[i + 1].coordinate))
+        let cumulativeDistances = TrackProjector.cumulativeDistances(for: points)
+        let thresholds = TierThresholds(light: lightThresholdDegrees, marked: markedThresholdDegrees, hard: hardThresholdDegrees, veryHard: veryHardThresholdDegrees)
+
+        // Fix "roadbook-turn-angle-from-heading-chords" : changement de cap RÉEL en chaque
+        // sommet (voir `headingChange`), candidats au-delà du seuil minimal, puis regroupés.
+        var candidates: [(pointIndex: Int, angle: Double)] = []
+        for i in 1..<(points.count - 1) {
+            guard let angle = headingChange(
+                atCumulativeDistance: cumulativeDistances[i],
+                points: points,
+                cumulativeDistances: cumulativeDistances,
+                windowBeforeMeters: windowBeforeMeters,
+                windowAfterMeters: windowAfterMeters
+            ), abs(angle) >= lightThresholdDegrees else { continue }
+            candidates.append((i, angle))
         }
 
         var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
-        let cumulativeDistances = TrackProjector.cumulativeDistances(for: points)
-
-        for i in 1..<(points.count - 1) {
-            guard let windowed = windowedTurn(
-                at: i,
-                segmentBearings: segmentBearings,
-                segmentLengths: segmentLengths,
-                windowBeforeMeters: windowBeforeMeters,
-                windowAfterMeters: windowAfterMeters
-            ) else { continue }
-            guard windowed.absAngle >= lightThresholdDegrees else { continue }
+        for candidate in clustered(candidates, points: points, cumulativeDistances: cumulativeDistances, windowBeforeMeters: windowBeforeMeters, windowAfterMeters: windowAfterMeters, minimumTurnDegrees: lightThresholdDegrees) {
+            let i = candidate.pointIndex
+            let absAngle = abs(candidate.angle)
 
             // Fix "roadbook-no-false-uturn" (it26 point 2) : le demi-tour n'est plus un palier
             // d'angle (≥ 135° avant, ce qui classait toute épingle en demi-tour) — il faut que la
             // trace reparte réellement sur SON PROPRE tracé. Au départ/à l'arrivée, c'est une
             // manœuvre de stationnement : ignorée.
-            let reversesOnSamePath = windowed.absAngle >= NavigationConstants.roadbookUTurnMinDegrees
+            let reversesOnSamePath = absAngle >= NavigationConstants.roadbookUTurnMinDegrees
                 && returnsOnSamePath(at: i, points: points, cumulativeDistances: cumulativeDistances, probeMeters: min(windowBeforeMeters, windowAfterMeters))
             if reversesOnSamePath, isNearTrackEndpoint(cumulativeDistances[i], cumulativeDistances: cumulativeDistances) { continue }
 
-            let tier: RoadbookTier
-            if reversesOnSamePath {
-                tier = .uTurn
-            } else if windowed.absAngle >= veryHardThresholdDegrees {
-                tier = .veryHard
-            } else if windowed.absAngle >= hardThresholdDegrees {
-                tier = .hard
-            } else if windowed.absAngle >= markedThresholdDegrees {
-                tier = .marked
-            } else {
-                tier = .light
-            }
-
-            let direction: TurnDirection = tier == .uTurn ? .uTurn : (windowed.signedAngle > 0 ? .right : .left)
-
-            raw.append((points[i].coordinate, windowed.absAngle, direction, tier, i))
+            let tier = reversesOnSamePath ? .uTurn : thresholds.tier(forAbsoluteAngle: absAngle)
+            let direction: TurnDirection = tier == .uTurn ? .uTurn : (candidate.angle > 0 ? .right : .left)
+            raw.append((points[i].coordinate, absAngle, direction, tier, i))
         }
 
         let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters, cumulativeDistances: cumulativeDistances)
@@ -102,8 +87,7 @@ enum RoadbookAnalyzer {
             into: geometricEvents,
             points: points,
             cumulativeDistances: cumulativeDistances,
-            segmentBearings: segmentBearings,
-            segmentLengths: segmentLengths,
+            thresholds: thresholds,
             windowBeforeMeters: windowBeforeMeters,
             windowAfterMeters: windowAfterMeters,
             mergeMinDistanceMeters: mergeMinDistanceMeters
@@ -135,8 +119,7 @@ enum RoadbookAnalyzer {
         into geometricEvents: [Checkpoint],
         points: [GPXPoint],
         cumulativeDistances: [Double],
-        segmentBearings: [Double],
-        segmentLengths: [Double],
+        thresholds: TierThresholds,
         windowBeforeMeters: Double,
         windowAfterMeters: Double,
         mergeMinDistanceMeters: Double
@@ -164,17 +147,37 @@ enum RoadbookAnalyzer {
             let exactCumulative = projection.cumulativeDistanceMeters
             guard !combined.contains(where: { abs(($0.cumulativeDistanceMeters(using: cumulativeDistances) ?? .infinity) - exactCumulative) < mergeMinDistanceMeters }) else { continue }
 
-            // Fix "roadbook-no-false-uturn" (it26 point 2) : un demi-tour Valhalla au départ/à
-            // l'arrivée est une manœuvre de stationnement (le seul du cache réel du propriétaire
-            // était à 20 m du départ) — ignoré. Ailleurs, demi-tour seulement si la rue d'après
-            // est celle d'avant ; sinon virage très serré, du côté indiqué par Valhalla.
+            // Fix "roadbook-turn-angle-from-heading-chords" : angle, sens ET libellé d'une
+            // manœuvre Valhalla viennent de la géométrie de la TRACE SUIVIE au vrai carrefour,
+            // jamais de la seule catégorie Valhalla (qui décrit la manœuvre sur SA route
+            // recalée, et gardait des carrefours où la trace va tout droit).
+            let turn = headingChange(
+                atCumulativeDistance: exactCumulative,
+                points: points,
+                cumulativeDistances: cumulativeDistances,
+                windowBeforeMeters: windowBeforeMeters,
+                windowAfterMeters: windowAfterMeters
+            ) ?? 0
             var direction = maneuver.type.roadbookDirection
-            if tier == .uTurn {
+            switch tier {
+            case .roundabout, .fork, .merge:
+                // Gardés tels quels, pictogrammes dédiés : sortie de rond-point, vraie fourche, et
+                // bretelle/sortie (choisir une branche, même à faible angle, EST une décision).
+                break
+            case .uTurn:
+                // Fix "roadbook-no-false-uturn" (it26 point 2) : au départ/à l'arrivée, manœuvre de
+                // stationnement — ignoré. Ailleurs, demi-tour seulement sur la même rue ; sinon
+                // virage très serré, du côté indiqué par Valhalla.
                 guard !isNearTrackEndpoint(exactCumulative, cumulativeDistances: cumulativeDistances) else { continue }
                 if !maneuver.isSameRoadUTurn {
                     tier = .veryHard
                     direction = maneuver.type == .uturnLeft ? .left : .right
                 }
+            default:
+                // Virage/bretelle : pas de vrai changement de cap de la trace = pas de checkpoint.
+                guard abs(turn) >= thresholds.light else { continue }
+                tier = thresholds.tier(forAbsoluteAngle: abs(turn))
+                direction = turn > 0 ? .right : .left
             }
 
             // Point GPX le plus proche SUR LE SEGMENT projeté — ne sert plus qu'au cap sortant
@@ -185,17 +188,9 @@ enum RoadbookAnalyzer {
                 ? segmentStart
                 : segmentEnd
 
-            let windowed = windowedTurn(
-                at: pointIndex,
-                segmentBearings: segmentBearings,
-                segmentLengths: segmentLengths,
-                windowBeforeMeters: windowBeforeMeters,
-                windowAfterMeters: windowAfterMeters
-            )
-
             combined.append(Checkpoint(
                 coordinate: maneuver.coordinate,
-                turnAngleDegrees: windowed?.absAngle ?? 0,
+                turnAngleDegrees: abs(turn),
                 direction: direction,
                 tier: tier,
                 sequenceIndex: 0, // renuméroté ci-dessous une fois l'ordre final connu
@@ -294,46 +289,138 @@ enum RoadbookAnalyzer {
         return cumulative < guardMeters || cumulative > total - guardMeters
     }
 
-    /// Angle de virage sur fenêtre AVANT/APRÈS le point `i` (extrait de `buildRoadbookEvents`
-    /// pour être réutilisé par la fusion map matching ci-dessus, SANS dupliquer la logique de
-    /// fenêtrage) — somme pas-à-pas des deltas de cap segment par segment (pas une simple
-    /// différence corde à corde, voir commentaire historique ci-dessous).
-    private static func windowedTurn(
-        at i: Int,
-        segmentBearings: [Double],
-        segmentLengths: [Double],
+    /// Paliers d'angle — SEUL endroit où un angle devient un libellé (fix "roadbook-turn-angle-
+    /// from-heading-chords") : un angle sous `light` n'est jamais un virage.
+    struct TierThresholds {
+        let light: Double
+        let marked: Double
+        let hard: Double
+        let veryHard: Double
+
+        func tier(forAbsoluteAngle angle: Double) -> RoadbookTier {
+            if angle >= veryHard { return .veryHard }
+            if angle >= hard { return .hard }
+            if angle >= marked { return .marked }
+            return .light
+        }
+    }
+
+    /// Changement de cap signé (droite > 0) à la distance cumulée `c` : cap MOYEN des
+    /// `windowBeforeMeters` précédents (corde position(c − avant) → position(c)) comparé au cap
+    /// moyen des `windowAfterMeters` suivants — positions INTERPOLÉES sur la trace suivie.
+    ///
+    /// Fix "roadbook-turn-angle-from-heading-chords" — retour terrain : "Virage fort" là où la trace
+    /// continue tout droit. Remplace l'ancienne SOMME des écarts de cap segment par segment, qui
+    /// cumulait deux défauts : (1) la fenêtre comptait en segments ENTIERS (au moins deux de chaque
+    /// côté), donc sur une trace peu dense "±60 m" couvrait plusieurs centaines de mètres et
+    /// additionnait des courbes sans rapport ; (2) un segment de longueur nulle (point GPX
+    /// dupliqué) a un cap fictif de 0°, qui injectait deux faux virages de ±90°. Cas réel : un
+    /// point dupliqué juste après un vrai virage à gauche produisait un "Virage fort" fantôme
+    /// 240 m plus loin sur une ligne droite. Une corde ne voit que le déplacement NET : ni
+    /// doublon, ni gigue GPS, ni zigzag ne créent de virage. `nil` si la trace ne s'étend pas
+    /// d'au moins la moitié de la fenêtre de chaque côté.
+    static func headingChange(
+        atCumulativeDistance c: Double,
+        points: [GPXPoint],
+        cumulativeDistances: [Double],
         windowBeforeMeters: Double,
         windowAfterMeters: Double
-    ) -> (absAngle: Double, signedAngle: Double)? {
-        guard i > 0, i < segmentBearings.count else { return nil }
+    ) -> Double? {
+        headingChange(from: c, to: c, points: points, cumulativeDistances: cumulativeDistances, windowBeforeMeters: windowBeforeMeters, windowAfterMeters: windowAfterMeters)
+    }
 
-        // Segment le plus ANCIEN considéré : recule depuis i-1 (le segment qui MÈNE à `i`,
-        // toujours inclus) tant que windowBeforeMeters n'est pas couvert.
-        var startSeg = i - 1
-        var distBefore: Double = 0
-        while startSeg > 0, distBefore < windowBeforeMeters {
-            distBefore += segmentLengths[startSeg - 1]
-            startSeg -= 1
-        }
-        // Segment le plus AVANCÉ considéré : avance depuis i (le segment qui PART de `i`,
-        // toujours inclus) tant que windowAfterMeters n'est pas couvert.
-        var endSeg = i
-        var distAfter: Double = 0
-        while endSeg < segmentBearings.count - 1, distAfter < windowAfterMeters {
-            distAfter += segmentLengths[endSeg]
-            endSeg += 1
-        }
-        guard endSeg > startSeg else { return nil }
+    /// Même mesure entre un cap d'APPROCHE (corde qui se termine à `start`) et un cap de SORTIE
+    /// (corde qui commence à `end`) — virage net d'une portion de trace [start, end] (grappe de
+    /// sommets rapprochés, ex. les deux coins d'une épingle).
+    private static func headingChange(
+        from start: Double,
+        to end: Double,
+        points: [GPXPoint],
+        cumulativeDistances: [Double],
+        windowBeforeMeters: Double,
+        windowAfterMeters: Double
+    ) -> Double? {
+        guard let total = cumulativeDistances.last else { return nil }
+        let approachStart = max(start - windowBeforeMeters, 0)
+        let exitEnd = min(end + windowAfterMeters, total)
+        guard start - approachStart >= windowBeforeMeters / 2, exitEnd - end >= windowAfterMeters / 2,
+              let a = TrackProjector.interpolatedCoordinate(atCumulativeDistance: approachStart, points: points, cumulativeDistances: cumulativeDistances),
+              let s = TrackProjector.interpolatedCoordinate(atCumulativeDistance: start, points: points, cumulativeDistances: cumulativeDistances),
+              let e = TrackProjector.interpolatedCoordinate(atCumulativeDistance: end, points: points, cumulativeDistances: cumulativeDistances),
+              let b = TrackProjector.interpolatedCoordinate(atCumulativeDistance: exitEnd, points: points, cumulativeDistances: cumulativeDistances)
+        else { return nil }
+        return signedAngleDifference(from: bearing(from: a, to: s), to: bearing(from: e, to: b))
+    }
 
-        // Somme des deltas segment à segment de startSeg à endSeg (PAS une simple différence
-        // d'angle entre les deux bornes — un virage > 180° sur la fenêtre serait alors mal
-        // reconstruit ; la somme pas-à-pas, chacun normalisé dans (-180,180], reste correcte
-        // même au-delà).
-        var totalTurn: Double = 0
-        for m in startSeg..<endSeg {
-            totalTurn += signedAngleDifference(from: segmentBearings[m], to: segmentBearings[m + 1])
+    /// Cap absolu (0-360°) à suivre APRÈS la distance cumulée `c` — cap moyen des
+    /// `windowAfterMeters` suivants (jamais le seul segment suivant, qui peut mesurer 0 m et
+    /// afficher un cap fictif de 0°). Repli sur le cap d'arrivée en toute fin de trace.
+    static func outgoingHeading(
+        atCumulativeDistance c: Double,
+        points: [GPXPoint],
+        cumulativeDistances: [Double],
+        windowAfterMeters: Double
+    ) -> Double {
+        guard let total = cumulativeDistances.last, total > 0,
+              let m = TrackProjector.interpolatedCoordinate(atCumulativeDistance: c, points: points, cumulativeDistances: cumulativeDistances)
+        else { return 0 }
+        let heading: Double
+        if total - c >= 1, let b = TrackProjector.interpolatedCoordinate(atCumulativeDistance: min(c + windowAfterMeters, total), points: points, cumulativeDistances: cumulativeDistances) {
+            heading = bearing(from: m, to: b)
+        } else if let a = TrackProjector.interpolatedCoordinate(atCumulativeDistance: max(c - windowAfterMeters, 0), points: points, cumulativeDistances: cumulativeDistances) {
+            heading = bearing(from: a, to: m)
+        } else {
+            return 0
         }
-        return (abs(totalTurn), totalTurn)
+        return (heading + 360).truncatingRemainder(dividingBy: 360)
+    }
+
+    /// Regroupe les candidats consécutifs à `roadbookTurnClusterMeters` ou moins les uns des autres
+    /// (le même virage vu depuis plusieurs sommets, ou deux coins rapprochés d'une épingle) : UN
+    /// événement par grappe, placé au sommet le plus marqué dans le sens du virage NET de la
+    /// grappe (de la fenêtre avant son premier sommet à la fenêtre après son dernier), et portant
+    /// ce virage net — deux coins à 90° espacés de 40 m forment une épingle à 180°, pas un
+    /// "virage fort". Virage net sous le seuil minimal : aller-retour parasite (zigzag d'un
+    /// artefact de tracé/matching), ignoré.
+    private static func clustered(
+        _ candidates: [(pointIndex: Int, angle: Double)],
+        points: [GPXPoint],
+        cumulativeDistances: [Double],
+        windowBeforeMeters: Double,
+        windowAfterMeters: Double,
+        minimumTurnDegrees: Double
+    ) -> [(pointIndex: Int, angle: Double)] {
+        var groups: [[(pointIndex: Int, angle: Double)]] = []
+        for candidate in candidates {
+            if let last = groups.last?.last,
+               cumulativeDistances[candidate.pointIndex] - cumulativeDistances[last.pointIndex] <= NavigationConstants.roadbookTurnClusterMeters {
+                groups[groups.count - 1].append(candidate)
+            } else {
+                groups.append([candidate])
+            }
+        }
+
+        return groups.compactMap { group in
+            guard group.count > 1, let first = group.first, let last = group.last else { return group.first }
+            // Changement de cap net : approche du premier sommet → sortie du dernier.
+            let net = headingChange(
+                from: cumulativeDistances[first.pointIndex],
+                to: cumulativeDistances[last.pointIndex],
+                points: points,
+                cumulativeDistances: cumulativeDistances,
+                windowBeforeMeters: windowBeforeMeters,
+                windowAfterMeters: windowAfterMeters
+            ) ?? group.map(\.angle).reduce(0, +)
+            guard abs(net) >= minimumTurnDegrees else { return nil }
+            if let apex = group.filter({ ($0.angle > 0) == (net > 0) }).max(by: { abs($0.angle) < abs($1.angle) }) {
+                return (apex.pointIndex, net)
+            }
+            // Aucun sommet dans le sens du virage net : la grappe a tourné de PLUS de 180° (boucle,
+            // bretelle d'échangeur) et la différence de caps s'est "enroulée" (210° à droite se
+            // lit −150°). Virage réel = 360° − |net|, dans le sens de ses sommets.
+            guard let apex = group.max(by: { abs($0.angle) < abs($1.angle) }) else { return nil }
+            return (apex.pointIndex, (apex.angle > 0 ? 1 : -1) * (360 - abs(net)))
+        }
     }
 
     /// Fusionne les points de virage trop rapprochés (même épingle détectée sur plusieurs

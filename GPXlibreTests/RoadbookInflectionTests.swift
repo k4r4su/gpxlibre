@@ -46,15 +46,13 @@ final class RoadbookInflectionTests: XCTestCase {
         )
     }
 
-    /// Cœur de la feature (hérité de "lateral-cap-banner-countdown", it12) : un virage
-    /// progressif ("naturel") dont l'angle PAR SEGMENT est faible, mais qui tourne net sur la
-    /// fenêtre avant/après complète, doit être détecté — 10 segments de 20 m à 8°, 80° cumulés
-    /// sur 200 m, bien au-delà de ce qu'un seuil ponctuel ±20 m capterait.
-    func testGradualCurveDetectedViaWindow() {
+    /// Fix "roadbook-turn-angle-from-heading-chords" — règle produit : une route qui courbe
+    /// PROGRESSIVEMENT (80° répartis sur 200 m) n'est pas un changement de direction, 0 checkpoint.
+    /// Inverse volontaire de l'ancien test it12 "courbe progressive détectée via la fenêtre" : la
+    /// somme des écarts de cap sur des segments entiers additionnait toute la courbe.
+    func testAGradualCurveIsNotACheckpoint() {
         let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 20, segmentTurnDegrees: 8)
-        let result = events(for: track)
-        XCTAssertFalse(result.isEmpty, "l'angle mesuré sur la fenêtre avant/après doit détecter cette courbe progressive")
-        XCTAssertEqual(result.first?.direction, .right, "cap croissant = virage à droite")
+        XCTAssertTrue(events(for: track).isEmpty)
     }
 
     /// Une vraie "split" nette (tout l'angle en un point) doit aussi déclencher.
@@ -79,9 +77,11 @@ final class RoadbookInflectionTests: XCTestCase {
 
     /// Deux candidats trop rapprochés fusionnent en un seul (garde l'angle le plus marqué).
     func testNearbyEventsMergeIntoOne() {
-        let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 15, segmentTurnDegrees: 8)
+        // 15° tous les 15 m : plusieurs sommets consécutifs dépassent chacun le seuil minimal.
+        let track = curvingTrack(segmentCount: 10, segmentLengthMeters: 15, segmentTurnDegrees: 15)
         let result = events(for: track, mergeMinDistanceMeters: 150)
-        for i in 1..<result.count {
+        XCTAssertFalse(result.isEmpty, "précondition : la courbe est bien détectée")
+        for i in result.indices.dropFirst() {
             let distance = RoadbookAnalyzer.distanceMeters(result[i - 1].coordinate, result[i].coordinate)
             XCTAssertGreaterThanOrEqual(distance, 150, "deux événements retenus ne doivent jamais être plus proches que mergeMinDistanceMeters")
         }

@@ -12,14 +12,19 @@ enum NavigationConstants {
     /// mesuré (spec : "±40-80 m autour de la position") — ASYMÉTRIQUE par construction (avant
     /// ≠ après possibles), réglable indépendamment dans Réglages > Roadbook > Fenêtre de mesure
     /// (spec "roadbook-settings-wired", Bloc 5).
-    static let roadbookWindowBeforeMetersDefault: Double = 60
-    static let roadbookWindowAfterMetersDefault: Double = 60
-    static let roadbookWindowRange: ClosedRange<Double> = 40...80
+    /// Fix "roadbook-turn-angle-from-heading-chords" : ce sont désormais les longueurs des
+    /// cordes AVANT/APRÈS (cap moyen) comparées en chaque point, positions interpolées — 40 m
+    /// (fiche : "~30-50 m"), au lieu de 60 m sommés segment par segment.
+    static let roadbookWindowBeforeMetersDefault: Double = 40
+    static let roadbookWindowAfterMetersDefault: Double = 40
+    static let roadbookWindowRange: ClosedRange<Double> = 30...80
 
     // MARK: - Paliers d'angle (segmentation type Waze/MUTCD)
 
-    /// < ce seuil : rien (tout droit, pas affiché).
-    static let roadbookLightThresholdDegreesDefault: Double = 30
+    /// < ce seuil : rien (tout droit, pas affiché) — SEUIL MINIMAL d'un checkpoint, pour la
+    /// géométrie ET pour les manœuvres Valhalla (règle produit : pas de vrai changement de cap =
+    /// pas de checkpoint). 25° (fiche : "~20-25°", 30° avant) : en dessous, une route qui ondule.
+    static let roadbookLightThresholdDegreesDefault: Double = 25
     /// [light, marked[ = virage léger ; [marked, hard[ = virage prononcé ; [hard, veryHard[ =
     /// virage fort ; ≥ veryHard = virage très serré (avec son sens). Le demi-tour n'est PLUS un
     /// palier d'angle (it26 point 2, voir `roadbookUTurn*` ci-dessous). Clé de réglage persistée
@@ -28,6 +33,13 @@ enum NavigationConstants {
     static let roadbookMarkedThresholdDegreesDefault: Double = 45
     static let roadbookHardThresholdDegreesDefault: Double = 90
     static let roadbookVeryHardThresholdDegreesDefault: Double = 135
+
+    /// Deux candidats de virage à moins de cette distance (le long de la trace) forment une seule
+    /// grappe : un seul checkpoint dans le sens du virage net, ou aucun si le virage net reste
+    /// sous le seuil minimal (zigzag parasite). Fiche : "~30-50 m" — 50 : à 40, les deux coins
+    /// d'une épingle tracée à 40 m d'écart (40,07 m sur l'ellipsoïde) ressortaient en deux
+    /// "Virage fort" au lieu d'une épingle "très serré".
+    static let roadbookTurnClusterMeters: Double = 50
 
     // MARK: - Demi-tour (it26 point 2, fix "roadbook-no-false-uturn")
 

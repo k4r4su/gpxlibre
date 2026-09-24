@@ -47,11 +47,12 @@ final class RoadbookMapMatchingTests: XCTestCase {
         return GPXTrack(id: UUID(), name: "Ordre", fileName: "ordre.gpx", importDate: Date(), points: points, waypoints: [])
     }
 
-    /// `type: .right` par défaut — une vraie décision de conduite classique (`roadbookTier ==
-    /// .lightDirectionChange`), suffisant pour les tests de fusion/ordonnancement ci-dessous, qui
+    /// `type: .stayRight` par défaut — une fourche, TOUJOURS conservée quel que soit l'angle de la
+    /// trace (depuis "roadbook-turn-angle-from-heading-chords", un simple virage Valhalla n'est
+    /// gardé que si la trace tourne vraiment) : suffisant pour les tests de position/fusion ci-dessous, qui
     /// ne s'intéressent pas au choix de palier lui-même (voir `ValhallaMapMatchingServiceTests`/
     /// `testMapMatchedManeuverTypeDrivesTheAssignedTier` pour ça).
-    private func events(for track: GPXTrack, mapMatched: [CLLocationCoordinate2D] = [], type: ValhallaManeuverType = .right, mergeMinDistanceMeters: Double = 150) -> [Checkpoint] {
+    private func events(for track: GPXTrack, mapMatched: [CLLocationCoordinate2D] = [], type: ValhallaManeuverType = .stayRight, mergeMinDistanceMeters: Double = 150) -> [Checkpoint] {
         RoadbookAnalyzer.buildRoadbookEvents(
             for: track,
             windowBeforeMeters: NavigationConstants.roadbookWindowBeforeMetersDefault,
@@ -86,17 +87,17 @@ final class RoadbookMapMatchingTests: XCTestCase {
         XCTAssertEqual(withoutParam.map(\.tier), withEmptyParam.map(\.tier))
     }
 
-    /// Cœur du test attendu par la spec : "virage < 30° avec changement de segment → événement
-    /// produit".
-    func testBelowLightThresholdCoordinateProducesLightDirectionChangeWhenMapMatched() {
+    /// Règle produit (fix "roadbook-turn-angle-from-heading-chords") : un virage Valhalla là où la
+    /// TRACE ne tourne que de 20° (sous le seuil minimal) n'est pas un checkpoint — Valhalla décrit
+    /// la manœuvre sur SA route recalée, pas le changement de cap réel du pilote. (Remplace le test
+    /// it20 "virage < 30° avec changement de segment → événement", voir le cas "changement de nom
+    /// de route" pour ce qui reste gardé sous le seuil.)
+    func testAValhallaTurnWhereTheTraceBarelyTurnsIsNotACheckpoint() {
         let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
-        XCTAssertTrue(events(for: track).isEmpty, "précondition : rien géométriquement, virage 20° < seuil light 30°")
+        XCTAssertTrue(events(for: track).isEmpty, "précondition : rien géométriquement")
 
-        let matchedCoordinate = track.points[1].coordinate
-        let result = events(for: track, mapMatched: [matchedCoordinate])
-
-        XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result.first?.tier, .lightDirectionChange)
+        XCTAssertTrue(events(for: track, mapMatched: [track.points[1].coordinate], type: .right).isEmpty)
+        XCTAssertTrue(events(for: track, mapMatched: [track.points[1].coordinate], type: .slightRight).isEmpty)
     }
 
     /// Second test attendu par la spec : "virage < 30° SANS changement de segment → rien" — un
@@ -153,7 +154,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
             veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: 150,
-            mapMatchedManeuvers: [MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil)]
+            mapMatchedManeuvers: [MapMatchedManeuver(coordinate: junction, type: .stayRight, roundaboutExitCount: nil)]
         )
         XCTAssertEqual(maneuvers.count, 1)
         XCTAssertEqual(maneuvers[0].cumulativeDistanceMeters, 300, accuracy: 1)
@@ -207,10 +208,10 @@ final class RoadbookMapMatchingTests: XCTestCase {
         let (track, junction, outbound, back) = outAndBack()
         let total = TrackProjector.cumulativeDistances(for: track.points).last ?? 1
         let result = buildEvents(track, maneuvers: [
-            MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil, routeProgressFraction: outbound / total),
-            MapMatchedManeuver(coordinate: junction, type: .left, roundaboutExitCount: nil, routeProgressFraction: back / total),
+            MapMatchedManeuver(coordinate: junction, type: .stayRight, roundaboutExitCount: nil, routeProgressFraction: outbound / total),
+            MapMatchedManeuver(coordinate: junction, type: .stayLeft, roundaboutExitCount: nil, routeProgressFraction: back / total),
         ])
-        let matched = result.filter { $0.tier == .lightDirectionChange }
+        let matched = result.filter { $0.tier == .fork }
 
         XCTAssertEqual(matched.count, 2, "un événement à l'aller, un au retour — jamais fusionnés en un seul")
         XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, outbound, accuracy: 1)
@@ -233,9 +234,9 @@ final class RoadbookMapMatchingTests: XCTestCase {
         XCTAssertLessThan(RoadbookAnalyzer.distanceMeters(loop.points[6].coordinate, junctionX), 1, "précondition : la boucle repasse bien sur X")
 
         let result = buildEvents(loop, maneuvers: [
-            MapMatchedManeuver(coordinate: junctionX, type: .right, roundaboutExitCount: nil, routeProgressFraction: secondPass / (cumulative.last ?? 1)),
+            MapMatchedManeuver(coordinate: junctionX, type: .stayRight, roundaboutExitCount: nil, routeProgressFraction: secondPass / (cumulative.last ?? 1)),
         ])
-        let matched = result.filter { $0.tier == .lightDirectionChange }
+        let matched = result.filter { $0.tier == .fork }
 
         XCTAssertEqual(matched.count, 1)
         XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, secondPass, accuracy: 2, "second passage (km 1,4), pas le premier (km 0,2) où le pilote va tout droit")
@@ -247,10 +248,10 @@ final class RoadbookMapMatchingTests: XCTestCase {
     func testOnAnOutAndBackWithoutRouteProgressTheMonotonicFallbackStillSplitsBothPasses() {
         let (track, junction, outbound, back) = outAndBack()
         let result = buildEvents(track, maneuvers: [
-            MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil),
-            MapMatchedManeuver(coordinate: junction, type: .left, roundaboutExitCount: nil),
+            MapMatchedManeuver(coordinate: junction, type: .stayRight, roundaboutExitCount: nil),
+            MapMatchedManeuver(coordinate: junction, type: .stayLeft, roundaboutExitCount: nil),
         ])
-        let matched = result.filter { $0.tier == .lightDirectionChange }
+        let matched = result.filter { $0.tier == .fork }
 
         XCTAssertEqual(matched.count, 2, "un événement à l'aller, un au retour — jamais fusionnés en un seul")
         XCTAssertEqual(matched.first?.trackCumulativeDistanceMeters ?? -1, outbound, accuracy: 1)
@@ -316,19 +317,18 @@ final class RoadbookMapMatchingTests: XCTestCase {
         // coïncider avec l'ordre d'insertion par accident.
         let track = track(segments: [(100, 0), (100, 0), (100, 0), (100, 60), (100, 0)])
         let geometricOnly = events(for: track)
-        // La fenêtre avant/après (60 m par défaut) chevauche le même unique changement de cap
-        // pour les points 3 ET 4 (mesure télescopique, voir buildRoadbookEvents) — deux
-        // candidats au même angle, fusionnés en un seul par mergeNearby (garde le premier
-        // rencontré à angle égal) : point 3, pas 4. Comportement existant, pas une régression.
+        // L'ancienne somme d'écarts de cap sur segments entiers plaçait ce virage au point 3 (un
+        // sommet trop tôt) ; le cap moyen par cordes (fix "roadbook-turn-angle-from-heading-
+        // chords") le place au vrai sommet, point 4.
         XCTAssertEqual(geometricOnly.count, 1, "précondition : un seul virage marqué (60°) retenu après fusion")
-        XCTAssertEqual(geometricOnly.first?.sourcePointIndex, 3)
+        XCTAssertEqual(geometricOnly.first?.sourcePointIndex, 4)
 
         let matchedCoordinate = track.points[1].coordinate
         let result = events(for: track, mapMatched: [matchedCoordinate])
 
         XCTAssertEqual(result.count, 2, "1 virage marqué géométrique + 1 léger changement de direction map matché")
         XCTAssertEqual(result.map(\.sequenceIndex), [1, 2], "numérotation continue dans l'ordre de progression")
-        XCTAssertEqual(result.map(\.tier), [.lightDirectionChange, .marked], "le point de map matching (point 1) précède le virage géométrique (point 3) le long de la trace, malgré un ordre d'insertion inverse dans le code")
+        XCTAssertEqual(result.map(\.tier), [.fork, .marked], "le point de map matching (point 1) précède le virage géométrique (point 4) le long de la trace, malgré un ordre d'insertion inverse dans le code")
     }
 
     // MARK: - Palier/direction pilotés par le type Valhalla (spec "roadbook-route-aware-maneuvers", it24, point 2)
