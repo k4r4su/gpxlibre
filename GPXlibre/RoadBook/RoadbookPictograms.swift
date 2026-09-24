@@ -41,7 +41,7 @@ struct RoadbookManeuverIcon: View {
         case .merge:
             RoadbookMergePictogram(direction: checkpoint.direction)
                 .frame(width: size, height: size)
-        case .light, .marked, .hard, .uTurn, .lightDirectionChange:
+        case .light, .marked, .hard, .veryHard, .uTurn, .lightDirectionChange:
             Image(systemName: checkpoint.tier.systemImageName(direction: checkpoint.direction))
                 .font(.system(size: size, weight: .semibold))
                 .rotationEffect(.degrees(checkpoint.tier.rotationDegrees(direction: checkpoint.direction) ?? 0))

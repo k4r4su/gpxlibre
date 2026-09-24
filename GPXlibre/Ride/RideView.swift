@@ -736,7 +736,7 @@ struct RideView: View {
     /// Combine tous les réglages roadbook en une seule valeur `Equatable` — évite d'empiler 7
     /// `.onChange` séparés pour le même effet (`session.rebuildCheckpoints()`).
     private var roadbookSettingsSignature: String {
-        "\(settings.roadbookEnabled)-\(settings.roadbookWindowBeforeMeters)-\(settings.roadbookWindowAfterMeters)-\(settings.roadbookLightThresholdDegrees)-\(settings.roadbookMarkedThresholdDegrees)-\(settings.roadbookHardThresholdDegrees)-\(settings.roadbookUTurnThresholdDegrees)"
+        "\(settings.roadbookEnabled)-\(settings.roadbookWindowBeforeMeters)-\(settings.roadbookWindowAfterMeters)-\(settings.roadbookLightThresholdDegrees)-\(settings.roadbookMarkedThresholdDegrees)-\(settings.roadbookHardThresholdDegrees)-\(settings.roadbookVeryHardThresholdDegrees)"
     }
 
     /// "Itinéraire ici" en Mode Nav démarre directement le guidage principal (voix +

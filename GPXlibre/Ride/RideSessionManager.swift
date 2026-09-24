@@ -571,7 +571,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             lightThresholdDegrees: settings.roadbookLightThresholdDegrees,
             markedThresholdDegrees: settings.roadbookMarkedThresholdDegrees,
             hardThresholdDegrees: settings.roadbookHardThresholdDegrees,
-            uTurnThresholdDegrees: settings.roadbookUTurnThresholdDegrees,
+            veryHardThresholdDegrees: settings.roadbookVeryHardThresholdDegrees,
             mergeMinDistanceMeters: settings.turnMergeMinDistanceMeters,
             mapMatchedManeuvers: mapMatchedDirectionChangePoints
         )

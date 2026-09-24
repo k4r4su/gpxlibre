@@ -27,12 +27,19 @@ struct MapMatchedManeuver {
     /// près du même carrefour (boucle, aller-retour) : la géométrie seule ne peut pas les
     /// départager. `nil` = inconnue (fixture de test), repli sur une projection monotone.
     let routeProgressFraction: Double?
+    /// Demi-tour Valhalla (`uturnLeft`/`uturnRight`) CONFIRMÉ sur la même route : la rue
+    /// empruntée après (`street_names` de la manœuvre) est aussi celle d'avant (`street_names` de
+    /// la manœuvre précédente) — fix "roadbook-no-false-uturn" (it26 point 2, règle métier : un
+    /// demi-tour = repartir en sens inverse sur la MÊME route). Rue sans nom ou différente :
+    /// `false`, affiché comme un virage très serré avec son sens, jamais comme un demi-tour.
+    let isSameRoadUTurn: Bool
 
-    init(coordinate: CLLocationCoordinate2D, type: ValhallaManeuverType, roundaboutExitCount: Int?, routeProgressFraction: Double? = nil) {
+    init(coordinate: CLLocationCoordinate2D, type: ValhallaManeuverType, roundaboutExitCount: Int?, routeProgressFraction: Double? = nil, isSameRoadUTurn: Bool = false) {
         self.coordinate = coordinate
         self.type = type
         self.roundaboutExitCount = roundaboutExitCount
         self.routeProgressFraction = routeProgressFraction
+        self.isSameRoadUTurn = isSameRoadUTurn
     }
 }
 
@@ -116,15 +123,19 @@ enum ValhallaMapMatchingService {
         routeProgressFractionAtShapeIndex: (Int) -> Double? = { _ in nil }
     ) -> [MapMatchedManeuver] {
         guard maneuvers.count > 2 else { return [] }
-        return maneuvers.dropFirst().dropLast().compactMap { maneuver -> MapMatchedManeuver? in
+        return maneuvers.indices.dropFirst().dropLast().compactMap { index -> MapMatchedManeuver? in
+            let maneuver = maneuvers[index]
             guard legCoordinates.indices.contains(maneuver.beginShapeIndex) else { return nil }
             let type = ValhallaManeuverType(rawValue: maneuver.type) ?? .none
             guard type.roadbookTier != nil else { return nil }
+            let isUTurn = type == .uturnLeft || type == .uturnRight
+            let roadBefore = Set(maneuvers[index - 1].streetNames)
             return MapMatchedManeuver(
                 coordinate: legCoordinates[maneuver.beginShapeIndex],
                 type: type,
                 roundaboutExitCount: maneuver.roundaboutExitCount,
-                routeProgressFraction: routeProgressFractionAtShapeIndex(maneuver.beginShapeIndex)
+                routeProgressFraction: routeProgressFractionAtShapeIndex(maneuver.beginShapeIndex),
+                isSameRoadUTurn: isUTurn && !roadBefore.isDisjoint(with: maneuver.streetNames)
             )
         }
     }
@@ -164,17 +175,22 @@ struct ValhallaManeuver: Decodable {
     let type: Int
     let beginShapeIndex: Int
     let roundaboutExitCount: Int?
+    /// Rue(s) empruntée(s) APRÈS cette manœuvre — sert uniquement à confirmer un demi-tour sur
+    /// la même route (it26 point 2). Vide si la route n'a pas de nom (fréquent en campagne).
+    let streetNames: [String]
 
     enum CodingKeys: String, CodingKey {
         case type
         case beginShapeIndex = "begin_shape_index"
         case roundaboutExitCount = "roundabout_exit_count"
+        case streetNames = "street_names"
     }
 
-    init(type: Int = ValhallaManeuverType.none.rawValue, beginShapeIndex: Int, roundaboutExitCount: Int? = nil) {
+    init(type: Int = ValhallaManeuverType.none.rawValue, beginShapeIndex: Int, roundaboutExitCount: Int? = nil, streetNames: [String] = []) {
         self.type = type
         self.beginShapeIndex = beginShapeIndex
         self.roundaboutExitCount = roundaboutExitCount
+        self.streetNames = streetNames
     }
 
     init(from decoder: Decoder) throws {
@@ -182,5 +198,6 @@ struct ValhallaManeuver: Decodable {
         type = try container.decodeIfPresent(Int.self, forKey: .type) ?? ValhallaManeuverType.none.rawValue
         beginShapeIndex = try container.decode(Int.self, forKey: .beginShapeIndex)
         roundaboutExitCount = try container.decodeIfPresent(Int.self, forKey: .roundaboutExitCount)
+        streetNames = try container.decodeIfPresent([String].self, forKey: .streetNames) ?? []
     }
 }

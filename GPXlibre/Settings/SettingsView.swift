@@ -64,9 +64,9 @@ struct SettingsView: View {
                             roadbookThresholdStepper("Léger dès", value: $settings.roadbookLightThresholdDegrees)
                             roadbookThresholdStepper("Prononcé dès", value: $settings.roadbookMarkedThresholdDegrees)
                             roadbookThresholdStepper("Fort dès", value: $settings.roadbookHardThresholdDegrees)
-                            roadbookThresholdStepper("Demi-tour dès", value: $settings.roadbookUTurnThresholdDegrees)
+                            roadbookThresholdStepper("Très serré dès", value: $settings.roadbookVeryHardThresholdDegrees)
                         } else {
-                            Text("Standard : léger 30° · prononcé 45° · fort 90° · demi-tour 135°")
+                            Text("Standard : léger 30° · prononcé 45° · fort 90° · très serré 135°. Demi-tour seulement si la trace repart sur la même route.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

@@ -20,11 +20,30 @@ enum NavigationConstants {
 
     /// < ce seuil : rien (tout droit, pas affiché).
     static let roadbookLightThresholdDegreesDefault: Double = 30
-    /// [light, marked[ = virage léger ; [marked, hard[ = virage prononcé ; [hard, uTurn[ =
-    /// virage fort ; ≥ uTurn = demi-tour.
+    /// [light, marked[ = virage léger ; [marked, hard[ = virage prononcé ; [hard, veryHard[ =
+    /// virage fort ; ≥ veryHard = virage très serré (avec son sens). Le demi-tour n'est PLUS un
+    /// palier d'angle (it26 point 2, voir `roadbookUTurn*` ci-dessous). Clé de réglage persistée
+    /// inchangée (`settings.roadbookUTurnThresholdDegrees`) : la valeur choisie avant it26 borne
+    /// désormais le palier "très serré".
     static let roadbookMarkedThresholdDegreesDefault: Double = 45
     static let roadbookHardThresholdDegreesDefault: Double = 90
-    static let roadbookUTurnThresholdDegreesDefault: Double = 135
+    static let roadbookVeryHardThresholdDegreesDefault: Double = 135
+
+    // MARK: - Demi-tour (it26 point 2, fix "roadbook-no-false-uturn")
+
+    /// Règle métier non négociable : un demi-tour = repartir en sens inverse sur la MÊME route
+    /// — en suivant une trace, ça ne doit quasiment jamais arriver. Repli géométrique : angle
+    /// cumulé au moins égal à ce seuil (degrés)...
+    static let roadbookUTurnMinDegrees: Double = 175
+    /// ...ET la trace repart sur son propre tracé : le point situé une fenêtre APRÈS le virage
+    /// passe à moins de cette distance (m) du tracé des mètres PRÉCÉDENTS. Vérifié sur les traces
+    /// réelles du propriétaire : les épingles/lacets repartent à 35-225 m de leur autre branche,
+    /// même avec un angle cumulé ≥ 175° — l'angle seul en laissait 5 sur un seul trajet de 110 km.
+    static let roadbookUTurnSamePathMaxMeters: Double = 12
+    /// Un demi-tour (géométrique OU Valhalla) dans les premiers/derniers mètres de la trace est
+    /// une manœuvre de stationnement (sortie de place, cour), pas une instruction de parcours :
+    /// ignoré. Seul demi-tour Valhalla du cache réel du propriétaire : à 20 m du départ.
+    static let roadbookUTurnEndpointGuardMeters: Double = 200
 
     // MARK: - Manœuvres route-aware (map matching Valhalla)
 

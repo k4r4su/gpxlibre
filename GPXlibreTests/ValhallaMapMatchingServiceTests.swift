@@ -113,6 +113,32 @@ final class ValhallaMapMatchingServiceTests: XCTestCase {
         XCTAssertTrue(ValhallaMapMatchingService.intermediateManeuvers(maneuvers: maneuvers, legCoordinates: coordinates).isEmpty)
     }
 
+    /// Fix "roadbook-no-false-uturn" (it26 point 2) : un demi-tour Valhalla n'est CONFIRMÉ que si
+    /// la rue d'après (`street_names` du demi-tour) est celle d'avant (`street_names` de la
+    /// manœuvre précédente). Rue différente ou sans nom (fréquent en campagne) : non confirmé.
+    func testUTurnIsConfirmedOnlyWhenTheStreetBeforeAndAfterIsTheSame() {
+        func uTurn(before: [String], after: [String]) -> MapMatchedManeuver? {
+            ValhallaMapMatchingService.intermediateManeuvers(maneuvers: [
+                ValhallaManeuver(type: ValhallaManeuverType.start.rawValue, beginShapeIndex: 0, streetNames: before),
+                ValhallaManeuver(type: ValhallaManeuverType.uturnLeft.rawValue, beginShapeIndex: 1, streetNames: after),
+                ValhallaManeuver(type: ValhallaManeuverType.destination.rawValue, beginShapeIndex: 3),
+            ], legCoordinates: coordinates).first
+        }
+
+        XCTAssertEqual(uTurn(before: ["D 83", "Route de Colmar"], after: ["D 83"])?.isSameRoadUTurn, true)
+        XCTAssertEqual(uTurn(before: ["D 83"], after: ["Rue du Moulin"])?.isSameRoadUTurn, false)
+        XCTAssertEqual(uTurn(before: [], after: [])?.isSameRoadUTurn, false)
+    }
+
+    func testStreetNamesAreDecodedFromTheValhallaManeuverJSON() throws {
+        let json = #"{"type":13,"begin_shape_index":2,"street_names":["D 83"]}"#
+        let maneuver = try JSONDecoder().decode(ValhallaManeuver.self, from: Data(json.utf8))
+        XCTAssertEqual(maneuver.streetNames, ["D 83"])
+
+        let unnamed = try JSONDecoder().decode(ValhallaManeuver.self, from: Data(#"{"type":13,"begin_shape_index":2}"#.utf8))
+        XCTAssertEqual(unnamed.streetNames, [])
+    }
+
     /// Fix "roadbook-maneuver-position-from-route" (it26 point 1) : chaque manœuvre porte sa
     /// progression le long de la route recalée ENTIÈRE — tronçons (`legs`) précédents inclus,
     /// jamais relative à son seul tronçon. Deux tronçons de ~3,3 km (points tous les ~1,1 km),

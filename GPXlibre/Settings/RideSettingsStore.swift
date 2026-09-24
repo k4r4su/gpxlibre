@@ -33,7 +33,7 @@ final class RideSettingsStore: ObservableObject {
         static let roadbookLightThresholdDegrees = "settings.roadbookLightThresholdDegrees"
         static let roadbookMarkedThresholdDegrees = "settings.roadbookMarkedThresholdDegrees"
         static let roadbookHardThresholdDegrees = "settings.roadbookHardThresholdDegrees"
-        static let roadbookUTurnThresholdDegrees = "settings.roadbookUTurnThresholdDegrees"
+        static let roadbookVeryHardThresholdDegrees = "settings.roadbookUTurnThresholdDegrees"
         static let defaultRideZoomCameraMeters = "settings.defaultRideZoomCameraMeters"
         static let autoZoomEnabled = "settings.autoZoomEnabled"
         static let autoZoomMinMeters = "settings.autoZoomMinMeters"
@@ -159,8 +159,8 @@ final class RideSettingsStore: ObservableObject {
     @Published var roadbookHardThresholdDegrees: Double {
         didSet { defaults.set(roadbookHardThresholdDegrees, forKey: Keys.roadbookHardThresholdDegrees) }
     }
-    @Published var roadbookUTurnThresholdDegrees: Double {
-        didSet { defaults.set(roadbookUTurnThresholdDegrees, forKey: Keys.roadbookUTurnThresholdDegrees) }
+    @Published var roadbookVeryHardThresholdDegrees: Double {
+        didSet { defaults.set(roadbookVeryHardThresholdDegrees, forKey: Keys.roadbookVeryHardThresholdDegrees) }
     }
 
     // MARK: - Road Book (spec "roadbook-mode", it23) — onglet dédié, DÉCOUPLÉ de l'état de
@@ -273,7 +273,7 @@ final class RideSettingsStore: ObservableObject {
         roadbookLightThresholdDegrees = NavigationConstants.roadbookLightThresholdDegreesDefault
         roadbookMarkedThresholdDegrees = NavigationConstants.roadbookMarkedThresholdDegreesDefault
         roadbookHardThresholdDegrees = NavigationConstants.roadbookHardThresholdDegreesDefault
-        roadbookUTurnThresholdDegrees = NavigationConstants.roadbookUTurnThresholdDegreesDefault
+        roadbookVeryHardThresholdDegrees = NavigationConstants.roadbookVeryHardThresholdDegreesDefault
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -369,8 +369,8 @@ final class RideSettingsStore: ObservableObject {
         roadbookMarkedThresholdDegrees = storedMarked ?? NavigationConstants.roadbookMarkedThresholdDegreesDefault
         let storedHard = defaults.object(forKey: Keys.roadbookHardThresholdDegrees) as? Double
         roadbookHardThresholdDegrees = storedHard ?? NavigationConstants.roadbookHardThresholdDegreesDefault
-        let storedUTurn = defaults.object(forKey: Keys.roadbookUTurnThresholdDegrees) as? Double
-        roadbookUTurnThresholdDegrees = storedUTurn ?? NavigationConstants.roadbookUTurnThresholdDegreesDefault
+        let storedUTurn = defaults.object(forKey: Keys.roadbookVeryHardThresholdDegrees) as? Double
+        roadbookVeryHardThresholdDegrees = storedUTurn ?? NavigationConstants.roadbookVeryHardThresholdDegreesDefault
 
         let zoomRange = RideConstants.defaultRideZoomRange
         let storedDefaultZoom = defaults.object(forKey: Keys.defaultRideZoomCameraMeters) as? Double

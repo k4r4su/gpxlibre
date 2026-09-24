@@ -248,7 +248,7 @@ enum RoadbookPDFExporter {
             drawForkPictogram(direction: checkpoint.direction, in: rect)
         case .merge:
             drawMergePictogram(direction: checkpoint.direction, in: rect)
-        case .light, .marked, .hard, .uTurn, .lightDirectionChange:
+        case .light, .marked, .hard, .veryHard, .uTurn, .lightDirectionChange:
             drawArrowPictogram(for: checkpoint, in: rect)
         }
     }

@@ -16,7 +16,7 @@ enum RoadbookAnalyzer {
     /// - Parameters:
     ///   - windowBeforeMeters/windowAfterMeters : ROADBOOK_WINDOW_BEFORE_M/AFTER_M — distance
     ///     sur laquelle le cap entrant/sortant de chaque point est mesuré.
-    ///   - lightThresholdDegrees...uTurnThresholdDegrees : paliers croissants (light < marked
+    ///   - lightThresholdDegrees...veryHardThresholdDegrees : paliers croissants (light < marked
     ///     < hard < uTurn) — un angle sous `lightThresholdDegrees` ne produit AUCUN événement.
     /// - Parameter mapMatchedManeuvers : manœuvres de changement de direction RETENUES (déjà
     ///   filtrées route-aware, voir `ValhallaManeuverType.roadbookTier`) issues du map matching
@@ -37,7 +37,7 @@ enum RoadbookAnalyzer {
         lightThresholdDegrees: Double,
         markedThresholdDegrees: Double,
         hardThresholdDegrees: Double,
-        uTurnThresholdDegrees: Double,
+        veryHardThresholdDegrees: Double,
         mergeMinDistanceMeters: Double,
         mapMatchedManeuvers: [MapMatchedManeuver] = []
     ) -> [Checkpoint] {
@@ -56,6 +56,7 @@ enum RoadbookAnalyzer {
         }
 
         var raw: [(coordinate: CLLocationCoordinate2D, angle: Double, direction: TurnDirection, tier: RoadbookTier, pointIndex: Int)] = []
+        let cumulativeDistances = TrackProjector.cumulativeDistances(for: points)
 
         for i in 1..<(points.count - 1) {
             guard let windowed = windowedTurn(
@@ -67,9 +68,19 @@ enum RoadbookAnalyzer {
             ) else { continue }
             guard windowed.absAngle >= lightThresholdDegrees else { continue }
 
+            // Fix "roadbook-no-false-uturn" (it26 point 2) : le demi-tour n'est plus un palier
+            // d'angle (≥ 135° avant, ce qui classait toute épingle en demi-tour) — il faut que la
+            // trace reparte réellement sur SON PROPRE tracé. Au départ/à l'arrivée, c'est une
+            // manœuvre de stationnement : ignorée.
+            let reversesOnSamePath = windowed.absAngle >= NavigationConstants.roadbookUTurnMinDegrees
+                && returnsOnSamePath(at: i, points: points, cumulativeDistances: cumulativeDistances, probeMeters: min(windowBeforeMeters, windowAfterMeters))
+            if reversesOnSamePath, isNearTrackEndpoint(cumulativeDistances[i], cumulativeDistances: cumulativeDistances) { continue }
+
             let tier: RoadbookTier
-            if windowed.absAngle >= uTurnThresholdDegrees {
+            if reversesOnSamePath {
                 tier = .uTurn
+            } else if windowed.absAngle >= veryHardThresholdDegrees {
+                tier = .veryHard
             } else if windowed.absAngle >= hardThresholdDegrees {
                 tier = .hard
             } else if windowed.absAngle >= markedThresholdDegrees {
@@ -83,7 +94,6 @@ enum RoadbookAnalyzer {
             raw.append((points[i].coordinate, windowed.absAngle, direction, tier, i))
         }
 
-        let cumulativeDistances = TrackProjector.cumulativeDistances(for: points)
         let geometricEvents = mergeNearby(raw, minDistanceMeters: mergeMinDistanceMeters, cumulativeDistances: cumulativeDistances)
         guard !mapMatchedManeuvers.isEmpty else { return geometricEvents }
 
@@ -139,7 +149,7 @@ enum RoadbookAnalyzer {
             // intermediateManeuvers`) — `roadbookTier` ne peut plus être `nil` ici, mais on reste
             // défensif plutôt que de force-unwrap une donnée qui a transité par un cache disque
             // (voir `RoadbookMapMatchCache`, format qui peut évoluer).
-            guard let tier = maneuver.type.roadbookTier else { continue }
+            guard var tier = maneuver.type.roadbookTier else { continue }
             guard let projection = placement(
                 of: maneuver,
                 points: points,
@@ -153,6 +163,19 @@ enum RoadbookAnalyzer {
             // même carrefour repassé au retour n'est pas un doublon de l'aller.
             let exactCumulative = projection.cumulativeDistanceMeters
             guard !combined.contains(where: { abs(($0.cumulativeDistanceMeters(using: cumulativeDistances) ?? .infinity) - exactCumulative) < mergeMinDistanceMeters }) else { continue }
+
+            // Fix "roadbook-no-false-uturn" (it26 point 2) : un demi-tour Valhalla au départ/à
+            // l'arrivée est une manœuvre de stationnement (le seul du cache réel du propriétaire
+            // était à 20 m du départ) — ignoré. Ailleurs, demi-tour seulement si la rue d'après
+            // est celle d'avant ; sinon virage très serré, du côté indiqué par Valhalla.
+            var direction = maneuver.type.roadbookDirection
+            if tier == .uTurn {
+                guard !isNearTrackEndpoint(exactCumulative, cumulativeDistances: cumulativeDistances) else { continue }
+                if !maneuver.isSameRoadUTurn {
+                    tier = .veryHard
+                    direction = maneuver.type == .uturnLeft ? .left : .right
+                }
+            }
 
             // Point GPX le plus proche SUR LE SEGMENT projeté — ne sert plus qu'au cap sortant
             // (`RoadbookExtractor`) et à l'angle affiché, jamais à la position/distance.
@@ -173,7 +196,7 @@ enum RoadbookAnalyzer {
             combined.append(Checkpoint(
                 coordinate: maneuver.coordinate,
                 turnAngleDegrees: windowed?.absAngle ?? 0,
-                direction: maneuver.type.roadbookDirection,
+                direction: direction,
                 tier: tier,
                 sequenceIndex: 0, // renuméroté ci-dessous une fois l'ordre final connu
                 sourcePointIndex: pointIndex,
@@ -239,6 +262,49 @@ enum RoadbookAnalyzer {
             return plausible[1]
         }
         return plausible.first
+    }
+
+    /// Vrai demi-tour géométrique : le point situé `probeMeters` APRÈS le virage passe à moins de
+    /// `roadbookUTurnSamePathMaxMeters` du tracé des `probeMeters` PRÉCÉDENTS — la trace repart
+    /// sur la même route. Une épingle/un lacet repart sur une AUTRE branche, plusieurs dizaines de
+    /// mètres plus loin, quel que soit son angle cumulé. Positions interpolées (jamais le point
+    /// GPX suivant, qui peut être à 300 m sur une trace peu dense). Pas assez de trace avant/après
+    /// pour vérifier : jamais un demi-tour.
+    private static func returnsOnSamePath(at i: Int, points: [GPXPoint], cumulativeDistances: [Double], probeMeters: Double) -> Bool {
+        let c = cumulativeDistances[i]
+        guard let probe = interpolatedCoordinate(atCumulativeDistance: c + probeMeters, points: points, cumulativeDistances: cumulativeDistances),
+              let approachStart = interpolatedCoordinate(atCumulativeDistance: c - probeMeters, points: points, cumulativeDistances: cumulativeDistances)
+        else { return false }
+
+        var approach = [GPXPoint(latitude: approachStart.latitude, longitude: approachStart.longitude)]
+        for k in 0...i where cumulativeDistances[k] > c - probeMeters {
+            approach.append(points[k])
+        }
+        guard approach.count > 1,
+              let projection = TrackProjector.project(probe, onto: approach, cumulativeDistances: TrackProjector.cumulativeDistances(for: approach))
+        else { return false }
+        return projection.distanceToTrackMeters <= NavigationConstants.roadbookUTurnSamePathMaxMeters
+    }
+
+    private static func interpolatedCoordinate(atCumulativeDistance target: Double, points: [GPXPoint], cumulativeDistances: [Double]) -> CLLocationCoordinate2D? {
+        guard let total = cumulativeDistances.last, target >= 0, target <= total,
+              let upper = cumulativeDistances.firstIndex(where: { $0 >= target })
+        else { return nil }
+        guard upper > 0 else { return points[0].coordinate }
+        let lower = upper - 1
+        let length = cumulativeDistances[upper] - cumulativeDistances[lower]
+        let t = length > 0 ? (target - cumulativeDistances[lower]) / length : 0
+        let a = points[lower].coordinate
+        let b = points[upper].coordinate
+        return CLLocationCoordinate2D(latitude: a.latitude + (b.latitude - a.latitude) * t, longitude: a.longitude + (b.longitude - a.longitude) * t)
+    }
+
+    /// Premiers/derniers `roadbookUTurnEndpointGuardMeters` de la trace — zone où un demi-tour
+    /// est une manœuvre de stationnement, pas une instruction de parcours.
+    private static func isNearTrackEndpoint(_ cumulative: Double, cumulativeDistances: [Double]) -> Bool {
+        let total = cumulativeDistances.last ?? 0
+        let guardMeters = NavigationConstants.roadbookUTurnEndpointGuardMeters
+        return cumulative < guardMeters || cumulative > total - guardMeters
     }
 
     /// Angle de virage sur fenêtre AVANT/APRÈS le point `i` (extrait de `buildRoadbookEvents`

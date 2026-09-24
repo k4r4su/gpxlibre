@@ -59,7 +59,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: mergeMinDistanceMeters,
             mapMatchedManeuvers: mapMatched.map { MapMatchedManeuver(coordinate: $0, type: type, roundaboutExitCount: nil) }
         )
@@ -77,7 +77,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: 150
         )
         let withEmptyParam = events(for: track, mapMatched: [])
@@ -151,7 +151,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: 150,
             mapMatchedManeuvers: [MapMatchedManeuver(coordinate: junction, type: .right, roundaboutExitCount: nil)]
         )
@@ -183,7 +183,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: 150,
             mapMatchedManeuvers: maneuvers
         )
@@ -344,7 +344,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: 150,
             mapMatchedManeuvers: [maneuver]
         )
@@ -369,15 +369,39 @@ final class RoadbookMapMatchingTests: XCTestCase {
         XCTAssertEqual(result.first?.tier, .merge)
     }
 
-    /// "Demi-tour : déjà existant (palier uTurn), à conserver tel quel" — un demi-tour détecté
-    /// par map matching réutilise le MÊME palier que la détection géométrique, jamais un
-    /// nouveau palier dédié.
-    func testUTurnManeuverReusesTheExistingUTurnTier() {
-        let track = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 20)
-        let result = events(for: track, mapMatched: [track.points[1].coordinate], type: .uturnLeft)
+    // MARK: - Demi-tour Valhalla (fix "roadbook-no-false-uturn", it26 point 2)
 
+    private func valhallaUTurn(_ type: ValhallaManeuverType, sameRoad: Bool, atMeters: Double = 500) -> [Checkpoint] {
+        let straight = track(segments: [(500, 0), (500, 0)])
+        let coordinate = destination(from: straight.points[0].coordinate, bearingDegrees: 0, distanceMeters: atMeters)
+        return buildEvents(straight, maneuvers: [MapMatchedManeuver(coordinate: coordinate, type: type, roundaboutExitCount: nil, isSameRoadUTurn: sameRoad)])
+    }
+
+    /// Test demandé par la fiche it26 : demi-tour SEULEMENT pour un type Valhalla demi-tour SUR
+    /// LA MÊME ROUTE (même nom de rue avant/après, voir `ValhallaMapMatchingService`).
+    func testValhallaUTurnOnTheSameRoadIsAUTurn() {
+        let result = valhallaUTurn(.uturnLeft, sameRoad: true)
         XCTAssertEqual(result.first?.tier, .uTurn)
         XCTAssertEqual(result.first?.direction, .uTurn)
+    }
+
+    /// Type demi-tour Valhalla sans même route confirmée (rue différente, ou sans nom) : virage
+    /// très serré, du côté indiqué par le type — jamais un demi-tour.
+    func testValhallaUTurnNotConfirmedOnTheSameRoadIsAVeryTightTurnOnItsSide() {
+        let left = valhallaUTurn(.uturnLeft, sameRoad: false)
+        XCTAssertEqual(left.first?.tier, .veryHard)
+        XCTAssertEqual(left.first?.direction, .left)
+
+        let right = valhallaUTurn(.uturnRight, sameRoad: false)
+        XCTAssertEqual(right.first?.tier, .veryHard)
+        XCTAssertEqual(right.first?.direction, .right)
+    }
+
+    /// Seul demi-tour Valhalla du cache réel du propriétaire : à 20 m du départ (sortie de
+    /// stationnement) — ignoré, même confirmé sur la même route.
+    func testValhallaUTurnRightAfterTheStartIsIgnoredAsAParkingManeuver() {
+        XCTAssertTrue(valhallaUTurn(.uturnRight, sameRoad: true, atMeters: 20).isEmpty)
+        XCTAssertTrue(valhallaUTurn(.uturnRight, sameRoad: false, atMeters: 20).isEmpty)
     }
 
     /// Un rond-point/une fourche/une fusion ne portent PAS de `roundaboutExitCount` en dehors du

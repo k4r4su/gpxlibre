@@ -41,7 +41,7 @@ final class RoadbookInflectionTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: mergeMinDistanceMeters
         )
     }
@@ -100,8 +100,68 @@ final class RoadbookInflectionTests: XCTestCase {
         let hardTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 100)
         XCTAssertEqual(events(for: hardTrack).first?.tier, .hard)
 
-        let uTurnTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 150)
-        XCTAssertEqual(events(for: uTurnTrack).first?.tier, .uTurn)
-        XCTAssertEqual(events(for: uTurnTrack).first?.direction, .uTurn)
+        // Avant it26, 150° donnait `.uTurn` : c'est précisément le faux demi-tour corrigé.
+        let veryHardTrack = curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 150)
+        XCTAssertEqual(events(for: veryHardTrack).first?.tier, .veryHard)
+        XCTAssertEqual(events(for: veryHardTrack).first?.direction, .right)
+    }
+
+    // MARK: - Demi-tour = même route en sens inverse (fix "roadbook-no-false-uturn", it26 point 2)
+
+    /// Trace à tours VARIABLES par segment (longueur, virage APRÈS le segment).
+    private func track(segments: [(length: Double, turnAfter: Double)]) -> GPXTrack {
+        var points = [GPXPoint(latitude: 45.0, longitude: 5.0)]
+        var bearing = 0.0
+        var coordinate = points[0].coordinate
+        for segment in segments {
+            coordinate = destination(from: coordinate, bearingDegrees: bearing, distanceMeters: segment.length)
+            points.append(GPXPoint(latitude: coordinate.latitude, longitude: coordinate.longitude))
+            bearing += segment.turnAfter
+        }
+        return GPXTrack(id: UUID(), name: "Segments", fileName: "segments.gpx", importDate: Date(), points: points, waypoints: [])
+    }
+
+    /// Test demandé par la fiche it26 : un virage de 160° est un changement de route, classé
+    /// "virage très serré" AVEC son sens — jamais demi-tour.
+    func testA160DegreeTurnIsAVeryTightTurnWithItsSideNeverAUTurn() {
+        let right = events(for: curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: 160))
+        XCTAssertEqual(right.first?.tier, .veryHard)
+        XCTAssertEqual(right.first?.direction, .right)
+        XCTAssertEqual(right.first?.tier.label, "Virage très serré")
+
+        let left = events(for: curvingTrack(segmentCount: 2, segmentLengthMeters: 100, segmentTurnDegrees: -160))
+        XCTAssertEqual(left.first?.tier, .veryHard)
+        XCTAssertEqual(left.first?.direction, .left)
+    }
+
+    /// Épingle/lacet : 180° cumulés sur la fenêtre (deux virages à 90° à 40 m d'écart), mais la
+    /// trace repart sur une AUTRE branche, 40 m à côté — même au-delà de 175°, ce n'est pas un
+    /// demi-tour. Cas réel : 5 lacets de ce type restaient "demi-tour" sur un seul trajet de
+    /// 110 km du propriétaire avec la seule règle d'angle.
+    func testAHairpinBeyond175DegreesThatLeavesOnAnotherBranchIsAVeryTightTurn() {
+        let hairpin = track(segments: [(300, 90), (40, 90), (300, 0)])
+        let result = events(for: hairpin)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertGreaterThanOrEqual(result.first?.turnAngleDegrees ?? 0, NavigationConstants.roadbookUTurnMinDegrees, "précondition : angle cumulé au-delà du seuil demi-tour")
+        XCTAssertEqual(result.first?.tier, .veryHard)
+        XCTAssertEqual(result.first?.direction, .right)
+    }
+
+    /// Vrai demi-tour : la trace repart EXACTEMENT sur son propre tracé.
+    func testAReversalOnTheSamePathIsAUTurn() {
+        let reversal = track(segments: [(400, 180), (400, 0)])
+        let result = events(for: reversal)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.tier, .uTurn)
+        XCTAssertEqual(result.first?.direction, .uTurn)
+    }
+
+    /// Demi-tour dans les premiers mètres (sortie de place, cour) : manœuvre de stationnement,
+    /// pas une instruction de parcours — ignoré.
+    func testAReversalRightAfterTheStartIsIgnoredAsAParkingManeuver() {
+        let parking = track(segments: [(100, 180), (400, 0)])
+        XCTAssertFalse(events(for: parking).contains { $0.tier == .uTurn })
     }
 }

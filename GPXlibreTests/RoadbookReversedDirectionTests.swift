@@ -51,7 +51,7 @@ final class RoadbookReversedDirectionTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault
         )
     }

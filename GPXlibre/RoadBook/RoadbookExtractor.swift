@@ -31,7 +31,7 @@ enum RoadbookExtractor {
         lightThresholdDegrees: Double,
         markedThresholdDegrees: Double,
         hardThresholdDegrees: Double,
-        uTurnThresholdDegrees: Double,
+        veryHardThresholdDegrees: Double,
         mergeMinDistanceMeters: Double,
         mapMatchedManeuvers: [MapMatchedManeuver] = []
     ) -> [RoadbookManeuver] {
@@ -42,7 +42,7 @@ enum RoadbookExtractor {
             lightThresholdDegrees: lightThresholdDegrees,
             markedThresholdDegrees: markedThresholdDegrees,
             hardThresholdDegrees: hardThresholdDegrees,
-            uTurnThresholdDegrees: uTurnThresholdDegrees,
+            veryHardThresholdDegrees: veryHardThresholdDegrees,
             mergeMinDistanceMeters: mergeMinDistanceMeters,
             mapMatchedManeuvers: mapMatchedManeuvers
         )

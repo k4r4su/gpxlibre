@@ -41,7 +41,7 @@ final class RoadbookExtractorTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault
         )
     }
@@ -170,7 +170,7 @@ final class RoadbookExtractorTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault,
             mapMatchedManeuvers: [matched]
         )
@@ -190,7 +190,7 @@ final class RoadbookExtractorTests: XCTestCase {
             lightThresholdDegrees: NavigationConstants.roadbookLightThresholdDegreesDefault,
             markedThresholdDegrees: NavigationConstants.roadbookMarkedThresholdDegreesDefault,
             hardThresholdDegrees: NavigationConstants.roadbookHardThresholdDegreesDefault,
-            uTurnThresholdDegrees: NavigationConstants.roadbookUTurnThresholdDegreesDefault,
+            veryHardThresholdDegrees: NavigationConstants.roadbookVeryHardThresholdDegreesDefault,
             mergeMinDistanceMeters: RideConstants.turnMergeMinDistanceMetersDefault,
             mapMatchedManeuvers: []
         )

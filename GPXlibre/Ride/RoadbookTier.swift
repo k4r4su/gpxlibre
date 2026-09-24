@@ -7,9 +7,12 @@ import Foundation
 /// - 30-44° : `.light` — virage léger
 /// - 45-89° : `.marked` — virage prononcé
 /// - 90-134° : `.hard` — virage fort
-/// - ≥ 135° : `.uTurn` — demi-tour
+/// - ≥ 135° : `.veryHard` — virage très serré, AVEC son sens (épingle, lacet : un changement de
+///   route, pas un demi-tour — it26 point 2, fix "roadbook-no-false-uturn")
+/// - `.uTurn` — demi-tour : PLUS un palier d'angle, seulement si la trace repart sur la MÊME
+///   route (voir `NavigationConstants.roadbookUTurn*`), ou demi-tour Valhalla sur la même rue
 enum RoadbookTier: Equatable {
-    case light, marked, hard, uTurn
+    case light, marked, hard, veryHard, uTurn
 
     /// Détecté via MAP MATCHING Valhalla (spec "valhalla-map-matching-direction-change", it20),
     /// PAS par l'angle géométrique de la trace (qui reste sous `lightThresholdDegrees` par
@@ -55,7 +58,7 @@ enum RoadbookTier: Equatable {
     /// Angle de rotation représentatif (degrés, non signé) — PAS l'angle géométrique réel mesuré
     /// sur la trace (trop bruité pour un pictogramme stable, voir `RoadbookAnalyzer`), un palier
     /// de sévérité standardisé, esprit pictogramme roadbook papier (une poignée de formes
-    /// reconnaissables, pas un curseur continu). Toujours < 180° pour les 3 premiers paliers —
+    /// reconnaissables, pas un curseur continu). Toujours < 180° pour les 4 paliers d'angle —
     /// ne doit JAMAIS s'approcher de 180° (se lirait comme un demi-tour) sauf pour `.uTurn`
     /// lui-même.
     private var baseRotationDegrees: Double {
@@ -63,6 +66,7 @@ enum RoadbookTier: Equatable {
         case .light: return 30
         case .marked: return 65
         case .hard: return 105
+        case .veryHard: return 140
         case .uTurn: return 180
         case .lightDirectionChange, .roundabout, .fork, .merge: return 0
         }
@@ -78,7 +82,7 @@ enum RoadbookTier: Equatable {
         switch self {
         case .uTurn: return 180
         case .lightDirectionChange, .roundabout, .fork, .merge: return nil
-        case .light, .marked, .hard: return direction == .left ? -baseRotationDegrees : baseRotationDegrees
+        case .light, .marked, .hard, .veryHard: return direction == .left ? -baseRotationDegrees : baseRotationDegrees
         }
     }
 
@@ -97,7 +101,7 @@ enum RoadbookTier: Equatable {
             return "arrow.triangle.branch"
         case .merge:
             return "arrow.merge"
-        case .light, .marked, .hard, .uTurn:
+        case .light, .marked, .hard, .veryHard, .uTurn:
             return Self.baseSystemImageName
         }
     }
@@ -107,6 +111,7 @@ enum RoadbookTier: Equatable {
         case .light: return "Virage léger"
         case .marked: return "Virage prononcé"
         case .hard: return "Virage fort"
+        case .veryHard: return "Virage très serré"
         case .uTurn: return "Demi-tour"
         case .lightDirectionChange: return "Changement de direction"
         case .roundabout: return "Rond-point"
