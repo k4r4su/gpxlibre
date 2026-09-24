@@ -489,3 +489,30 @@ suspendu sans minuteur ; la passe qui saute ne recentre jamais ; +/- zoome autou
 "Me recentrer" (visible pendant tout le mode) appelle `AppNavigationState.endRoadBookFocus()` +
 `recenterCamera()` — seule sortie. Le changement d'onglet ne force jamais la caméra (seuls +/-
 et "Me recentrer" changent `cameraCommandToken`), vérifié.
+
+## Itération corrective — fiabilité des checkpoints (angle par cordes)
+
+Retour terrain : "Virage fort" (-90°, 0°) là où la trace va tout droit. Diagnostic sur traces
+réelles (dump par checkpoint) : TOUS venaient de la détection géométrique — l'angle était la
+SOMME des écarts de cap segment par segment, fenêtre comptée en segments ENTIERS (≥ 2 de chaque
+côté, donc des centaines de mètres sur une trace peu dense) et segments de 0 m (points GPX
+dupliqués, cap fictif 0°) injectant ±90°. Les "0°/-89°" affichés étaient le CAP du segment
+suivant. 316 checkpoints sur 436 avaient un changement de cap réel < 25°.
+
+Règle produit : pas de vrai changement de direction = pas de checkpoint. Désormais :
+- `RoadbookAnalyzer.headingChange` : cap MOYEN avant (corde interpolée) vs cap moyen après —
+  SEULE mesure d'angle, pour la géométrie ET les manœuvres Valhalla (au vrai carrefour). Ne
+  jamais réintroduire une somme d'écarts segment par segment.
+- `TierThresholds` : seul endroit où un angle devient un libellé ; sous
+  `roadbookLightThresholdDegreesDefault` (25°, seuil minimal) jamais de "virage".
+- Valhalla : rond-point, fourche, bretelle/sortie, demi-tour gardés ; un virage seulement si la
+  trace tourne ≥ seuil minimal, ou si la route change de nom (`MapMatchedManeuver.
+  changesRoadName`, noms avant/après désormais conservés) avec ≥ `roadbookRoadChangeMinTurnDegrees`
+  (10°) → "Changement de direction". Libellé et sens toujours issus de la trace.
+- Grappes (`roadbookTurnClusterMeters`, 50 m) : un checkpoint au sommet le plus marqué, portant
+  le virage NET (approche → sortie ; > 180° géré) ; net sous le seuil = zigzag, ignoré.
+- Cap affiché : `RoadbookAnalyzer.outgoingHeading` (cap moyen après, 0-360°).
+- Fenêtres par défaut 40 m (Réglages > Roadbook, plage 30-80 m).
+- Dump de debug : `RoadbookDebugDump` (build DEBUG, `Logger` catégorie "roadbook").
+Tests : `RoadbookCheckpointReliabilityTests` (dont réplique synthétique de la trace du retour
+terrain).

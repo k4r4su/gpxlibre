@@ -1,5 +1,20 @@
 # TODO
 
+## Itération corrective — fiabilité des checkpoints du Road Book
+
+Commits `roadbook-turn-angle-from-heading-chords` et `roadbook-valhalla-road-change-and-debug-dump`
+(détail : Ride/CLAUDE.md, dernière section). Checklist manuelle (même trace
+"wahlbach-moulin-bas-test-gpx", sens inversé comme sur l'iPhone) :
+- [ ] Vers 20,5 km : UN seul checkpoint, "Virage fort" à gauche, cap ~270° (plus de 0°).
+- [ ] Vers 20,8 km : plus aucun checkpoint (ligne droite).
+- [ ] Croisements de chemins forestiers/sentiers où la trace va tout droit : aucun checkpoint.
+- [ ] Rond-points et vraies fourches toujours présents.
+- [ ] Nombre de checkpoints nettement réduit (301 au lieu de 436 sur les 12 traces de l'iPhone).
+- [ ] Premier affichage d'une trace : le cache Valhalla est recalculé (format changé), les
+      manœuvres route-aware réapparaissent après quelques secondes.
+- [ ] Réglages > Roadbook : la fenêtre "après" est encore à 60 m sur l'iPhone (valeur enregistrée
+      avant) — revenir à "Seuils standard"/40 m si les virages paraissent décalés.
+
 ## Itération 26 (précision du Road Book, checkpoints villages, saut carte) — v0.0.26
 
 Commits : `mapmatch-cache-direction-aware` (trouvé en route : types Valhalla gauche/droite
