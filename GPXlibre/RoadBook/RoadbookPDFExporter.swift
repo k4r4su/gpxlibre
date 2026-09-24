@@ -61,7 +61,16 @@ enum RoadbookPDFExporter {
         return ColumnLayout(partial: rects["partial"] ?? .zero, cumulative: rects["cumulative"], heading: rects["heading"] ?? .zero, note: rects["note"])
     }
 
-    static func generate(trackName: String, maneuvers: [RoadbookManeuver], options: RoadbookPDFOptions, landmarks: [UUID: RoadbookLandmarkInfo?] = [:]) -> Data {
+    /// - Parameter localities : checkpoints d'entrée de commune (spec "roadbook-locality-
+    ///   checkpoints", it26 point 3), intercalés dans l'ordre de progression — une ligne dédiée
+    ///   (panneau d'entrée d'agglomération portant le nom de la commune + distance cumulée).
+    static func generate(
+        trackName: String,
+        maneuvers: [RoadbookManeuver],
+        localities: [RoadbookLocalityCheckpoint] = [],
+        options: RoadbookPDFOptions,
+        landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
+    ) -> Data {
         let pageSize = options.orientation == .portrait
             ? CGSize(width: RoadBookConstants.pdfPageWidthPoints, height: RoadBookConstants.pdfPageHeightPoints)
             : CGSize(width: RoadBookConstants.pdfPageHeightPoints, height: RoadBookConstants.pdfPageWidthPoints)
@@ -79,15 +88,16 @@ enum RoadbookPDFExporter {
 
         // Trace vide/sans manœuvre détectée : une seule page, message explicite plutôt qu'une
         // page blanche muette — jamais un crash (spec, tests attendus).
-        let pages: [[RoadbookManeuver]] = maneuvers.isEmpty
+        let entries = RoadbookEntry.merge(maneuvers: maneuvers, localities: localities)
+        let pages: [[RoadbookEntry]] = maneuvers.isEmpty
             ? [[]]
-            : stride(from: 0, to: maneuvers.count, by: rowsPerPage).map {
-                Array(maneuvers[$0..<min($0 + rowsPerPage, maneuvers.count)])
+            : stride(from: 0, to: entries.count, by: rowsPerPage).map {
+                Array(entries[$0..<min($0 + rowsPerPage, entries.count)])
             }
 
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
         return renderer.pdfData { context in
-            for (pageIndex, pageManeuvers) in pages.enumerated() {
+            for (pageIndex, pageEntries) in pages.enumerated() {
                 context.beginPage()
                 drawHeader(
                     trackName: trackName,
@@ -102,11 +112,16 @@ enum RoadbookPDFExporter {
                 }
                 let layout = columnLayout(options: options, contentRect: CGRect(x: contentRect.minX, y: contentRect.minY, width: contentRect.width, height: rowHeight))
                 drawColumnTitles(layout: layout, options: options, fontSize: options.fontSize.points)
-                for (rowIndex, maneuver) in pageManeuvers.enumerated() {
+                for (rowIndex, entry) in pageEntries.enumerated() {
                     let rowY = contentRect.minY + rowHeight * CGFloat(rowIndex + 1) // +1 : ligne 0 = titres de colonnes
                     let rowRect = CGRect(x: contentRect.minX, y: rowY, width: contentRect.width, height: rowHeight)
                     let rowLayout = columnLayout(options: options, contentRect: rowRect)
-                    drawRow(maneuver, layout: rowLayout, options: options, landmark: landmarks[maneuver.id] ?? nil)
+                    switch entry {
+                    case .maneuver(let maneuver, _):
+                        drawRow(maneuver, layout: rowLayout, options: options, landmark: landmarks[maneuver.id] ?? nil)
+                    case .locality(let locality):
+                        drawLocalityRow(locality, layout: rowLayout, options: options)
+                    }
                 }
             }
         }
@@ -220,6 +235,39 @@ enum RoadbookPDFExporter {
             path.lineWidth = 0.5
             path.stroke()
         }
+
+        let separatorPath = UIBezierPath()
+        separatorPath.move(to: CGPoint(x: layout.partial.minX, y: layout.partial.maxY))
+        separatorPath.addLine(to: CGPoint(x: (layout.note ?? layout.heading).maxX, y: layout.partial.maxY))
+        UIColor(white: 0.85, alpha: 1).setStroke()
+        separatorPath.lineWidth = 0.5
+        separatorPath.stroke()
+    }
+
+    /// Ligne "entrée de commune" : distance cumulée (colonne cumulée si affichée, sinon colonne
+    /// partielle — c'est l'info qu'on vérifie sur son compteur) et, dans la colonne cap, un
+    /// panneau d'entrée d'agglomération (fond blanc, bordure rouge) portant le nom de la commune,
+    /// comme le vrai panneau — reste lisible imprimé en niveaux de gris (bordure foncée).
+    private static func drawLocalityRow(_ locality: RoadbookLocalityCheckpoint, layout: ColumnLayout, options: RoadbookPDFOptions) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: options.fontSize.points),
+            .foregroundColor: UIColor.black,
+        ]
+        let distance = options.distanceUnit.displayString(fromMeters: locality.cumulativeDistanceMeters)
+        draw(distance, in: layout.cumulative ?? layout.partial, attributes: attributes, alignment: .center)
+
+        let signArea = layout.note.map { layout.heading.union($0) } ?? layout.heading
+        let sign = signArea.insetBy(dx: 4, dy: signArea.height * 0.14)
+        let path = UIBezierPath(roundedRect: sign, cornerRadius: min(sign.height * 0.18, 4))
+        UIColor.white.setFill()
+        path.fill()
+        UIColor(red: 0.85, green: 0.1, blue: 0.1, alpha: 1).setStroke()
+        path.lineWidth = 1.6
+        path.stroke()
+
+        var nameAttributes = attributes
+        nameAttributes[.font] = UIFont.boldSystemFont(ofSize: min(options.fontSize.points, sign.height * 0.55))
+        draw(locality.name, in: sign.insetBy(dx: 6, dy: 0), attributes: nameAttributes, alignment: .center)
 
         let separatorPath = UIBezierPath()
         separatorPath.move(to: CGPoint(x: layout.partial.minX, y: layout.partial.maxY))

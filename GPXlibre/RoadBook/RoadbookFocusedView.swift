@@ -17,8 +17,13 @@ import SwiftUI
 /// gauche, distance à droite) plutôt que le portrait simplement compressé.
 struct RoadbookFocusedView: View {
     let maneuvers: [RoadbookManeuver]
+    /// Checkpoints d'entrée de commune (it26 point 3) — intercalés dans la liste des étapes À
+    /// VENIR, jamais dans la carte hero (qui reste le prochain changement de direction).
+    let localities: [RoadbookLocalityCheckpoint]
     let currentIndex: Int?
     let distanceRemainingMeters: Double?
+    /// Position actuelle projetée sur la trace — distance "dans combien" des checkpoints.
+    let currentCumulativeDistanceMeters: Double?
     let unit: DistanceUnit
     /// Distingue "pas encore de position GPS" de "trace terminée" (les deux se traduisent par
     /// `currentIndex == nil`, mais méritent un message différent — jamais le même écran vide
@@ -40,17 +45,41 @@ struct RoadbookFocusedView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
-    /// TOUTES les manœuvres restantes (it25, point 1 — plus de `.prefix(2)`) — distance
-    /// recalculée DEPUIS LA POSITION ACTUELLE (pas depuis la manœuvre courante), pour rester une
-    /// vraie distance "dans combien" plutôt qu'un simple report de `partialDistanceMeters`.
-    private var upcoming: [(maneuver: RoadbookManeuver, distanceFromNowMeters: Double)] {
+    private enum UpcomingStep: Identifiable {
+        case maneuver(RoadbookManeuver, rank: Int, distanceFromNowMeters: Double)
+        case locality(RoadbookLocalityCheckpoint, distanceFromNowMeters: Double)
+
+        var id: String {
+            switch self {
+            case .maneuver(let maneuver, _, _): return "maneuver-\(maneuver.id.uuidString)"
+            case .locality(let locality, _): return locality.id
+            }
+        }
+
+        var distanceFromNowMeters: Double {
+            switch self {
+            case .maneuver(_, _, let distance), .locality(_, let distance): return distance
+            }
+        }
+    }
+
+    /// TOUTES les étapes restantes (it25, point 1 — plus de `.prefix(2)`), manœuvres et
+    /// checkpoints de commune (it26 point 3) mêlés par distance — distance recalculée DEPUIS LA
+    /// POSITION ACTUELLE, une vraie distance "dans combien" plutôt qu'un simple report de
+    /// `partialDistanceMeters`.
+    private var upcoming: [UpcomingStep] {
         guard let currentIndex, let distanceRemainingMeters,
               maneuvers.indices.contains(currentIndex)
         else { return [] }
         let currentCumulative = maneuvers[currentIndex].cumulativeDistanceMeters
-        return maneuvers[(currentIndex + 1)...].map { maneuver in
-            (maneuver, maneuver.cumulativeDistanceMeters - currentCumulative + distanceRemainingMeters)
+        let upcomingManeuvers = maneuvers[(currentIndex + 1)...].enumerated().map { offset, maneuver in
+            UpcomingStep.maneuver(maneuver, rank: offset + 2, distanceFromNowMeters: maneuver.cumulativeDistanceMeters - currentCumulative + distanceRemainingMeters)
         }
+        let position = currentCumulativeDistanceMeters ?? (currentCumulative - distanceRemainingMeters)
+        let upcomingLocalities = localities
+            .filter { $0.cumulativeDistanceMeters > position }
+            .map { UpcomingStep.locality($0, distanceFromNowMeters: $0.cumulativeDistanceMeters - position) }
+        return (upcomingManeuvers + upcomingLocalities).sorted { $0.distanceFromNowMeters < $1.distanceFromNowMeters }
     }
 
     var body: some View {
@@ -64,14 +93,19 @@ struct RoadbookFocusedView: View {
                     Divider()
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(upcoming.enumerated()), id: \.element.maneuver.id) { offset, entry in
-                                RoadbookUpcomingRow(
-                                    maneuver: entry.maneuver,
-                                    distanceFromNowMeters: entry.distanceFromNowMeters,
-                                    unit: unit,
-                                    rank: offset + 2,
-                                    landmark: landmarks[entry.maneuver.id] ?? nil
-                                )
+                            ForEach(upcoming) { step in
+                                switch step {
+                                case .maneuver(let maneuver, let rank, let distance):
+                                    RoadbookUpcomingRow(
+                                        maneuver: maneuver,
+                                        distanceFromNowMeters: distance,
+                                        unit: unit,
+                                        rank: rank,
+                                        landmark: landmarks[maneuver.id] ?? nil
+                                    )
+                                case .locality(let locality, let distance):
+                                    RoadbookUpcomingLocalityRow(locality: locality, distanceFromNowMeters: distance, unit: unit)
+                                }
                                 Divider().padding(.leading, 16)
                             }
                         }
@@ -302,6 +336,44 @@ private struct RoadbookUpcomingRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+}
+
+/// Checkpoint d'entrée de commune dans la liste des étapes à venir (it26 point 3) — panneau
+/// d'entrée d'agglomération + nom, fond teinté : jamais confondu avec un virage.
+private struct RoadbookUpcomingLocalityRow: View {
+    let locality: RoadbookLocalityCheckpoint
+    let distanceFromNowMeters: Double
+    let unit: DistanceUnit
+
+    @EnvironmentObject private var navigationState: AppNavigationState
+
+    var body: some View {
+        Button {
+            navigationState.focusRideMap(on: locality.coordinate)
+        } label: {
+            HStack(spacing: 16) {
+                Color.clear.frame(width: 28, height: 1)
+                RoadbookLocalitySignIcon(size: 22)
+                    .frame(width: 60)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(locality.name)
+                        .font(.subheadline.bold())
+                        .lineLimit(1)
+                    Text("Entrée de commune")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(unit.displayString(fromMeters: distanceFromNowMeters))
+                    .font(.headline.monospacedDigit())
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.red.opacity(0.06))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Entrée de commune : \(locality.name), dans \(unit.displayString(fromMeters: distanceFromNowMeters))")
     }
 }
 

@@ -226,3 +226,24 @@ struct RoadbookMergePictogram: View {
         }
     }
 }
+
+/// Pictogramme des checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", it26
+/// point 3) — panneau d'entrée d'agglomération (fond blanc, bordure rouge), volontairement
+/// DISTINCT de toute flèche : un checkpoint n'est jamais un changement de direction.
+struct RoadbookLocalitySignIcon: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.12, style: .continuous)
+                .fill(Color.white)
+            RoundedRectangle(cornerRadius: size * 0.12, style: .continuous)
+                .strokeBorder(Color(red: 0.85, green: 0.1, blue: 0.1), lineWidth: max(size * 0.1, 1.5))
+            Image(systemName: "building.2.fill")
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(Color.black)
+        }
+        .frame(width: size * 1.4, height: size)
+        .accessibilityHidden(true)
+    }
+}

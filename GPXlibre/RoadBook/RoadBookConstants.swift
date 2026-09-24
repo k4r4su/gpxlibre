@@ -57,6 +57,37 @@ enum RoadBookConstants {
     /// même si d'autres tags (commerces, etc.) matchent aussi au même endroit.
     static let landmarkResultLimit = 30
 
+    // MARK: - Checkpoints d'entrée de commune (spec "roadbook-locality-checkpoints", it26 point 3)
+
+    /// Niveau administratif des communes dans OSM (`boundary=administrative`) — 8 en France
+    /// (et chez les voisins frontaliers : Gemeinde allemande, commune suisse).
+    static let localityAdminLevel = 8
+    /// La trace est échantillonnée tous les N m (au moins) pour la requête Overpass
+    /// `around:` — et ce même N sert de rayon, pour que la corde entre deux échantillons ne
+    /// sorte jamais de la zone interrogée. Plafonné en nombre de points pour une trace longue.
+    static let localityQuerySampleSpacingMeters: Double = 250
+    static let localityQueryMaxPolylinePoints = 600
+    /// Requête lourde (géométrie complète des communes) mais UNE seule par trace et par sens.
+    static let localityRequestTimeoutSeconds: Double = 90
+    /// L'instance Overpass publique renvoie par intermittence 429/504 (deux 504 d'affilée constatés
+    /// sur simulateur pendant le développement) : nouveaux essais après ces pauses croissantes, puis
+    /// abandon propre (rien en cache, nouvel essai à la prochaine ouverture).
+    static let localityRetryDelaysSeconds: [Double] = [5, 15]
+    /// Trace qui longe une limite (route qui SUIT la limite, GPS qui oscille de part et d'autre)
+    /// ou coupe un coin de commune : un passage plus court que ça dans une commune n'est pas une
+    /// entrée (ni le retour qui s'ensuit). 150 m laissait encore des entrées à 100 m d'écart sur
+    /// une trace réelle de 110 km du propriétaire.
+    static let localityMinStayMeters: Double = 300
+    /// Distance minimale entre deux checkpoints de la MÊME commune — une ré-entrée plus proche
+    /// que ça de la précédente est ignorée (trace qui sort et rentre aussitôt).
+    static let localityReentryMinDistanceMeters: Double = 2000
+    /// Repli "panneaux d'entrée d'agglomération" (`traffic_sign=city_limit`) : panneau retenu
+    /// s'il est à moins de cette distance de la trace.
+    static let localitySignMaxOffTrackMeters: Double = 40
+    /// Repli "lieux" (`place=village/town/city`) : lieu retenu s'il est à moins de cette
+    /// distance de la trace — un nœud `place` est au centre du village, pas sur la route.
+    static let localityPlaceMaxOffTrackMeters: Double = 800
+
     // MARK: - Export PDF
 
     /// A4 à 72 dpi (unité native PDFKit/UIGraphicsPDFRenderer, indépendante de l'orientation —

@@ -272,8 +272,8 @@ enum RoadbookAnalyzer {
     /// pour vérifier : jamais un demi-tour.
     private static func returnsOnSamePath(at i: Int, points: [GPXPoint], cumulativeDistances: [Double], probeMeters: Double) -> Bool {
         let c = cumulativeDistances[i]
-        guard let probe = interpolatedCoordinate(atCumulativeDistance: c + probeMeters, points: points, cumulativeDistances: cumulativeDistances),
-              let approachStart = interpolatedCoordinate(atCumulativeDistance: c - probeMeters, points: points, cumulativeDistances: cumulativeDistances)
+        guard let probe = TrackProjector.interpolatedCoordinate(atCumulativeDistance: c + probeMeters, points: points, cumulativeDistances: cumulativeDistances),
+              let approachStart = TrackProjector.interpolatedCoordinate(atCumulativeDistance: c - probeMeters, points: points, cumulativeDistances: cumulativeDistances)
         else { return false }
 
         var approach = [GPXPoint(latitude: approachStart.latitude, longitude: approachStart.longitude)]
@@ -284,19 +284,6 @@ enum RoadbookAnalyzer {
               let projection = TrackProjector.project(probe, onto: approach, cumulativeDistances: TrackProjector.cumulativeDistances(for: approach))
         else { return false }
         return projection.distanceToTrackMeters <= NavigationConstants.roadbookUTurnSamePathMaxMeters
-    }
-
-    private static func interpolatedCoordinate(atCumulativeDistance target: Double, points: [GPXPoint], cumulativeDistances: [Double]) -> CLLocationCoordinate2D? {
-        guard let total = cumulativeDistances.last, target >= 0, target <= total,
-              let upper = cumulativeDistances.firstIndex(where: { $0 >= target })
-        else { return nil }
-        guard upper > 0 else { return points[0].coordinate }
-        let lower = upper - 1
-        let length = cumulativeDistances[upper] - cumulativeDistances[lower]
-        let t = length > 0 ? (target - cumulativeDistances[lower]) / length : 0
-        let a = points[lower].coordinate
-        let b = points[upper].coordinate
-        return CLLocationCoordinate2D(latitude: a.latitude + (b.latitude - a.latitude) * t, longitude: a.longitude + (b.longitude - a.longitude) * t)
     }
 
     /// Premiers/derniers `roadbookUTurnEndpointGuardMeters` de la trace — zone où un demi-tour

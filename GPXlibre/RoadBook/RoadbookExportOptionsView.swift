@@ -7,6 +7,8 @@ import SwiftUI
 struct RoadbookExportOptionsView: View {
     let trackName: String
     let maneuvers: [RoadbookManeuver]
+    /// Checkpoints d'entrée de commune (it26 point 3) — même liste que l'écran.
+    var localities: [RoadbookLocalityCheckpoint] = []
     @Binding var options: RoadbookPDFOptions
     var landmarks: [UUID: RoadbookLandmarkInfo?] = [:]
 
@@ -72,7 +74,7 @@ struct RoadbookExportOptionsView: View {
     }
 
     private func generate() {
-        let data = RoadbookPDFExporter.generate(trackName: trackName, maneuvers: maneuvers, options: options, landmarks: landmarks)
+        let data = RoadbookPDFExporter.generate(trackName: trackName, maneuvers: maneuvers, localities: localities, options: options, landmarks: landmarks)
         let sanitizedName = trackName
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .joined(separator: "_")

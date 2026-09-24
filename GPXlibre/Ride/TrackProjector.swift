@@ -137,6 +137,34 @@ enum TrackProjector {
         return (points[bestIndex].coordinate, cumulativeDistances[bestIndex])
     }
 
+    /// Position INTERPOLÉE sur la trace à une distance cumulée donnée (contrairement à
+    /// `coordinate(in:...)` ci-dessous, qui renvoie le point GPX suivant). `nil` hors de la trace.
+    static func interpolatedCoordinate(
+        atCumulativeDistance target: Double,
+        points: [GPXPoint],
+        cumulativeDistances: [Double]
+    ) -> CLLocationCoordinate2D? {
+        guard points.count == cumulativeDistances.count, let total = cumulativeDistances.last,
+              target >= 0, target <= total
+        else { return nil }
+        // Premier index dont la distance cumulée atteint `target` (dichotomie : appelée des
+        // milliers de fois par trace, voir `RoadbookLocalityDetector`).
+        var low = 0
+        var high = cumulativeDistances.count - 1
+        while low < high {
+            let mid = (low + high) / 2
+            if cumulativeDistances[mid] < target { low = mid + 1 } else { high = mid }
+        }
+        let upper = low
+        guard upper > 0 else { return points[0].coordinate }
+        let lower = upper - 1
+        let length = cumulativeDistances[upper] - cumulativeDistances[lower]
+        let t = length > 0 ? (target - cumulativeDistances[lower]) / length : 0
+        let a = points[lower].coordinate
+        let b = points[upper].coordinate
+        return CLLocationCoordinate2D(latitude: a.latitude + (b.latitude - a.latitude) * t, longitude: a.longitude + (b.longitude - a.longitude) * t)
+    }
+
     static func coordinate(
         in points: [GPXPoint],
         cumulativeDistances: [Double],
