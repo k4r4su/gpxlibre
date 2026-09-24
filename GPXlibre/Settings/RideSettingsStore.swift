@@ -45,11 +45,7 @@ final class RideSettingsStore: ObservableObject {
         static let recordingDensityPreset = "settings.recordingDensityPreset"
         static let unsavedRideRetentionLimit = "settings.unsavedRideRetentionLimit"
         static let roadbookReadingMode = "settings.roadbookReadingMode"
-        static let roadbookMiniMapEnabled = "settings.roadbookMiniMapEnabled"
         static let roadbookPDFOptions = "settings.roadbookPDFOptionsJSON"
-        static let roadbookMiniMapSpanMeters = "settings.roadbookMiniMapSpanMeters"
-        static let roadbookMiniMapPositionXFraction = "settings.roadbookMiniMapPositionXFraction"
-        static let roadbookMiniMapPositionYFraction = "settings.roadbookMiniMapPositionYFraction"
         static let roadbookPaletteSetting = "settings.roadbookPaletteSetting"
     }
 
@@ -166,13 +162,10 @@ final class RideSettingsStore: ObservableObject {
     // MARK: - Road Book (spec "roadbook-mode", it23) — onglet dédié, DÉCOUPLÉ de l'état de
     // Ride actif (voir RoadBook/CLAUDE.md). Réutilise les seuils/fenêtre roadbook ci-dessus
     // (aucun nouveau réglage de DÉTECTION, demande explicite de la fiche) — seuls le mode de
-    // lecture, la mini-carte et les options d'export PDF sont propres à cet onglet.
+    // lecture, les repères affichés et les options d'export PDF sont propres à cet onglet.
 
     @Published var roadbookReadingMode: RoadbookReadingMode {
         didSet { defaults.set(roadbookReadingMode.rawValue, forKey: Keys.roadbookReadingMode) }
-    }
-    @Published var roadbookMiniMapEnabled: Bool {
-        didSet { defaults.set(roadbookMiniMapEnabled, forKey: Keys.roadbookMiniMapEnabled) }
     }
     /// Persisté en JSON (`Codable`, une seule clé) plutôt qu'un champ UserDefaults par option —
     /// `RoadbookPDFOptions` n'a de sens qu'ensemble (les 7 champs sont toujours lus/écrits
@@ -184,21 +177,6 @@ final class RideSettingsStore: ObservableObject {
                 defaults.set(data, forKey: Keys.roadbookPDFOptions)
             }
         }
-    }
-    /// Portée de la mini-carte (spec "roadbook-mode", it23quinquies, retour terrain : "zoomé
-    /// beaucoup plus... que ce paramètre soit changeable") — réglable via +/- directement sur la
-    /// mini-carte, voir `RoadbookMiniMapView`/`RoadBookTabView`.
-    @Published var roadbookMiniMapSpanMeters: Double {
-        didSet { defaults.set(roadbookMiniMapSpanMeters, forKey: Keys.roadbookMiniMapSpanMeters) }
-    }
-    /// Position de la mini-carte flottante, fraction (0...1) de la zone disponible — mise à jour
-    /// en direct pendant le glisser (spec : "une fenêtre qu'on peut déplacer suivant la
-    /// préférence de l'utilisateur"), persistée pour rester où le pilote l'a laissée.
-    @Published var roadbookMiniMapPositionXFraction: Double {
-        didSet { defaults.set(roadbookMiniMapPositionXFraction, forKey: Keys.roadbookMiniMapPositionXFraction) }
-    }
-    @Published var roadbookMiniMapPositionYFraction: Double {
-        didSet { defaults.set(roadbookMiniMapPositionYFraction, forKey: Keys.roadbookMiniMapPositionYFraction) }
     }
     /// Palette Road Book (spec "roadbook-ui-redesign", it25, point 0 — retour terrain : "le Road
     /// Book hérite du thème sombre global de l'app... à l'inverse d'un vrai roadbook papier de
@@ -411,22 +389,12 @@ final class RideSettingsStore: ObservableObject {
         } else {
             roadbookReadingMode = .gpsAssisted
         }
-        roadbookMiniMapEnabled = defaults.object(forKey: Keys.roadbookMiniMapEnabled) == nil
-            ? true : defaults.bool(forKey: Keys.roadbookMiniMapEnabled)
         if let data = defaults.data(forKey: Keys.roadbookPDFOptions), let decoded = try? JSONDecoder().decode(RoadbookPDFOptions.self, from: data) {
             roadbookPDFOptions = decoded
         } else {
             roadbookPDFOptions = RoadbookPDFOptions()
         }
 
-        let spanRange = RoadBookConstants.miniMapSpanMetersRange
-        let storedSpan = defaults.object(forKey: Keys.roadbookMiniMapSpanMeters) as? Double
-        roadbookMiniMapSpanMeters = storedSpan.map { min(max($0, spanRange.lowerBound), spanRange.upperBound) }
-            ?? RoadBookConstants.miniMapSpanMetersDefault
-        let storedX = defaults.object(forKey: Keys.roadbookMiniMapPositionXFraction) as? Double
-        roadbookMiniMapPositionXFraction = storedX ?? RoadBookConstants.miniMapDefaultPositionXFraction
-        let storedY = defaults.object(forKey: Keys.roadbookMiniMapPositionYFraction) as? Double
-        roadbookMiniMapPositionYFraction = storedY ?? RoadBookConstants.miniMapDefaultPositionYFraction
         if let rawPalette = defaults.string(forKey: Keys.roadbookPaletteSetting), let setting = RoadbookPaletteSetting(rawValue: rawPalette) {
             roadbookPaletteSetting = setting
         } else {

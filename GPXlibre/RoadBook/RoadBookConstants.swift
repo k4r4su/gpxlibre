@@ -18,22 +18,6 @@ enum RoadBookConstants {
     /// SAUF virages enchaînés (voir ce même fichier), où le maintien serait contre-productif.
     static let liveManeuverHoldAfterMeters: Double = 15
 
-    /// Portée de la mini-carte en mode Assisté GPS — PAS la trace complète, juste de quoi
-    /// confirmer visuellement qu'on est au bon endroit localement (spec "roadbook-focused-next-
-    /// turn", it23ter). Resserrée en it23quinquies (retour terrain : "zoomé beaucoup plus...
-    /// qu'on voit les 400 mètres de chaque côté, peut-être même 300") — 700 m de portée totale
-    /// (~350 m de chaque côté du point central), RÉGLABLE par l'utilisateur (`RideSettingsStore.
-    /// roadbookMiniMapSpanMeters`, cette constante n'est plus que la valeur par défaut).
-    static let miniMapSpanMetersDefault: Double = 400
-    static let miniMapSpanMetersRange: ClosedRange<Double> = 200...1500
-    static let miniMapSpanMetersStep: Double = 100
-
-    /// Position par défaut de la mini-carte flottante (fraction de la zone disponible, 0...1)
-    /// — coin bas-droit, comme avant qu'elle devienne déplaçable (it23quinquies, retour terrain :
-    /// "il faudrait pouvoir la changer à la volée, comme une fenêtre qu'on peut déplacer").
-    static let miniMapDefaultPositionXFraction: Double = 0.82
-    static let miniMapDefaultPositionYFraction: Double = 0.82
-
     // MARK: - Overpass (OSM public, gratuit, aucune clé)
 
     /// Seul service permettant d'interroger des tags OSM arbitraires le long d'une trace —
@@ -170,17 +154,4 @@ enum RoadBookConstants {
     /// distance") — la hauteur ainsi libérée revient à la carte hero plutôt que de rester
     /// inexploitée.
     static let focusedHeroLandscapeHeight: Double = 210
-
-    // MARK: - Mini-carte en paysage (spec "roadbook-ui-redesign", it25, point 2)
-
-    /// Taille FIXE (pas une fraction de `containerSize`, root cause du bug terrain "mini-carte
-    /// réduite à une bande illisible" — une fraction de hauteur calculée sur un écran deux fois
-    /// moins haut qu'en portrait produisait un bandeau écrasé) — ancrée dans un coin dédié via
-    /// `.overlay(alignment:)`, jamais déplaçable en paysage (voir RoadbookLandscapeMiniMap).
-    static let miniMapLandscapeWidth: Double = 150
-    static let miniMapLandscapeHeight: Double = 100
-    /// En dessous de cette hauteur de conteneur disponible, la mini-carte est MASQUÉE plutôt
-    /// qu'affichée à moitié cassée (demande explicite : "pas de compromis à moitié cassé") — un
-    /// iPhone en paysage avec le clavier ouvert, par exemple.
-    static let miniMapLandscapeMinContainerHeight: Double = 170
 }

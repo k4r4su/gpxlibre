@@ -414,26 +414,18 @@ struct RoadBookTabView: View {
             // "prochain virage" n'a de sens qu'avec une position réelle à comparer. Le mode
             // Classique garde la table complète ci-dessous (aucune notion de "position
             // actuelle" à mettre en avant dans ce mode).
-            GeometryReader { geometry in
-                ZStack {
-                    RoadbookFocusedView(
-                        maneuvers: maneuvers,
-                        landmarkCheckpoints: landmarkSelection.standalone,
-                        currentIndex: liveProgress?.index,
-                        distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
-                        currentCumulativeDistanceMeters: liveCumulativeDistanceMeters,
-                        unit: settings.roadbookPDFOptions.distanceUnit,
-                        hasLocationFix: locationManager.currentLocation != nil,
-                        landmarks: landmarks,
-                        landscapeMiniMapReservedWidth: showsLandscapeMiniMap(containerSize: geometry.size)
-                            ? RoadBookConstants.miniMapLandscapeWidth + 24 : 0
-                    )
-
-                    if settings.roadbookMiniMapEnabled, let coordinate = locationManager.currentLocation?.coordinate {
-                        miniMap(track: track, coordinate: coordinate, containerSize: geometry.size)
-                    }
-                }
-            }
+            // Mini-carte RETIRÉE (jalon it28, demande explicite) : la vue focus occupe tout
+            // l'espace, portrait comme paysage — aucune réservation de place à droite du hero.
+            RoadbookFocusedView(
+                maneuvers: maneuvers,
+                landmarkCheckpoints: landmarkSelection.standalone,
+                currentIndex: liveProgress?.index,
+                distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
+                currentCumulativeDistanceMeters: liveCumulativeDistanceMeters,
+                unit: settings.roadbookPDFOptions.distanceUnit,
+                hasLocationFix: locationManager.currentLocation != nil,
+                landmarks: landmarks
+            )
         } else {
             RoadbookTableView(
                 maneuvers: maneuvers,
@@ -446,51 +438,8 @@ struct RoadBookTabView: View {
         }
     }
 
-    /// Bascule PORTRAIT (glisser/zoomer, `RoadbookDraggableMiniMap`, inchangé depuis it23quinquies
-    /// — "ça marche" confirmé par retour terrain) / PAYSAGE (`RoadbookLandscapeMiniMap`, coin
-    /// fixe, spec it25 point 2). `verticalSizeClass == .compact` = paysage sur iPhone (seul
-    /// device family ciblé, `TARGETED_DEVICE_FAMILY "1"`).
+    /// `.compact` = paysage sur iPhone (seul device family ciblé, `TARGETED_DEVICE_FAMILY "1"`).
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-
-    /// `true` si la mini-carte paysage sera RÉELLEMENT affichée (mêmes conditions que `miniMap`
-    /// ci-dessous) — calculé une seule fois et réutilisé pour réserver la place correspondante
-    /// dans le layout du hero (`RoadbookFocusedView.landscapeMiniMapReservedWidth`), jamais
-    /// dupliqué/désynchronisé entre les deux (fix "roadbook-landscape-minimap-overlap", it25,
-    /// retour terrain avec capture : la mini-carte chevauchait le texte de distance ET la
-    /// première ligne de la liste).
-    private func showsLandscapeMiniMap(containerSize: CGSize) -> Bool {
-        verticalSizeClass == .compact
-            && settings.roadbookMiniMapEnabled
-            && locationManager.currentLocation != nil
-            && containerSize.height >= RoadBookConstants.miniMapLandscapeMinContainerHeight
-    }
-
-    @ViewBuilder
-    private func miniMap(track: GPXTrack, coordinate: CLLocationCoordinate2D, containerSize: CGSize) -> some View {
-        if verticalSizeClass == .compact {
-            // "Masquée en paysage si le format ne permet pas un rendu propre" — demande
-            // explicite, jamais un compromis à moitié cassé.
-            if showsLandscapeMiniMap(containerSize: containerSize) {
-                // CONFINÉE à la bande du hero (`.topTrailing`, jamais `.bottomTrailing` sur tout
-                // l'écran) — root cause du chevauchement : ancrée sur la hauteur TOTALE (hero +
-                // liste), elle débordait dans la zone de la liste en dessous.
-                RoadbookLandscapeMiniMap(track: track, currentLocation: coordinate, spanMeters: settings.roadbookMiniMapSpanMeters)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 14)
-                    .padding(.top, max((RoadBookConstants.focusedHeroLandscapeHeight - RoadBookConstants.miniMapLandscapeHeight) / 2, 8))
-                    .frame(maxHeight: .infinity, alignment: .top)
-            }
-        } else {
-            RoadbookDraggableMiniMap(
-                track: track,
-                currentLocation: coordinate,
-                containerSize: containerSize,
-                spanMeters: $settings.roadbookMiniMapSpanMeters,
-                positionXFraction: $settings.roadbookMiniMapPositionXFraction,
-                positionYFraction: $settings.roadbookMiniMapPositionYFraction
-            )
-        }
-    }
 
     private var trackPickerSheet: some View {
         NavigationStack {
