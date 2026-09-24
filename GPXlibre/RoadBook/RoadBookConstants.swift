@@ -24,22 +24,45 @@ enum RoadBookConstants {
     /// Nominatim (recherche d'adresse) ne fait que du géocodage.
     static let overpassBaseURLString = "https://overpass-api.de/api/interpreter"
 
-    // MARK: - Repères visibles (itération "repères = uniquement ce que le conducteur voit")
+    // MARK: - Repères visibles (jalon it28 — "uniquement ce que le conducteur voit")
 
+    /// Catégories ACTIVÉES par défaut (menu Réglages > Repères du Road Book, "Réinitialiser") —
+    /// toutes les autres catégories du catalogue (`RoadbookLandmarkCategory`, famille "Autres")
+    /// sont désactivées par défaut.
+    static let landmarkDefaultEnabledCategories: Set<RoadbookLandmarkCategory> = [
+        .citySign, .stopSign, .giveWaySign, .trafficSignals, .levelCrossing,
+        .speedBump, .bridge, .tunnel,
+        .church, .townHall, .waterTower, .mill, .waysideCross, .castle,
+        .fuel, .chargingStation,
+    ]
     /// Rayon de VISIBILITÉ par catégorie (m, distance à la trace) : petit pour ce qui est SUR la
-    /// route (panneau, marquage), large pour ce qui se voit de loin (clocher, château d'eau).
+    /// route (panneau, ralentisseur), large pour ce qui se voit de loin (clocher, château d'eau,
+    /// éolienne) ; pour un service, rayon de DÉTOUR raisonnable (la distance est affichée).
     /// Catégorie absente : jamais retenue.
     static let landmarkVisibilityRadiusMeters: [RoadbookLandmarkCategory: Double] = [
+        // Panneaux
         .citySign: 25, .stopSign: 20, .giveWaySign: 20, .trafficSignals: 25, .levelCrossing: 20,
-        .pedestrianCrossing: 12, .speedBump: 12, .bridge: 8, .tunnel: 8,
-        .church: 150, .townHall: 60, .fuel: 40, .waterTower: 200, .mill: 150, .waysideCross: 30,
-        .remarkableStructure: 150,
+        // Infrastructure
+        .speedBump: 12, .bridge: 8, .tunnel: 8,
+        // Bâtiments et ouvrages
+        .church: 150, .townHall: 60, .waterTower: 200, .mill: 150, .waysideCross: 30, .castle: 250,
+        // Services
+        .fuel: 250, .chargingStation: 250,
+        // Autres
+        .parking: 40, .restArea: 80, .drinkingWater: 20, .restaurant: 40, .cafe: 40, .bakery: 30,
+        .supermarket: 80, .pharmacy: 30, .hotel: 60, .campsite: 150, .trainStation: 120, .school: 60,
+        .cemetery: 100, .memorial: 30, .windTurbine: 500, .antenna: 300, .lighthouse: 500, .tower: 200,
     ]
-    /// Priorité FIXE entre familles, de la plus forte à la plus faible (le carrefour lui-même,
-    /// c'est-à-dire la manœuvre, passe avant tout repère). À famille égale : ordre de
-    /// `RoadbookLandmarkCategory.allCases` (l'entrée d'agglomération d'abord), puis le plus proche
-    /// de la trace.
-    static let landmarkGroupPriority: [RoadbookLandmarkCategory.Group] = [.sign, .ground, .building]
+    /// Priorité FIXE entre familles, de la plus forte à la plus faible — le carrefour lui-même
+    /// (la manœuvre, rond-point compris) passe avant tout repère. À famille égale : ordre du
+    /// catalogue (`RoadbookLandmarkCategory.allCases`), puis le plus proche de la trace.
+    static let landmarkGroupPriority: [RoadbookLandmarkCategory.Group] = [.sign, .infrastructure, .service, .building, .other]
+    /// Services (carburant, recharge) : jamais soumis à la limite de densité des repères de
+    /// repérage ni rattachés à un virage — seul un doublon de la même catégorie à moins de ça
+    /// (station cartographiée en nœud ET en surface) est fusionné.
+    static let landmarkServiceMergeMeters: Double = 100
+    /// Service : distance à la trace affichée ("à droite, 120 m") au-delà de ça.
+    static let landmarkServiceShowDistanceFromMeters: Double = 30
     /// Un repère à moins de ça (le long de la trace) d'un changement de direction sert à
     /// identifier CE carrefour : affiché avec la manœuvre (le plus prioritaire seulement), jamais
     /// en ligne séparée.
@@ -61,9 +84,14 @@ enum RoadBookConstants {
     /// marche est opposé à ce cap à cette tolérance près (degrés).
     static let landmarkSignFacingToleranceDegrees: Double = 80
     /// Requête Overpass : trace échantillonnée tous les N m (au moins), plafonnée en points ; le
-    /// rayon interrogé = pas + rayon de visibilité max de la famille.
+    /// rayon interrogé = pas + rayon de visibilité de la catégorie.
     static let landmarkQuerySampleSpacingMeters: Double = 250
     static let landmarkQueryMaxPolylinePoints = 600
+    /// Téléchargement découpé en TRONÇONS de trace de cette longueur (une requête chacun) : c'est
+    /// l'unité de la barre de progression, et les repères apparaissent au fur et à mesure.
+    static let landmarkQueryChunkMeters: Double = 8000
+    /// Durée d'affichage de l'état "Terminé" avant que l'indicateur ne disparaisse.
+    static let landmarkProgressDoneDisplaySeconds: Double = 2
     static let landmarkRequestTimeoutSeconds: Double = 90
     /// L'instance Overpass publique renvoie par intermittence 429/504 : nouveaux essais après ces
     /// pauses, puis abandon propre (Road Book sans repères, cache existant conservé).

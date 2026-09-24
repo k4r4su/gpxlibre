@@ -47,6 +47,7 @@ final class RideSettingsStore: ObservableObject {
         static let roadbookReadingMode = "settings.roadbookReadingMode"
         static let roadbookPDFOptions = "settings.roadbookPDFOptionsJSON"
         static let roadbookPaletteSetting = "settings.roadbookPaletteSetting"
+        static let roadbookLandmarkCategories = "settings.roadbookLandmarkCategories"
     }
 
     private let defaults: UserDefaults
@@ -186,6 +187,16 @@ final class RideSettingsStore: ObservableObject {
     /// écran, DISTINCT de tout thème global de l'app (périmètre explicite de la fiche).
     @Published var roadbookPaletteSetting: RoadbookPaletteSetting {
         didSet { defaults.set(roadbookPaletteSetting.rawValue, forKey: Keys.roadbookPaletteSetting) }
+    }
+    /// Catégories de repères affichées dans le Road Book (jalon it28, Réglages > Repères du Road
+    /// Book) — persistées en liste de `rawValue` (une valeur inconnue, catégorie retirée du
+    /// catalogue, est ignorée). Défaut : `RoadBookConstants.landmarkDefaultEnabledCategories`.
+    @Published var roadbookLandmarkCategories: Set<RoadbookLandmarkCategory> {
+        didSet { defaults.set(roadbookLandmarkCategories.map(\.rawValue).sorted(), forKey: Keys.roadbookLandmarkCategories) }
+    }
+
+    func resetRoadbookLandmarkCategoriesToDefaults() {
+        roadbookLandmarkCategories = RoadBookConstants.landmarkDefaultEnabledCategories
     }
 
     // MARK: - Zoom par défaut au démarrage (spec "default-zoom-preview", it14, Bloc 6)
@@ -395,6 +406,11 @@ final class RideSettingsStore: ObservableObject {
             roadbookPDFOptions = RoadbookPDFOptions()
         }
 
+        if let rawCategories = defaults.stringArray(forKey: Keys.roadbookLandmarkCategories) {
+            roadbookLandmarkCategories = Set(rawCategories.compactMap(RoadbookLandmarkCategory.init(rawValue:)))
+        } else {
+            roadbookLandmarkCategories = RoadBookConstants.landmarkDefaultEnabledCategories
+        }
         if let rawPalette = defaults.string(forKey: Keys.roadbookPaletteSetting), let setting = RoadbookPaletteSetting(rawValue: rawPalette) {
             roadbookPaletteSetting = setting
         } else {

@@ -22,28 +22,51 @@ struct RoadbookLandmarkCandidate: Codable, Equatable {
     /// Caps (axes, sens indifférent) des routes carrossables qui portent l'élément quand il est un
     /// nœud de chaussée — `nil`/vide si inconnu (panneau posé à côté de la route) : pas de filtre.
     let roadAxes: [Double]?
+    /// "node/123" — identifiant OSM, dédoublonne un élément renvoyé par deux tronçons voisins.
+    let osmID: String?
 
-    init(category: RoadbookLandmarkCategory, label: String, coordinate: CLLocationCoordinate2D, orientation: Orientation? = nil, roadAxes: [Double]? = nil) {
+    init(category: RoadbookLandmarkCategory, label: String, coordinate: CLLocationCoordinate2D, orientation: Orientation? = nil, roadAxes: [Double]? = nil, osmID: String? = nil) {
         self.category = category
         self.label = label
         latitude = coordinate.latitude
         longitude = coordinate.longitude
         self.orientation = orientation
         self.roadAxes = roadAxes
+        self.osmID = osmID
     }
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }
 
-/// Tout ce qui est récupéré (et mis en cache) pour une trace.
+/// Tout ce qui est récupéré (et mis en cache) pour une trace — `fetchedCategories` dit quelles
+/// catégories ont DÉJÀ été téléchargées : activer une catégorie absente ne télécharge qu'elle
+/// (complément), en désactiver une ne fait que filtrer (aucun réseau).
 struct RoadbookLandmarkData: Codable, Equatable {
     let candidates: [RoadbookLandmarkCandidate]
     /// Routes limitées à 50 km/h / `FR:urban` — seulement si `landmarkUrbanEntryFallbackEnabled`.
     let urbanWays: [[CLLocationCoordinate2DCodable]]
+    let fetchedCategories: Set<RoadbookLandmarkCategory>
 
-    init(candidates: [RoadbookLandmarkCandidate], urbanWays: [[CLLocationCoordinate2DCodable]] = []) {
+    init(candidates: [RoadbookLandmarkCandidate], urbanWays: [[CLLocationCoordinate2DCodable]] = [], fetchedCategories: Set<RoadbookLandmarkCategory> = Set(RoadbookLandmarkCategory.allCases)) {
         self.candidates = candidates
         self.urbanWays = urbanWays
+        self.fetchedCategories = fetchedCategories
+    }
+
+    static let empty = RoadbookLandmarkData(candidates: [], fetchedCategories: [])
+
+    /// Ajoute des candidats (dédoublonnés par identifiant OSM) et marque `categories` comme
+    /// téléchargées.
+    func adding(_ other: RoadbookLandmarkData, markingFetched categories: Set<RoadbookLandmarkCategory>) -> RoadbookLandmarkData {
+        var known = Set(candidates.compactMap(\.osmID))
+        var merged = candidates
+        for candidate in other.candidates {
+            if let id = candidate.osmID {
+                guard known.insert(id).inserted else { continue }
+            }
+            merged.append(candidate)
+        }
+        return RoadbookLandmarkData(candidates: merged, urbanWays: urbanWays + other.urbanWays, fetchedCategories: fetchedCategories.union(categories))
     }
 }
 
@@ -83,20 +106,26 @@ enum RoadbookLandmarkSelector {
         _ data: RoadbookLandmarkData,
         points: [GPXPoint],
         maneuvers: [RoadbookManeuver],
+        enabledCategories: Set<RoadbookLandmarkCategory> = Set(RoadbookLandmarkCategory.allCases),
         urbanEntryFallbackEnabled: Bool = RoadBookConstants.landmarkUrbanEntryFallbackEnabled
     ) -> RoadbookLandmarkSelection {
         let cumulative = TrackProjector.cumulativeDistances(for: points)
         guard points.count > 1, (cumulative.last ?? 0) > 0 else { return .empty }
 
-        var placements = data.candidates.flatMap { visiblePlacements(of: $0, points: points, cumulative: cumulative) }
-        if urbanEntryFallbackEnabled {
+        var placements = data.candidates
+            .filter { enabledCategories.contains($0.category) }
+            .flatMap { visiblePlacements(of: $0, points: points, cumulative: cumulative) }
+        if urbanEntryFallbackEnabled, enabledCategories.contains(.citySign) {
             placements += urbanEntries(data.urbanWays, mappedSigns: placements.filter { $0.info.category == .citySign }, points: points, cumulative: cumulative)
         }
 
         let maneuverPositions = maneuvers.map(\.cumulativeDistanceMeters)
         var attached: [UUID: Placement] = [:]
         var standalone: [Placement] = []
-        for placement in placements {
+        // Services : voie à part — jamais rattachés à un virage ni écartés par la densité des
+        // repères de repérage (seuls leurs doublons sont fusionnés).
+        let services = placements.filter { $0.info.category.group == .service }
+        for placement in placements where placement.info.category.group != .service {
             let nearest = maneuvers.indices.min { abs(maneuverPositions[$0] - placement.cumulative) < abs(maneuverPositions[$1] - placement.cumulative) }
             if let nearest, abs(maneuverPositions[nearest] - placement.cumulative) <= RoadBookConstants.landmarkJunctionRadiusMeters {
                 let id = maneuvers[nearest].id
@@ -108,7 +137,9 @@ enum RoadbookLandmarkSelector {
 
         return RoadbookLandmarkSelection(
             attached: attached.mapValues(\.info),
-            standalone: densityLimited(standalone, maneuverPositions: maneuverPositions).map {
+            standalone: (densityLimited(standalone, maneuverPositions: maneuverPositions) + deduplicatedServices(services))
+                .sorted { $0.cumulative < $1.cumulative }
+                .map {
                 RoadbookLandmarkCheckpoint(info: $0.info, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude, cumulativeDistanceMeters: $0.cumulative)
             }
         )
@@ -130,12 +161,13 @@ enum RoadbookLandmarkSelector {
             // Côté seulement pour ce qui est posé À CÔTÉ de la route : un élément qui traverse la
             // chaussée (famille "au sol") ou un nœud de la route elle-même n'en a pas — l'écart
             // mesuré n'y est que celui entre la trace GPS et l'axe de la route.
-            let isOnRoad = candidate.category.group == .ground || candidate.category == .levelCrossing || !(candidate.roadAxes ?? []).isEmpty
+            let isOnRoad = candidate.category.isOnRoad || !(candidate.roadAxes ?? []).isEmpty
             let side = (isOnRoad || pass.distanceToTrackMeters < RoadBookConstants.landmarkSideMinOffsetMeters)
                 ? nil
                 : side(of: candidate.coordinate, from: onTrack, travelHeading: heading)
+            let showsDistance = candidate.category.group == .service && pass.distanceToTrackMeters >= RoadBookConstants.landmarkServiceShowDistanceFromMeters
             return Placement(
-                info: RoadbookLandmarkInfo(category: candidate.category, label: candidate.label, side: side),
+                info: RoadbookLandmarkInfo(category: candidate.category, label: candidate.label, side: side, lateralDistanceMeters: showsDistance ? pass.distanceToTrackMeters : nil),
                 coordinate: candidate.coordinate,
                 cumulative: pass.cumulativeDistanceMeters,
                 lateral: pass.distanceToTrackMeters
@@ -211,6 +243,20 @@ enum RoadbookLandmarkSelector {
         return segments.values
             .flatMap { $0.sorted(by: isStronger).prefix(RoadBookConstants.landmarkMaxPerSegment) }
             .sorted { $0.cumulative < $1.cumulative }
+    }
+
+    /// Doublons d'un même service (nœud + surface, deux bornes d'une même station) : le plus proche
+    /// de la trace reste.
+    private static func deduplicatedServices(_ services: [Placement]) -> [Placement] {
+        var kept: [Placement] = []
+        for placement in services.sorted(by: { $0.cumulative < $1.cumulative }) {
+            if let index = kept.lastIndex(where: { $0.info.category == placement.info.category && placement.cumulative - $0.cumulative < RoadBookConstants.landmarkServiceMergeMeters }) {
+                if placement.lateral < kept[index].lateral { kept[index] = placement }
+            } else {
+                kept.append(placement)
+            }
+        }
+        return kept
     }
 
     // MARK: - Repli zone urbaine (désactivé par défaut)

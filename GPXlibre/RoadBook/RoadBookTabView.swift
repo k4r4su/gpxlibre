@@ -22,18 +22,18 @@ struct RoadBookTabView: View {
     /// cumulée déjà supérieure à celle de TOUTES les manœuvres dès le premier point, d'où
     /// "tout est déjà passé". Voir `selectedTrack` ci-dessous.
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
+    @EnvironmentObject private var networkMonitor: NetworkMonitor
 
     @State private var selectedTrackID: UUID?
     @State private var showExportOptions = false
     @State private var showTrackPicker = false
     @StateObject private var locationManager = LocationManager()
-    /// Repères VISIBLES (itération "repères = uniquement ce que le conducteur voit") : candidats
-    /// récupérés en UNE requête Overpass par trace (`landmarkData`, cache par trace), puis
-    /// sélectionnés pour le parcours affiché (`landmarkSelection`, recalculée à chaque changement
-    /// des manœuvres) — best-effort, ne bloque JAMAIS l'affichage des manœuvres elles-mêmes.
-    @State private var landmarkData: RoadbookLandmarkData?
-    @State private var landmarkDataCache = RoadbookLandmarkDataCache()
-    @State private var landmarkSelection: RoadbookLandmarkSelection = .empty
+    /// Repères VISIBLES (jalon it28) : téléchargement par tronçons avec progression, cache par
+    /// trace, complément par catégorie, sélection pour le parcours affiché — best-effort, ne bloque
+    /// JAMAIS l'affichage des manœuvres elles-mêmes. Voir `RoadbookLandmarkLoader`.
+    @StateObject private var landmarkLoader = RoadbookLandmarkLoader()
+
+    private var landmarkSelection: RoadbookLandmarkSelection { landmarkLoader.selection }
 
     /// Repère affiché AVEC chaque changement de direction (clé = `RoadbookManeuver.id`).
     private var landmarks: [UUID: RoadbookLandmarkInfo?] {
@@ -185,6 +185,7 @@ struct RoadBookTabView: View {
                 locationManager.startUpdating()
             }
             updateResolvedPalette()
+            landmarkLoader.isOnline = { [weak networkMonitor] in networkMonitor?.isReachable ?? true }
             // Spec "roadbook-keep-screen-awake" (it25, retour terrain : "l'écran doit rester
             // allumé dans road book, il a tendance à s'arrêter") — un roadbook papier ne s'éteint
             // jamais tout seul ; inconditionnel tant que cet écran est affiché, aucun réglage
@@ -214,10 +215,6 @@ struct RoadBookTabView: View {
         // sans que `id` ne change) — jamais besoin de gérer l'annulation à la main (voir
         // RoadBook/CLAUDE.md pour le détail du fonctionnement best-effort, point par point).
         .task(id: selectedTrack?.traversalKey) {
-            // Sélection propre à CE parcours (ids dérivés de la position le long de la trace) :
-            // jamais réutilisée d'un parcours précédent.
-            landmarkSelection = .empty
-            landmarkData = nil
             guard let track = selectedTrack else {
                 mapMatchedManeuvers = []
                 return
@@ -226,10 +223,12 @@ struct RoadBookTabView: View {
             #if DEBUG
             RoadbookDebugDump.log(trackName: track.name, maneuvers: maneuvers, mapMatched: mapMatchedManeuvers)
             #endif
-            await loadVisibleLandmarks(for: track)
+            updateLandmarks()
         }
-        .onChange(of: maneuvers) { _ in
-            Task { await refreshLandmarkSelection() }
+        .onChange(of: maneuvers) { _ in updateLandmarks() }
+        .onChange(of: settings.roadbookLandmarkCategories) { _ in updateLandmarks() }
+        .onChange(of: networkMonitor.isReachable) { isReachable in
+            if isReachable { landmarkLoader.retry() }
         }
     }
 
@@ -280,36 +279,17 @@ struct RoadBookTabView: View {
         }
     }
 
-    /// Repères visibles : cache (par trace) sinon UNE requête Overpass. Échec réseau : rien en
-    /// cache, Road Book sans repères, nouvel essai à la prochaine ouverture ; succès vide : mis en
-    /// cache.
-    private func loadVisibleLandmarks(for track: GPXTrack) async {
-        if let cached = landmarkDataCache.data(for: track.id) {
-            landmarkData = cached
-        } else {
-            guard let fetched = await RoadbookLandmarkOverpassService.shared.fetch(for: track.points), !Task.isCancelled else { return }
-            landmarkDataCache.store(fetched, for: track.id)
-            guard selectedTrack?.id == track.id else { return }
-            landmarkData = fetched
-        }
-        await refreshLandmarkSelection()
-    }
-
-    /// Sélection pour le parcours AFFICHÉ (sens, manœuvres) — hors du fil principal (projection de
-    /// centaines de candidats sur la trace).
-    private func refreshLandmarkSelection() async {
-        guard let data = landmarkData, let track = selectedTrack else {
-            landmarkSelection = .empty
-            return
-        }
-        let traversalKey = track.traversalKey
-        let points = track.points
-        let currentManeuvers = maneuvers
-        let selection = await Task.detached(priority: .utility) {
-            RoadbookLandmarkSelector.select(data, points: points, maneuvers: currentManeuvers)
-        }.value
-        guard selectedTrack?.traversalKey == traversalKey, currentManeuvers == maneuvers else { return }
-        landmarkSelection = selection
+    /// Repères visibles pour le parcours et les catégories affichés — le chargeur décide seul s'il
+    /// faut télécharger (catégories manquantes seulement) ou juste refaire la sélection.
+    private func updateLandmarks() {
+        guard let track = selectedTrack else { return }
+        landmarkLoader.update(
+            trackID: track.id,
+            traversalKey: track.traversalKey,
+            points: track.points,
+            maneuvers: maneuvers,
+            enabled: settings.roadbookLandmarkCategories
+        )
     }
 
     /// Sous-échantillonnage UNIFORME avant map matching — même patron que `RideSessionManager.
@@ -332,15 +312,29 @@ struct RoadBookTabView: View {
     private func content(track: GPXTrack) -> some View {
         if verticalSizeClass == .compact {
             HStack(spacing: 0) {
-                mainArea(track: track)
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 0) {
+                    landmarkProgress
+                    mainArea(track: track)
+                }
+                .frame(maxWidth: .infinity)
                 landscapeModeColumn
             }
         } else {
             VStack(spacing: 0) {
                 modePickerRow
+                landmarkProgress
                 mainArea(track: track)
             }
+        }
+    }
+
+    /// Bandeau de chargement des repères (jalon it28) — une ligne, seulement tant qu'il y a
+    /// quelque chose à dire ; les directions en dessous restent utilisables.
+    @ViewBuilder
+    private var landmarkProgress: some View {
+        if landmarkLoader.phase != .idle {
+            RoadbookLandmarkProgressView(phase: landmarkLoader.phase) { landmarkLoader.retry() }
+                .transition(.opacity)
         }
     }
 
@@ -909,7 +903,7 @@ private struct RoadbookLandmarkTableRow: View {
 enum RoadbookLandmarkRowText {
     static func detail(_ info: RoadbookLandmarkInfo) -> String {
         let category = info.label == info.category.genericLabel ? nil : info.category.genericLabel
-        return [category, info.side?.label].compactMap { $0 }.joined(separator: " · ").ifEmpty(info.category.genericLabel)
+        return [category, info.sideDescription].compactMap { $0 }.joined(separator: " · ").ifEmpty(info.category.genericLabel)
     }
 }
 

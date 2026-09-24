@@ -1,19 +1,20 @@
 import Foundation
 import CoreLocation
 
-/// Récupère en UNE requête Overpass les repères VISIBLES candidats le long d'une trace (itération
-/// "repères = uniquement ce que le conducteur voit") — panneaux, marquages/infrastructures,
-/// bâtiments et ouvrages remarquables (liste autorisée : `RoadbookLandmarkCategory`), plus les
-/// routes porteuses des panneaux orientés `forward`/`backward` pour en déduire le sens. Remplace
-/// l'ancienne requête par manœuvre (une par virage) ET l'ancienne requête des limites de communes.
+/// Récupère par requête Overpass les repères candidats le long d'un TRONÇON de trace (le
+/// découpage en tronçons et la progression sont gérés par `RoadbookLandmarkLoader`) — uniquement
+/// les catégories demandées (celles activées et pas encore en cache), plus les routes porteuses
+/// des éléments posés sur la chaussée pour en déduire le sens et l'alignement.
 ///
 /// Best-effort : `nil` en cas d'échec (réseau, Overpass saturé) — le Road Book s'affiche alors sans
 /// repères, ou avec le cache existant, jamais un blocage.
 actor RoadbookLandmarkOverpassService {
     static let shared = RoadbookLandmarkOverpassService()
 
-    func fetch(for points: [GPXPoint]) async -> RoadbookLandmarkData? {
-        guard let query = Self.query(for: points, includeUrbanWays: RoadBookConstants.landmarkUrbanEntryFallbackEnabled),
+    /// Candidats du tronçon pour `categories` seulement (tout élément reconnu dans une autre
+    /// catégorie est écarté : il n'est pas marqué comme téléchargé).
+    func fetch(for points: [GPXPoint], categories: Set<RoadbookLandmarkCategory>, includeUrbanWays: Bool = RoadBookConstants.landmarkUrbanEntryFallbackEnabled) async -> RoadbookLandmarkData? {
+        guard let query = Self.query(for: points, categories: categories, includeUrbanWays: includeUrbanWays),
               let url = URL(string: RoadBookConstants.overpassBaseURLString),
               let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .overpassFormValueAllowed)
         else { return nil }
@@ -28,7 +29,8 @@ actor RoadbookLandmarkOverpassService {
         for attempt in 0...retryDelays.count {
             if let (data, response) = try? await URLSession.shared.data(for: request),
                (response as? HTTPURLResponse)?.statusCode == 200 {
-                return Self.parse(data)
+                guard let parsed = Self.parse(data) else { return nil }
+                return RoadbookLandmarkData(candidates: parsed.candidates.filter { categories.contains($0.category) }, urbanWays: parsed.urbanWays, fetchedCategories: [])
             }
             guard retryDelays.indices.contains(attempt) else { break }
             try? await Task.sleep(nanoseconds: UInt64(retryDelays[attempt] * 1_000_000_000))
@@ -38,16 +40,19 @@ actor RoadbookLandmarkOverpassService {
     }
 
     /// Routes non carrossables : jamais la chaussée qu'un repère "sur la route" doit longer (un nœud
-    /// de passage piéton appartient aussi au trottoir qui traverse).
+    /// de feux ou de ralentisseur appartient aussi au trottoir ou à la piste qui traverse).
     static let nonVehicleHighways: Set<String> = ["footway", "path", "cycleway", "pedestrian", "steps", "bridleway", "corridor", "elevator", "platform"]
 
     /// Requête Overpass QL : trace échantillonnée en polyligne `around:` (pas =
     /// `landmarkQuerySampleSpacingMeters`, élargi pour rester sous `landmarkQueryMaxPolylinePoints`),
-    /// rayon = pas + rayon de visibilité max de la famille — le filtrage FIN par catégorie se fait
-    /// ensuite sur la trace complète (`RoadbookLandmarkSelector`). `nil` si la trace est trop courte.
-    static func query(for points: [GPXPoint], includeUrbanWays: Bool) -> String? {
+    /// UNE ligne par sélecteur des seules `categories` demandées, rayon = pas + rayon de visibilité
+    /// de la catégorie — le filtrage FIN se fait ensuite sur la trace complète
+    /// (`RoadbookLandmarkSelector`). Les routes porteuses ne sont demandées que si une catégorie
+    /// posée sur la chaussée en a besoin. `nil` si la trace est trop courte ou rien n'est demandé.
+    static func query(for points: [GPXPoint], categories: Set<RoadbookLandmarkCategory>, includeUrbanWays: Bool) -> String? {
         let cumulative = TrackProjector.cumulativeDistances(for: points)
         guard points.count > 1, let total = cumulative.last, total > 0 else { return nil }
+        guard !categories.isEmpty || includeUrbanWays else { return nil }
 
         let spacing = max(RoadBookConstants.landmarkQuerySampleSpacingMeters, total / Double(RoadBookConstants.landmarkQueryMaxPolylinePoints - 1))
         let sampleCount = Int((total / spacing).rounded(.up))
@@ -56,39 +61,14 @@ actor RoadbookLandmarkOverpassService {
             .map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }
             .joined(separator: ",")
 
-        func radius(_ group: RoadbookLandmarkCategory.Group) -> Int {
-            let maxVisibility = RoadBookConstants.landmarkVisibilityRadiusMeters.filter { $0.key.group == group }.map(\.value).max() ?? 0
-            return Int((spacing + maxVisibility).rounded(.up))
+        // Ordre du catalogue : requête déterministe (testable, et identique d'un appel à l'autre).
+        let ordered = RoadbookLandmarkCategory.allCases.filter(categories.contains)
+        let statements = ordered.flatMap { category -> [String] in
+            let radius = Int((spacing + (RoadBookConstants.landmarkVisibilityRadiusMeters[category] ?? 0)).rounded(.up))
+            return category.definition.overpassSelectors.map { "  \($0)(around:\(radius),\(polyline));" }
         }
-        let near = "around:\(max(radius(.sign), radius(.ground))),\(polyline)"
-        let far = "around:\(radius(.building)),\(polyline)"
-        let citySign = RoadbookLandmark.citySignValues.joined(separator: "|")
-        let urbanWays = includeUrbanWays ? """
-        (
-          way(\(near))["highway"]["maxspeed"~"^(50|FR:urban)$"];
-          way(\(near))["highway"]["zone:maxspeed"="FR:urban"];
-          way(\(near))["highway"]["maxspeed:type"="FR:urban"];
-        );
-        out geom;
-        """ : ""
-
-        return """
-        [out:json][timeout:\(Int(RoadBookConstants.landmarkRequestTimeoutSeconds))];
-        (
-          node(\(near))["traffic_sign"~"\(citySign)"];
-          node(\(near))["traffic_sign:forward"~"\(citySign)"];
-          node(\(near))["traffic_sign:backward"~"\(citySign)"];
-          node(\(near))["highway"~"^(stop|give_way|traffic_signals|crossing)$"];
-          node(\(near))["railway"="level_crossing"];
-          node(\(near))["traffic_calming"~"^(bump|hump|table|cushion)$"];
-          way(\(near))["highway"]["bridge"="yes"];
-          way(\(near))["highway"]["tunnel"="yes"];
-          nwr(\(far))["amenity"~"^(place_of_worship|townhall|fuel)$"];
-          nwr(\(far))["building"~"^(church|chapel)$"];
-          nwr(\(far))["man_made"~"^(bell_tower|water_tower|windmill|watermill|lighthouse|tower)$"];
-          nwr(\(far))["historic"~"^(wayside_cross|wayside_shrine|castle)$"];
-        )->.candidates;
-        .candidates out tags center;
+        let needsCarriageways = ordered.contains { $0.requiresRoadAlignment || $0.isDirectional }
+        let carriageways = needsCarriageways ? """
         (
           node.candidates["highway"];
           node.candidates["railway"="level_crossing"];
@@ -99,6 +79,24 @@ actor RoadbookLandmarkOverpassService {
         )->.onroad;
         way(bn.onroad)["highway"];
         out geom;
+        """ : ""
+        let nearRadius = Int((spacing + 25).rounded(.up))
+        let urbanWays = includeUrbanWays ? """
+        (
+          way(around:\(nearRadius),\(polyline))["highway"]["maxspeed"~"^(50|FR:urban)$"];
+          way(around:\(nearRadius),\(polyline))["highway"]["zone:maxspeed"="FR:urban"];
+          way(around:\(nearRadius),\(polyline))["highway"]["maxspeed:type"="FR:urban"];
+        );
+        out geom;
+        """ : ""
+
+        return """
+        [out:json][timeout:\(Int(RoadBookConstants.landmarkRequestTimeoutSeconds))];
+        (
+        \(statements.joined(separator: "\n"))
+        )->.candidates;
+        .candidates out tags center;
+        \(carriageways)
         \(urbanWays)
         """
     }
@@ -124,14 +122,15 @@ actor RoadbookLandmarkOverpassService {
                 label: classified.label,
                 coordinate: coordinate,
                 orientation: orientation(of: element, tags: tags, carriedBy: vehicleWays),
-                roadAxes: element.type == "node" ? element.id.map { roadAxes(of: $0, carriedBy: vehicleWays) } : nil
+                roadAxes: element.type == "node" ? element.id.map { roadAxes(of: $0, carriedBy: vehicleWays) } : nil,
+                osmID: element.id.map { "\(element.type)/\($0)" }
             ))
         }
 
         let urbanWays = ways
             .filter { isUrban($0.tags ?? [:]) }
             .map { $0.geometry?.compactMap { $0.map { CLLocationCoordinate2DCodable(CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)) } } ?? [] }
-        return RoadbookLandmarkData(candidates: candidates, urbanWays: urbanWays)
+        return RoadbookLandmarkData(candidates: candidates, urbanWays: urbanWays, fetchedCategories: [])
     }
 
     /// Cap de chaque chaussée porteuse au nœud (segment qui en part, ou qui y arrive en bout).

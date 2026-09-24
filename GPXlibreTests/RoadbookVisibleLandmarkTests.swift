@@ -2,8 +2,9 @@ import XCTest
 import CoreLocation
 @testable import GPXlibre
 
-/// Itération "repères du Road Book = uniquement ce que le conducteur voit" — classification,
-/// visibilité (rayon par catégorie, sens des panneaux), côté, priorité et densité. Aucun réseau :
+/// Itérations it27/it28 "repères du Road Book = uniquement ce que le conducteur voit" —
+/// catalogue, visibilité (rayon par catégorie, sens des panneaux), côté, priorité et densité,
+/// services. Chargement/progression/complément par catégorie : `RoadbookLandmarkLoaderTests`. Aucun réseau :
 /// réponses Overpass et candidats synthétiques. Trace de test : plein nord, un point tous les 20 m.
 @MainActor
 final class RoadbookVisibleLandmarkTests: XCTestCase {
@@ -123,12 +124,12 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
         XCTAssertTrue(select([church]).standalone.isEmpty)
     }
 
-    /// Plusieurs candidats rapprochés : un seul repère, selon la priorité fixe (panneau > marquage
-    /// au sol > bâtiment ; entrée d'agglomération d'abord parmi les panneaux).
+    /// Plusieurs candidats rapprochés : un seul repère, selon la priorité fixe (panneau >
+    /// infrastructure > bâtiment ; entrée d'agglomération d'abord parmi les panneaux).
     func testSeveralCloseCandidatesGiveOneLandmarkByPriority() throws {
         let candidates = [
             try candidate(["amenity": "place_of_worship", "name": "Église"], at: place(along: 800, lateral: 20)),
-            try candidate(["highway": "crossing", "crossing": "marked"], at: place(along: 820, lateral: 0)),
+            try candidate(["traffic_calming": "hump"], at: place(along: 820, lateral: 0)),
             try candidate(["highway": "stop"], at: place(along: 840, lateral: 5)),
             try candidate(["traffic_sign": "city_limit", "name": "Village"], at: place(along: 860, lateral: 5)),
         ]
@@ -138,18 +139,22 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(result.standalone.first).info.category, .citySign)
     }
 
-    /// Catégories non autorisées : ignorées (limite administrative, commerce lambda, arbre, parc,
-    /// lieu habité, restaurant, passage piéton non marqué, aménagement autre qu'un ralentisseur).
+    /// Hors catalogue : ignoré (limite administrative, commerce lambda, arbre, parc, lieu habité,
+    /// passage piéton — même marqué, retiré du catalogue en it28 —, aménagement autre qu'un
+    /// ralentisseur, panneau de sortie d'agglomération).
     func testDisallowedCategoriesAreIgnored() {
         let disallowed: [[String: String]] = [
             ["boundary": "administrative", "admin_level": "8", "name": "Commune"],
-            ["shop": "bakery", "name": "Boulangerie"],
-            ["amenity": "restaurant", "name": "Chez Paul"],
+            ["shop": "clothes", "name": "Boutique"],
+            ["amenity": "bank", "name": "Banque"],
             ["natural": "tree"],
             ["leisure": "park"],
             ["place": "village", "name": "Hameau"],
             ["building": "yes"],
             ["highway": "crossing", "crossing": "unmarked"],
+            ["highway": "crossing", "crossing": "marked"],
+            ["highway": "crossing", "crossing": "zebra"],
+            ["highway": "crossing", "crossing_ref": "zebra"],
             ["highway": "crossing"],
             ["traffic_calming": "chicane"],
             ["traffic_sign": "city_limit", "city_limit": "end", "name": "Sortie"],
@@ -174,7 +179,14 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
             (["man_made": "water_tower"], .waterTower, "Château d'eau"),
             (["man_made": "windmill"], .mill, "Moulin"),
             (["historic": "wayside_cross"], .waysideCross, "Calvaire"),
-            (["historic": "castle"], .remarkableStructure, "Château"),
+            (["historic": "castle"], .castle, "Château"),
+            (["amenity": "charging_station", "operator": "Ionity"], .chargingStation, "Ionity"),
+            (["amenity": "charging_station"], .chargingStation, "Borne de recharge"),
+            (["historic": "wayside_shrine"], .waysideCross, "Oratoire"),
+            (["shop": "bakery", "name": "Au bon pain"], .bakery, "Au bon pain"),
+            (["man_made": "tower", "tower:type": "communication"], .antenna, "Antenne"),
+            (["man_made": "tower"], .tower, "Tour"),
+            (["power": "generator", "generator:source": "wind"], .windTurbine, "Éolienne"),
         ]
         for (tags, category, label) in expectations {
             let classified = try XCTUnwrap(RoadbookLandmark.classify(tags), "\(tags)")
@@ -206,7 +218,7 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
 
     func testAtMostOneStandaloneLandmarkPerSegmentBetweenTwoTurns() throws {
         let candidates = [
-            try candidate(["amenity": "fuel", "name": "Station"], at: place(along: 200, lateral: 20)),
+            try candidate(["amenity": "townhall"], at: place(along: 200, lateral: 20)),
             try candidate(["traffic_sign": "city_limit", "name": "Village"], at: place(along: 500, lateral: 5)),
             try candidate(["man_made": "water_tower"], at: place(along: 800, lateral: 50)),
         ]
@@ -216,16 +228,16 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(result.standalone.first).info.category, .citySign)
     }
 
-    /// Stop/cédez-le-passage/passage piéton de la rue qui DÉBOUCHE sur celle du pilote : à
+    /// Stop/cédez-le-passage/ralentisseur de la rue qui DÉBOUCHE sur celle du pilote : à
     /// quelques mètres de la trace, mais sa chaussée est perpendiculaire — il ne le concerne pas.
     /// Validé sur une trace réelle : sans ce filtre, ils ressortaient tout au long des lignes droites.
     func testASignOrCrossingOnASideRoadIsIgnored() throws {
         let sideStop = try candidate(["highway": "stop"], at: place(along: 700, lateral: 12), orientation: nil)
         let sideStopOnRoad = RoadbookLandmarkCandidate(category: sideStop.category, label: sideStop.label, coordinate: sideStop.coordinate, roadAxes: [90])
-        let sideCrossing = RoadbookLandmarkCandidate(category: .pedestrianCrossing, label: "Passage piéton", coordinate: place(along: 1500, lateral: 8), roadAxes: [270, 0])
+        let sharedBump = RoadbookLandmarkCandidate(category: .speedBump, label: "Ralentisseur", coordinate: place(along: 1500, lateral: 8), roadAxes: [270, 0])
 
         XCTAssertTrue(select([sideStopOnRoad]).standalone.isEmpty, "stop sur une route perpendiculaire")
-        XCTAssertEqual(select([sideCrossing]).standalone.count, 1, "passage piéton porté AUSSI par la route du pilote (axe 0°) : gardé")
+        XCTAssertEqual(select([sharedBump]).standalone.count, 1, "ralentisseur porté AUSSI par la route du pilote (axe 0°) : gardé")
     }
 
     func testAStopOnTheRidersOwnRoadIsKeptWithoutASide() throws {
@@ -275,13 +287,14 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
     }
 
     func testTheQueryAsksOnlyForAllowedCategories() throws {
-        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, includeUrbanWays: false))
+        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: RoadBookConstants.landmarkDefaultEnabledCategories, includeUrbanWays: false))
 
         XCTAssertFalse(query.contains("boundary"), "plus aucune limite administrative")
         XCTAssertFalse(query.contains(#"["place""#), "plus aucun lieu habité")
         XCTAssertTrue(query.contains(#"["traffic_sign"~"city_limit|FR:EB10"]"#) || query.contains(#"["traffic_sign"~"FR:EB10|city_limit"]"#))
         XCTAssertTrue(query.contains("way(bn.onroad)"), "chaussées porteuses des éléments posés sur la route (sens, alignement)")
         XCTAssertFalse(query.contains("maxspeed"), "repli zone urbaine désactivé par défaut")
+        XCTAssertFalse(query.contains(#""crossing""#), "plus jamais de passage piéton")
     }
 
     // MARK: - Repli "entrée de localité" par limitation 50 km/h (désactivé par défaut)
@@ -344,5 +357,129 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
             let data = RoadbookPDFExporter.generate(trackName: "Repères", maneuvers: [maneuver(atMeters: 300)], landmarkCheckpoints: landmarks, options: options)
             XCTAssertGreaterThan(data.count, 1000)
         }
+    }
+
+    // MARK: - Jalon it28 : catalogue, services, catégories actives
+
+    /// Station-service et borne de recharge proches de la trace : présentes PAR DÉFAUT, avec côté
+    /// et distance à la trace, et jamais écartées par la densité des repères de repérage.
+    func testFuelAndChargingStationsNearTheTrackArePresentByDefault() throws {
+        let candidates = [
+            try candidate(["amenity": "fuel", "brand": "Total"], at: place(along: 600, lateral: 120)),
+            try candidate(["amenity": "charging_station"], at: place(along: 650, lateral: -12)),
+            try candidate(["traffic_sign": "city_limit", "name": "Village"], at: place(along: 620, lateral: 5)),
+            try candidate(["amenity": "place_of_worship", "name": "Église"], at: place(along: 900, lateral: 20)),
+        ]
+        let result = RoadbookLandmarkSelector.select(
+            RoadbookLandmarkData(candidates: candidates),
+            points: northTrack().points,
+            maneuvers: [],
+            enabledCategories: RoadBookConstants.landmarkDefaultEnabledCategories,
+            urbanEntryFallbackEnabled: false
+        )
+        let byCategory = Dictionary(grouping: result.standalone, by: \.info.category)
+
+        let fuel = try XCTUnwrap(byCategory[.fuel]?.first)
+        XCTAssertEqual(fuel.info.label, "Total")
+        XCTAssertEqual(fuel.info.side, .right)
+        XCTAssertEqual(fuel.info.lateralDistanceMeters ?? 0, 120, accuracy: 3)
+        XCTAssertEqual(fuel.info.displayLabel, "Total à droite, 120 m")
+        let charger = try XCTUnwrap(byCategory[.chargingStation]?.first)
+        XCTAssertEqual(charger.info.side, .left)
+        XCTAssertNil(charger.info.lateralDistanceMeters, "au bord de la route : pas de distance")
+        // Repérage : une seule ligne sur ce tronçon (le panneau), les services en plus.
+        XCTAssertEqual(byCategory[.citySign]?.count, 1)
+        XCTAssertNil(byCategory[.church])
+        XCTAssertEqual(result.standalone.count, 3)
+    }
+
+    func testAServiceMappedTwiceIsShownOnce() throws {
+        let node = try candidate(["amenity": "fuel", "name": "Station"], at: place(along: 600, lateral: 40))
+        let area = try candidate(["amenity": "fuel", "name": "Station"], at: place(along: 630, lateral: 55))
+        let result = select([node, area])
+
+        XCTAssertEqual(result.standalone.count, 1)
+        XCTAssertEqual(try XCTUnwrap(result.standalone.first).info.lateralDistanceMeters ?? 0, 40, accuracy: 3)
+    }
+
+    func testServicesAreNeverAttachedToATurn() throws {
+        let turn = maneuver(atMeters: 1000)
+        let fuel = try candidate(["amenity": "fuel", "name": "Station"], at: place(along: 1010, lateral: 20))
+        let result = select([fuel], maneuvers: [turn])
+
+        XCTAssertNil(result.attached[turn.id])
+        XCTAssertEqual(result.standalone.map(\.info.category), [.fuel])
+    }
+
+    /// Passage piéton présent dans les données : jamais affiché (ni candidat, ni demandé).
+    func testAPedestrianCrossingInTheDataIsNeverShown() throws {
+        let json = """
+        {"elements":[
+          {"type":"node","id":1,"lat":45.005,"lon":5.0,"tags":{"highway":"crossing","crossing":"marked"}},
+          {"type":"node","id":2,"lat":45.006,"lon":5.0,"tags":{"highway":"crossing","crossing":"zebra","crossing_ref":"zebra"}},
+          {"type":"node","id":3,"lat":45.007,"lon":5.0,"tags":{"highway":"crossing","crossing":"traffic_signals"}}
+        ]}
+        """
+        let data = try XCTUnwrap(RoadbookLandmarkOverpassService.parse(Data(json.utf8)))
+
+        XCTAssertTrue(data.candidates.isEmpty)
+        XCTAssertFalse(RoadbookLandmarkCategory.allCases.contains { $0.rawValue.lowercased().contains("crossing") && $0 != .levelCrossing })
+        let everything = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: Set(RoadbookLandmarkCategory.allCases), includeUrbanWays: false))
+        XCTAssertFalse(everything.contains(#""crossing""#))
+    }
+
+    /// La requête ne contient QUE les catégories demandées.
+    func testTheQueryIsBuiltWithTheActiveCategoriesOnly() throws {
+        let points = northTrack().points
+        let signsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.stopSign, .fuel], includeUrbanWays: false))
+
+        XCTAssertTrue(signsOnly.contains(#"node["highway"="stop"](around:"#))
+        XCTAssertTrue(signsOnly.contains(#"nwr["amenity"="fuel"](around:"#))
+        XCTAssertFalse(signsOnly.contains("place_of_worship"))
+        XCTAssertFalse(signsOnly.contains("give_way"))
+        XCTAssertFalse(signsOnly.contains("charging_station"))
+        XCTAssertTrue(signsOnly.contains("way(bn.onroad)"), "un stop a besoin de sa route porteuse")
+
+        let buildingsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.church], includeUrbanWays: false))
+        XCTAssertTrue(buildingsOnly.contains("place_of_worship"))
+        XCTAssertFalse(buildingsOnly.contains("highway\"=\"stop"))
+        XCTAssertFalse(buildingsOnly.contains("way(bn.onroad)"), "rien de posé sur la chaussée : pas de routes porteuses")
+
+        XCTAssertNil(RoadbookLandmarkOverpassService.query(for: points, categories: [], includeUrbanWays: false), "aucune catégorie : aucune requête")
+    }
+
+    /// Radius per category : la requête interroge chaque catégorie à son propre rayon.
+    func testEachCategoryIsQueriedAtItsOwnRadius() throws {
+        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: [.stopSign, .waterTower], includeUrbanWays: false))
+        let spacing = RoadBookConstants.landmarkQuerySampleSpacingMeters
+        let stopRadius = Int((spacing + (RoadBookConstants.landmarkVisibilityRadiusMeters[.stopSign] ?? 0)).rounded(.up))
+        let towerRadius = Int((spacing + (RoadBookConstants.landmarkVisibilityRadiusMeters[.waterTower] ?? 0)).rounded(.up))
+
+        XCTAssertTrue(query.contains(#"node["highway"="stop"](around:\#(stopRadius),"#))
+        XCTAssertTrue(query.contains(#"nwr["man_made"="water_tower"](around:\#(towerRadius),"#))
+    }
+
+    func testDisabledCategoriesAreFilteredOutOfTheSelection() throws {
+        let bakery = try candidate(["shop": "bakery", "name": "Au bon pain"], at: place(along: 600, lateral: 10))
+        let data = RoadbookLandmarkData(candidates: [bakery])
+        let points = northTrack().points
+
+        XCTAssertTrue(RoadbookLandmarkSelector.select(data, points: points, maneuvers: [], enabledCategories: RoadBookConstants.landmarkDefaultEnabledCategories).standalone.isEmpty, "Autres : désactivées par défaut")
+        XCTAssertEqual(RoadbookLandmarkSelector.select(data, points: points, maneuvers: [], enabledCategories: [.bakery]).standalone.map(\.info.label), ["Au bon pain"])
+    }
+
+    /// Catalogue : chaque catégorie a un rayon, un libellé, un pictogramme et au moins un
+    /// sélecteur Overpass ; défaut = panneaux, infrastructure, bâtiments, services ; "Autres" off.
+    func testTheCatalogIsCompleteAndDefaultsMatchTheSpec() {
+        for category in RoadbookLandmarkCategory.allCases {
+            XCTAssertNotNil(RoadBookConstants.landmarkVisibilityRadiusMeters[category], "\(category) sans rayon")
+            XCTAssertFalse(category.genericLabel.isEmpty)
+            XCTAssertFalse(category.emoji.isEmpty)
+            XCTAssertFalse(category.definition.overpassSelectors.isEmpty, "\(category) sans sélecteur")
+            XCTAssertEqual(category.isEnabledByDefault, category.group != .other, "\(category)")
+        }
+        XCTAssertTrue(RoadbookLandmarkCategory.Group.service.categories.contains(.fuel))
+        XCTAssertTrue(RoadbookLandmarkCategory.Group.service.categories.contains(.chargingStation))
+        XCTAssertEqual(Set(RoadBookConstants.landmarkGroupPriority), Set(RoadbookLandmarkCategory.Group.allCases))
     }
 }

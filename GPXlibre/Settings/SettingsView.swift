@@ -77,6 +77,15 @@ struct SettingsView: View {
                     Text("Mesure l'angle de la trace autour de chaque point (fenêtre avant/après) et le classe en 4 paliers — léger, prononcé, fort, demi-tour.")
                 }
 
+                // Jalon it28 : catégories de repères affichées dans l'onglet Road Book.
+                Section {
+                    NavigationLink {
+                        RoadbookLandmarkSettingsView()
+                    } label: {
+                        Label("Repères du Road Book", systemImage: "signpost.right")
+                    }
+                }
+
                 Section {
                     Picker("Orientation", selection: $settings.mapOrientationNorthUp) {
                         Text("Cap en haut").tag(false)
