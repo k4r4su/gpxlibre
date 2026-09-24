@@ -41,6 +41,12 @@ enum NavigationConstants {
     /// "Virage fort" au lieu d'une épingle "très serré".
     static let roadbookTurnClusterMeters: Double = 50
 
+    /// Changement de ROUTE (noms Valhalla avant/après disjoints) : checkpoint "Changement de
+    /// direction" même sous le seuil minimal, si la trace tourne d'au moins ça (fiche : "le nom de
+    /// la route change ET le cap change sensiblement"). La classe de route n'est pas disponible
+    /// dans `/trace_route` (seulement dans `/trace_attributes`, non utilisé).
+    static let roadbookRoadChangeMinTurnDegrees: Double = 10
+
     // MARK: - Demi-tour (it26 point 2, fix "roadbook-no-false-uturn")
 
     /// Règle métier non négociable : un demi-tour = repartir en sens inverse sur la MÊME route

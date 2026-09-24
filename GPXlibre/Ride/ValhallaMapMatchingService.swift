@@ -27,19 +27,39 @@ struct MapMatchedManeuver {
     /// près du même carrefour (boucle, aller-retour) : la géométrie seule ne peut pas les
     /// départager. `nil` = inconnue (fixture de test), repli sur une projection monotone.
     let routeProgressFraction: Double?
-    /// Demi-tour Valhalla (`uturnLeft`/`uturnRight`) CONFIRMÉ sur la même route : la rue
-    /// empruntée après (`street_names` de la manœuvre) est aussi celle d'avant (`street_names` de
-    /// la manœuvre précédente) — fix "roadbook-no-false-uturn" (it26 point 2, règle métier : un
-    /// demi-tour = repartir en sens inverse sur la MÊME route). Rue sans nom ou différente :
-    /// `false`, affiché comme un virage très serré avec son sens, jamais comme un demi-tour.
-    let isSameRoadUTurn: Bool
+    /// Rue(s) AVANT la manœuvre (`street_names` de la manœuvre précédente) et APRÈS (`street_names`
+    /// de celle-ci) — vides si la route n'a pas de nom (fréquent en campagne). Servent à confirmer
+    /// un demi-tour sur la même route et un changement de route (voir `changesRoadName`).
+    let streetNamesBefore: [String]
+    let streetNamesAfter: [String]
 
-    init(coordinate: CLLocationCoordinate2D, type: ValhallaManeuverType, roundaboutExitCount: Int?, routeProgressFraction: Double? = nil, isSameRoadUTurn: Bool = false) {
+    init(
+        coordinate: CLLocationCoordinate2D,
+        type: ValhallaManeuverType,
+        roundaboutExitCount: Int?,
+        routeProgressFraction: Double? = nil,
+        streetNamesBefore: [String] = [],
+        streetNamesAfter: [String] = []
+    ) {
         self.coordinate = coordinate
         self.type = type
         self.roundaboutExitCount = roundaboutExitCount
         self.routeProgressFraction = routeProgressFraction
-        self.isSameRoadUTurn = isSameRoadUTurn
+        self.streetNamesBefore = streetNamesBefore
+        self.streetNamesAfter = streetNamesAfter
+    }
+
+    /// Demi-tour Valhalla CONFIRMÉ sur la même route (fix "roadbook-no-false-uturn", it26 point 2,
+    /// règle métier : un demi-tour = repartir en sens inverse sur la MÊME route) : la rue d'après
+    /// est aussi celle d'avant. Rue sans nom ou différente : affiché comme un virage très serré.
+    var isSameRoadUTurn: Bool {
+        (type == .uturnLeft || type == .uturnRight) && !Set(streetNamesBefore).isDisjoint(with: streetNamesAfter)
+    }
+
+    /// La route suivie change de nom (les deux noms sont connus et n'ont rien en commun) — un
+    /// croisement avec un chemin sans nom, ou une route qui garde son nom, ne l'est jamais.
+    var changesRoadName: Bool {
+        !streetNamesBefore.isEmpty && !streetNamesAfter.isEmpty && Set(streetNamesBefore).isDisjoint(with: streetNamesAfter)
     }
 }
 
@@ -128,14 +148,13 @@ enum ValhallaMapMatchingService {
             guard legCoordinates.indices.contains(maneuver.beginShapeIndex) else { return nil }
             let type = ValhallaManeuverType(rawValue: maneuver.type) ?? .none
             guard type.roadbookTier != nil else { return nil }
-            let isUTurn = type == .uturnLeft || type == .uturnRight
-            let roadBefore = Set(maneuvers[index - 1].streetNames)
             return MapMatchedManeuver(
                 coordinate: legCoordinates[maneuver.beginShapeIndex],
                 type: type,
                 roundaboutExitCount: maneuver.roundaboutExitCount,
                 routeProgressFraction: routeProgressFractionAtShapeIndex(maneuver.beginShapeIndex),
-                isSameRoadUTurn: isUTurn && !roadBefore.isDisjoint(with: maneuver.streetNames)
+                streetNamesBefore: maneuvers[index - 1].streetNames,
+                streetNamesAfter: maneuver.streetNames
             )
         }
     }

@@ -226,6 +226,9 @@ struct RoadBookTabView: View {
                 return
             }
             triggerMapMatchingIfNeeded(for: track)
+            #if DEBUG
+            RoadbookDebugDump.log(trackName: track.name, maneuvers: maneuvers, mapMatched: mapMatchedManeuvers)
+            #endif
             // Communes AVANT les repères, jamais en parallèle : Overpass limite les requêtes
             // simultanées par adresse IP, et la rafale de requêtes de repères faisait échouer
             // (504) l'unique requête des communes (constaté sur simulateur).
@@ -274,6 +277,9 @@ struct RoadBookTabView: View {
                 guard selectedTrack?.traversalKey == traversalKey else { return }
                 mapMatchCache.store(traversalKey: traversalKey, maneuvers: matched)
                 mapMatchedManeuvers = matched
+                #if DEBUG
+                RoadbookDebugDump.log(trackName: selectedTrack?.name ?? "", maneuvers: maneuvers, mapMatched: matched)
+                #endif
             }
         }
     }

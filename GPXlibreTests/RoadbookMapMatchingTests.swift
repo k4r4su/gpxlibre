@@ -374,7 +374,7 @@ final class RoadbookMapMatchingTests: XCTestCase {
     private func valhallaUTurn(_ type: ValhallaManeuverType, sameRoad: Bool, atMeters: Double = 500) -> [Checkpoint] {
         let straight = track(segments: [(500, 0), (500, 0)])
         let coordinate = destination(from: straight.points[0].coordinate, bearingDegrees: 0, distanceMeters: atMeters)
-        return buildEvents(straight, maneuvers: [MapMatchedManeuver(coordinate: coordinate, type: type, roundaboutExitCount: nil, isSameRoadUTurn: sameRoad)])
+        return buildEvents(straight, maneuvers: [MapMatchedManeuver(coordinate: coordinate, type: type, roundaboutExitCount: nil, streetNamesBefore: ["D 83"], streetNamesAfter: sameRoad ? ["D 83"] : ["Rue du Moulin"])])
     }
 
     /// Test demandé par la fiche it26 : demi-tour SEULEMENT pour un type Valhalla demi-tour SUR

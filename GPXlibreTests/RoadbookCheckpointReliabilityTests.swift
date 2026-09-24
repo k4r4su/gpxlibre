@@ -179,4 +179,53 @@ final class RoadbookCheckpointReliabilityTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(maneuver.checkpoint.turnAngleDegrees, NavigationConstants.roadbookLightThresholdDegreesDefault)
         }
     }
+
+    // MARK: - Changement de route (noms Valhalla avant/après)
+
+    private func slightBend(_ degrees: Double) -> GPXTrack {
+        track([(400, degrees), (400, 0)], pointSpacing: 20)
+    }
+
+    /// La route suivie change de nom ET la trace tourne sensiblement (15°, sous le seuil minimal) :
+    /// gardé, "Changement de direction", du côté de la trace.
+    func testARoadChangeWithASensibleHeadingChangeIsKeptAsADirectionChange() {
+        let bend = slightBend(15)
+        let result = maneuvers(bend, mapMatched: [MapMatchedManeuver(coordinate: point(bend, atMeters: 400), type: .slightRight, roundaboutExitCount: nil, streetNamesBefore: ["D 83"], streetNamesAfter: ["Rue du Moulin"])])
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.checkpoint.tier, .lightDirectionChange)
+        XCTAssertEqual(result.first?.checkpoint.direction, .right)
+    }
+
+    /// Changement de nom en allant tout droit (la route "devient" une autre) : pas un checkpoint.
+    func testARoadNameChangeWhileGoingStraightIsNotACheckpoint() {
+        let straight = track([(800, 0)], pointSpacing: 20)
+        let result = maneuvers(straight, mapMatched: [MapMatchedManeuver(coordinate: point(straight, atMeters: 400), type: .slightLeft, roundaboutExitCount: nil, streetNamesBefore: ["D 83"], streetNamesAfter: ["Rue du Moulin"])])
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    /// Croisement d'un chemin/sentier SANS changement de route (même nom, ou chemin sans nom) et
+    /// sans vrai virage : supprimé.
+    func testASideTrackCrossingWithoutARoadChangeIsNotACheckpoint() {
+        let bend = slightBend(15)
+        for (before, after) in [(["D 83"], ["D 83"]), ([String](), [String]()), (["D 83"], [String]())] {
+            let result = maneuvers(bend, mapMatched: [MapMatchedManeuver(coordinate: point(bend, atMeters: 400), type: .right, roundaboutExitCount: nil, streetNamesBefore: before, streetNamesAfter: after)])
+            XCTAssertTrue(result.isEmpty, "\(before) → \(after)")
+        }
+    }
+
+    // MARK: - Dump de debug
+
+    func testTheDebugDumpDescribesEachCheckpointAndItsSource() {
+        let turn = track([(400, -100), (400, 0)], pointSpacing: 20)
+        let straightFork = MapMatchedManeuver(coordinate: point(turn, atMeters: 700), type: .stayLeft, roundaboutExitCount: nil, streetNamesBefore: ["D 83"], streetNamesAfter: [])
+        let result = maneuvers(turn, mapMatched: [straightFork])
+
+        let lines = RoadbookDebugDump.lines(maneuvers: result, mapMatched: [straightFork])
+
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[0].contains("#1") && lines[0].contains("source géométrie") && lines[0].contains("angle recalculé -100°") && lines[0].contains("palier Virage fort"), lines[0])
+        XCTAssertTrue(lines[1].contains("source Valhalla") && lines[1].contains("type stayLeft") && lines[1].contains("rues D 83 → (sans nom)"), lines[1])
+    }
 }

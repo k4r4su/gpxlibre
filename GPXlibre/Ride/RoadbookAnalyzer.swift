@@ -174,9 +174,13 @@ enum RoadbookAnalyzer {
                     direction = maneuver.type == .uturnLeft ? .left : .right
                 }
             default:
-                // Virage/bretelle : pas de vrai changement de cap de la trace = pas de checkpoint.
-                guard abs(turn) >= thresholds.light else { continue }
-                tier = thresholds.tier(forAbsoluteAngle: abs(turn))
+                // Virage : gardé si la trace tourne vraiment (seuil minimal), OU si la route suivie
+                // change de nom avec un changement de cap sensible — "Changement de direction".
+                // Croisement de chemin/sentier où la trace garde son cap ET sa route : supprimé.
+                let isRealTurn = abs(turn) >= thresholds.light
+                let isRoadChange = maneuver.changesRoadName && abs(turn) >= NavigationConstants.roadbookRoadChangeMinTurnDegrees
+                guard isRealTurn || isRoadChange else { continue }
+                tier = isRealTurn ? thresholds.tier(forAbsoluteAngle: abs(turn)) : .lightDirectionChange
                 direction = turn > 0 ? .right : .left
             }
 

@@ -32,8 +32,11 @@ struct CachedMapMatchedManeuver: Codable {
     let roundaboutExitCount: Int?
     /// it26 — voir `MapMatchedManeuver.routeProgressFraction` (optionnel : absent = `nil`).
     let routeProgressFraction: Double?
-    /// it26 — voir `MapMatchedManeuver.isSameRoadUTurn` (absent = `false`, jamais un demi-tour).
-    let isSameRoadUTurn: Bool?
+    /// Noms de rue avant/après (voir `MapMatchedManeuver`). NON optionnels volontairement : un
+    /// cache antérieur (sans noms) échoue à décoder et est recalculé — sans eux, ni demi-tour ni
+    /// changement de route ne peuvent être confirmés.
+    let streetNamesBefore: [String]
+    let streetNamesAfter: [String]
 }
 
 struct CachedMapMatch: Codable {
@@ -76,7 +79,8 @@ final class RoadbookMapMatchCache {
                 type: ValhallaManeuverType(rawValue: $0.maneuverTypeRawValue) ?? .none,
                 roundaboutExitCount: $0.roundaboutExitCount,
                 routeProgressFraction: $0.routeProgressFraction,
-                isSameRoadUTurn: $0.isSameRoadUTurn ?? false
+                streetNamesBefore: $0.streetNamesBefore,
+                streetNamesAfter: $0.streetNamesAfter
             )
         }
     }
@@ -88,7 +92,8 @@ final class RoadbookMapMatchCache {
                 maneuverTypeRawValue: $0.type.rawValue,
                 roundaboutExitCount: $0.roundaboutExitCount,
                 routeProgressFraction: $0.routeProgressFraction,
-                isSameRoadUTurn: $0.isSameRoadUTurn
+                streetNamesBefore: $0.streetNamesBefore,
+                streetNamesAfter: $0.streetNamesAfter
             )
         }
         saveIndex()

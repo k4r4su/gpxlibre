@@ -130,6 +130,25 @@ final class ValhallaMapMatchingServiceTests: XCTestCase {
         XCTAssertEqual(uTurn(before: [], after: [])?.isSameRoadUTurn, false)
     }
 
+    /// Noms avant/après conservés (itération "fiabilité des checkpoints") : changement de route
+    /// seulement si les deux noms sont connus et disjoints.
+    func testStreetNamesBeforeAndAfterAreKeptAndDriveTheRoadChange() {
+        func turn(before: [String], after: [String]) -> MapMatchedManeuver? {
+            ValhallaMapMatchingService.intermediateManeuvers(maneuvers: [
+                ValhallaManeuver(type: ValhallaManeuverType.start.rawValue, beginShapeIndex: 0, streetNames: before),
+                ValhallaManeuver(type: ValhallaManeuverType.right.rawValue, beginShapeIndex: 1, streetNames: after),
+                ValhallaManeuver(type: ValhallaManeuverType.destination.rawValue, beginShapeIndex: 3),
+            ], legCoordinates: coordinates).first
+        }
+
+        let change = turn(before: ["D 83"], after: ["Rue du Moulin"])
+        XCTAssertEqual(change?.streetNamesBefore, ["D 83"])
+        XCTAssertEqual(change?.streetNamesAfter, ["Rue du Moulin"])
+        XCTAssertEqual(change?.changesRoadName, true)
+        XCTAssertEqual(turn(before: ["D 83", "Route de Colmar"], after: ["D 83"])?.changesRoadName, false)
+        XCTAssertEqual(turn(before: ["D 83"], after: [])?.changesRoadName, false, "chemin sans nom : jamais un changement de route")
+    }
+
     func testStreetNamesAreDecodedFromTheValhallaManeuverJSON() throws {
         let json = #"{"type":13,"begin_shape_index":2,"street_names":["D 83"]}"#
         let maneuver = try JSONDecoder().decode(ValhallaManeuver.self, from: Data(json.utf8))
