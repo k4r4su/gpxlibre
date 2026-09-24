@@ -107,4 +107,17 @@ struct GPXTrack: Identifiable, Codable, Hashable {
         }
         return GPXTrack(id: id, name: name, fileName: fileName, importDate: importDate, contentDate: contentDate, points: reordered, waypoints: waypoints)
     }
+
+    /// Identifie la trace ET le sens/le départ dans lequel elle est parcourue — `reordered(using:)`
+    /// préserve `id`, donc `id` seul ne distingue pas A→B de B→A. Toute donnée dérivée qui dépend
+    /// de l'ORDRE des points (types de manœuvre Valhalla gauche/droite, rang de sortie de
+    /// rond-point, entrées de commune) doit être mise en cache sous cette clé, jamais sous `id`.
+    /// Les DEUX premiers points (pas un seul) : sur une boucle, le premier point est au même
+    /// endroit dans les deux sens, le second ne l'est pas.
+    var traversalKey: String {
+        let head = points.prefix(2)
+            .map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }
+            .joined(separator: ";")
+        return "\(id.uuidString)|\(head)"
+    }
 }

@@ -92,7 +92,31 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
 
         XCTAssertEqual(provider.callCount, 1)
         XCTAssertEqual(session.mapMatchedDirectionChangePoints.count, 1)
-        XCTAssertEqual(session.mapMatchCache.maneuvers(for: matchedTrack.id)?.count, 1, "le résultat doit être écrit dans le cache disque")
+        XCTAssertEqual(session.mapMatchCache.maneuvers(for: matchedTrack)?.count, 1, "le résultat doit être écrit dans le cache disque")
+    }
+
+    /// Fix "mapmatch-cache-direction-aware" : inverser le sens de parcours (Réglages de trace →
+    /// retour sur Ride, donc `switchMode` avec la MÊME `id` mais les points réordonnés) doit
+    /// relancer le map matching — les types gauche/droite/rang de sortie de rond-point du sens
+    /// A→B sont faux dans le sens B→A. Avant ce fix, le garde `mapMatchedTrackID == track.id`
+    /// court-circuitait tout, et les manœuvres A→B restaient appliquées en B→A.
+    func testReversingTheDirectionOfTheSameTrackRetriggersMapMatching() async {
+        let session = makeSession(valhallaEnabled: true)
+        let forward = track()
+        let reversed = forward.reordered(using: TrackRideSettings(isReversed: true))
+        let provider = FakeMapMatchingProvider(coordinatesToReturn: [forward.points[1].coordinate])
+        session.mapMatchingProvider = provider
+
+        session.start(track: forward)
+        await session.mapMatchingTask?.value
+        XCTAssertEqual(provider.callCount, 1)
+
+        session.switchMode(track: reversed)
+        await session.mapMatchingTask?.value
+
+        XCTAssertEqual(provider.callCount, 2, "sens inversé : nouveau map matching, jamais les types du sens A→B")
+        XCTAssertNotNil(session.mapMatchCache.maneuvers(for: forward))
+        XCTAssertNotNil(session.mapMatchCache.maneuvers(for: reversed))
     }
 
     /// Retour d'onglet (Ride→Biblio→Ride) : `switchMode` est appelé pour la MÊME trace, le map
@@ -113,7 +137,7 @@ final class RideSessionManagerMapMatchingTests: XCTestCase {
         XCTAssertEqual(provider.callCount, 1, "même trace : aucun nouvel appel réseau")
     }
 
-    /// Le cache est tenu par TRACE (id), pas par session — une nouvelle session pointant vers le
+    /// Le cache est tenu par TRACE et SENS (`traversalKey`), pas par session — une nouvelle session pointant vers le
     /// même dossier de cache (équivalent à un relancement de l'app) ne doit pas ré-appeler le
     /// réseau pour une trace déjà mise en cache.
     func testASecondSessionReusesTheDiskCacheInsteadOfCallingTheProviderAgain() async {

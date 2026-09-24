@@ -41,13 +41,14 @@ struct RoadBookTabView: View {
     /// triggerMapMatchingIfNeeded`/`RoadbookMapMatchCache`, dupliqué ICI plutôt que partagé
     /// pour garder ce module décorrélé du fichier `RideSessionManager` (invariant "totalement
     /// découplé de l'état de Ride actif") — mais le CACHE DISQUE, lui, est bien le même
-    /// (`Documents/RoadbookMapMatchCache/`, clé = id de trace) : un trajet déjà map-matché
-    /// depuis l'onglet Ride profite d'un cache-hit immédiat ici, et vice-versa.
+    /// (`Documents/RoadbookMapMatchCache/`, clé = `GPXTrack.traversalKey`, trace ET sens) : un
+    /// trajet déjà map-matché depuis l'onglet Ride dans le même sens profite d'un cache-hit
+    /// immédiat ici, et vice-versa.
     @State private var mapMatchedManeuvers: [MapMatchedManeuver] = []
     @State private var mapMatchCache = RoadbookMapMatchCache()
     @State private var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
     @State private var mapMatchingTask: Task<Void, Never>?
-    @State private var mapMatchedTrackID: UUID?
+    @State private var mapMatchedTraversalKey: String?
 
     /// Palette jour/nuit RÉSOLUE (spec "roadbook-ui-redesign", it25, point 0) — recalculée à
     /// l'apparition, à chaque mise à jour de position, à chaque changement du réglage manuel, ET
@@ -198,13 +199,15 @@ struct RoadBookTabView: View {
         .onReceive(Timer.publish(every: RoadBookConstants.paletteReevaluationIntervalSeconds, on: .main, in: .common).autoconnect()) { _ in
             updateResolvedPalette()
         }
-        // `.task(id:)` annule/relance automatiquement si la trace sélectionnée change — jamais
-        // besoin de gérer l'annulation à la main (voir RoadBook/CLAUDE.md pour le détail du
-        // fonctionnement best-effort, point par point, sans jamais bloquer l'affichage).
-        .task(id: selectedTrack?.id) {
-            // `Checkpoint.id` est désormais dérivé de `sourcePointIndex` SEUL (fix
-            // "roadbook-landmark-id-stability") — deux traces différentes peuvent partager le
-            // même index, donc jamais réutiliser les entrées d'une trace précédente ici.
+        // `.task(id:)` annule/relance automatiquement si la trace sélectionnée OU son sens de
+        // parcours change (`traversalKey`, fix "mapmatch-cache-direction-aware" — le sens peut
+        // changer depuis Réglages de trace pendant que cet onglet reste vivant dans le TabView,
+        // sans que `id` ne change) — jamais besoin de gérer l'annulation à la main (voir
+        // RoadBook/CLAUDE.md pour le détail du fonctionnement best-effort, point par point).
+        .task(id: selectedTrack?.traversalKey) {
+            // `Checkpoint.id` est dérivé de `sourcePointIndex` SEUL (fix
+            // "roadbook-landmark-id-stability") — deux traces/sens différents peuvent partager le
+            // même index, donc jamais réutiliser les entrées d'un parcours précédent ici.
             landmarks = [:]
             if let track = selectedTrack {
                 triggerMapMatchingIfNeeded(for: track)
@@ -229,8 +232,9 @@ struct RoadBookTabView: View {
     /// Valhalla désactivé/non configuré → aucun appel réseau, roadbook géométrique identique à
     /// avant ce fix ; échec réseau (`try?`) → même résultat, jamais de crash ni de blocage.
     private func triggerMapMatchingIfNeeded(for track: GPXTrack) {
-        guard mapMatchedTrackID != track.id else { return }
-        mapMatchedTrackID = track.id
+        let traversalKey = track.traversalKey
+        guard mapMatchedTraversalKey != traversalKey else { return }
+        mapMatchedTraversalKey = traversalKey
         mapMatchingTask?.cancel()
 
         guard let configuration = currentValhallaConfiguration else {
@@ -238,13 +242,12 @@ struct RoadBookTabView: View {
             return
         }
 
-        if let cached = mapMatchCache.maneuvers(for: track.id) {
+        if let cached = mapMatchCache.maneuvers(for: track) {
             mapMatchedManeuvers = cached
             return
         }
 
         mapMatchedManeuvers = []
-        let trackID = track.id
         let sampled = Self.downsampledForMapMatching(track.points.map(\.coordinate))
         let provider = mapMatchingProvider
 
@@ -252,8 +255,8 @@ struct RoadBookTabView: View {
             guard let matched = try? await provider.matchRoute(coordinates: sampled, configuration: configuration) else { return }
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard selectedTrack?.id == trackID else { return }
-                mapMatchCache.store(trackID: trackID, maneuvers: matched)
+                guard selectedTrack?.traversalKey == traversalKey else { return }
+                mapMatchCache.store(traversalKey: traversalKey, maneuvers: matched)
                 mapMatchedManeuvers = matched
             }
         }

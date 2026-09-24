@@ -20,6 +20,12 @@ import CoreLocation
 /// simplement à décoder : dégradation propre, pas un crash (`try?` ci-dessous), le prochain accès
 /// se comporte comme un cache vide et relance l'appel réseau en tâche de fond. Aucune migration
 /// nécessaire — un cache est par nature un dérivé recalculable, jamais une donnée source.
+///
+/// Clé CHANGÉE en it26 (fix "mapmatch-cache-direction-aware") : `GPXTrack.traversalKey` au lieu de
+/// `GPXTrack.id`. Les types de manœuvre Valhalla dépendent du SENS de parcours (un "tourner à
+/// droite" A→B est un "tourner à gauche" B→A, le rang de sortie d'un rond-point change aussi) —
+/// indexé par `id` seul, un trajet déjà map-matché dans un sens réutilisait ces manœuvres telles
+/// quelles dans l'autre sens. Ancien format (`trackID`) : même dégradation propre qu'en it24.
 struct CachedMapMatchedManeuver: Codable {
     let coordinate: CLLocationCoordinate2DCodable
     let maneuverTypeRawValue: Int
@@ -27,13 +33,13 @@ struct CachedMapMatchedManeuver: Codable {
 }
 
 struct CachedMapMatch: Codable {
-    let trackID: UUID
+    let traversalKey: String
     let maneuvers: [CachedMapMatchedManeuver]
 }
 
 @MainActor
 final class RoadbookMapMatchCache {
-    private var entries: [UUID: [CachedMapMatchedManeuver]] = [:]
+    private var entries: [String: [CachedMapMatchedManeuver]] = [:]
 
     private let fileManager = FileManager.default
     private let directoryOverride: URL?
@@ -59,8 +65,8 @@ final class RoadbookMapMatchCache {
         loadIndex()
     }
 
-    func maneuvers(for trackID: UUID) -> [MapMatchedManeuver]? {
-        entries[trackID]?.map {
+    func maneuvers(for track: GPXTrack) -> [MapMatchedManeuver]? {
+        entries[track.traversalKey]?.map {
             MapMatchedManeuver(
                 coordinate: $0.coordinate.coordinate,
                 type: ValhallaManeuverType(rawValue: $0.maneuverTypeRawValue) ?? .none,
@@ -69,8 +75,8 @@ final class RoadbookMapMatchCache {
         }
     }
 
-    func store(trackID: UUID, maneuvers: [MapMatchedManeuver]) {
-        entries[trackID] = maneuvers.map {
+    func store(traversalKey: String, maneuvers: [MapMatchedManeuver]) {
+        entries[traversalKey] = maneuvers.map {
             CachedMapMatchedManeuver(
                 coordinate: CLLocationCoordinate2DCodable($0.coordinate),
                 maneuverTypeRawValue: $0.type.rawValue,
@@ -83,11 +89,11 @@ final class RoadbookMapMatchCache {
     private func loadIndex() {
         guard let data = try? Data(contentsOf: indexFileURL),
               let decoded = try? JSONDecoder().decode([CachedMapMatch].self, from: data) else { return }
-        entries = Dictionary(uniqueKeysWithValues: decoded.map { ($0.trackID, $0.maneuvers) })
+        entries = Dictionary(decoded.map { ($0.traversalKey, $0.maneuvers) }, uniquingKeysWith: { _, latest in latest })
     }
 
     private func saveIndex() {
-        let encoded = entries.map { CachedMapMatch(trackID: $0.key, maneuvers: $0.value) }
+        let encoded = entries.map { CachedMapMatch(traversalKey: $0.key, maneuvers: $0.value) }
         guard let data = try? JSONEncoder().encode(encoded) else { return }
         try? data.write(to: indexFileURL)
     }

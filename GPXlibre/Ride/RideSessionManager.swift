@@ -115,10 +115,11 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
     /// idem, `directoryOverride` dédié en test — jamais le vrai `Documents/RoadbookMapMatchCache`.
     var mapMatchCache = RoadbookMapMatchCache()
-    /// Trace pour laquelle le map matching a déjà été déclenché (succès, échec ou en cours) —
-    /// évite de relancer un appel réseau à CHAQUE `switchMode`/`start` (retour d'onglet), pas
-    /// seulement au vrai premier chargement de la trace.
-    private var mapMatchedTrackID: UUID?
+    /// Trace ET sens (`GPXTrack.traversalKey`) pour lesquels le map matching a déjà été déclenché
+    /// (succès, échec ou en cours) — évite de relancer un appel réseau à CHAQUE `switchMode`/
+    /// `start` (retour d'onglet), tout en relançant bien si le sens de parcours change (types de
+    /// manœuvre Valhalla dépendants du sens, fix "mapmatch-cache-direction-aware").
+    private var mapMatchedTraversalKey: String?
     /// `internal` uniquement pour la testabilité — permet à un test d'attendre
     /// (`await session.mapMatchingTask?.value`) la fin de la tâche de fond avant d'asserter,
     /// sans `Task.sleep` arbitraire.
@@ -406,7 +407,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             currentInflection = nil
             distanceToCurrentInflectionMeters = nil
             mapMatchingTask?.cancel()
-            mapMatchedTrackID = nil
+            mapMatchedTraversalKey = nil
             mapMatchedDirectionChangePoints = []
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
@@ -457,7 +458,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             currentInflection = nil
             distanceToCurrentInflectionMeters = nil
             mapMatchingTask?.cancel()
-            mapMatchedTrackID = nil
+            mapMatchedTraversalKey = nil
             mapMatchedDirectionChangePoints = []
             // "Reprendre ici" est spécifique au Mode Trace (Bloc 3) — quitter vers le Mode Nav
             // purge tout guidage en cours, jamais laissé orphelin.
@@ -583,14 +584,15 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
     /// Déclenche le map matching Valhalla EN TÂCHE DE FOND, une fois par trace RÉELLEMENT
     /// différente (spec "valhalla-map-matching-direction-change", it20) — jamais en temps réel
-    /// pendant le Ride, jamais relancé à chaque retour d'onglet (`mapMatchedTrackID` fait
+    /// pendant le Ride, jamais relancé à chaque retour d'onglet (`mapMatchedTraversalKey` fait
     /// exactement ce que `recordingTrackID` fait déjà pour l'enregistrement, un garde distinct
     /// car ce sont deux préoccupations indépendantes). Dégradation propre : Valhalla désactivé
     /// ou non configuré → aucun appel réseau, `mapMatchedDirectionChangePoints` reste vide, le
     /// roadbook géométrique est strictement inchangé (comportement identique à avant it20).
     private func triggerMapMatchingIfNeeded(for track: GPXTrack) {
-        guard mapMatchedTrackID != track.id else { return }
-        mapMatchedTrackID = track.id
+        let traversalKey = track.traversalKey
+        guard mapMatchedTraversalKey != traversalKey else { return }
+        mapMatchedTraversalKey = traversalKey
         mapMatchingTask?.cancel()
 
         guard let configuration = currentValhallaConfiguration else {
@@ -598,7 +600,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             return
         }
 
-        if let cached = mapMatchCache.maneuvers(for: track.id) {
+        if let cached = mapMatchCache.maneuvers(for: track) {
             // Pas de rebuildCheckpoints() ici : l'appelant (start/switchMode) en fait déjà un
             // juste après avoir appelé cette fonction, qui lira cette valeur à jour.
             mapMatchedDirectionChangePoints = cached
@@ -606,7 +608,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
 
         mapMatchedDirectionChangePoints = []
-        let trackID = track.id
         let sampled = Self.downsampledForMapMatching(track.points.map(\.coordinate))
         let provider = mapMatchingProvider
 
@@ -614,8 +615,8 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             guard let matched = try? await provider.matchRoute(coordinates: sampled, configuration: configuration) else { return }
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard let self, self.track?.id == trackID else { return }
-                self.mapMatchCache.store(trackID: trackID, maneuvers: matched)
+                guard let self, self.track?.traversalKey == traversalKey else { return }
+                self.mapMatchCache.store(traversalKey: traversalKey, maneuvers: matched)
                 self.mapMatchedDirectionChangePoints = matched
                 // Contrairement au cas cache-hit ci-dessus, le rebuildCheckpoints() de
                 // start/switchMode a déjà eu lieu SANS ces points (réponse réseau arrivée après
