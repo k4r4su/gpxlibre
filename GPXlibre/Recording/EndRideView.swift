@@ -25,6 +25,7 @@ struct EndRideView: View {
     /// l'emprise que la fiche Biblio), est le seul moyen de "voir la trace sur la carte
     /// immédiatement après validation save" sans y toucher.
     @State private var savedTrack: GPXTrack?
+    @State private var confirmDiscard = false
 
     private static let defaultNameDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -46,6 +47,13 @@ struct EndRideView: View {
                     Text("\(points.count) points enregistrés · \(waypoints.count) point(s) d'intérêt")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                // It30 : terminer SANS enregistrer (sortie de test, oubli) — arrêt propre de
+                // l'enregistrement, rien n'est ajouté à la Bibliothèque.
+                if exportURL == nil {
+                    Section {
+                        Button("Supprimer sans enregistrer", role: .destructive) { confirmDiscard = true }
+                    }
                 }
                 if exportURL != nil {
                     Section {
@@ -86,6 +94,15 @@ struct EndRideView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog("Supprimer cette sortie ?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Supprimer \(points.count) points", role: .destructive) {
+                recorder.finish()
+                onFinished()
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("L'enregistrement s'arrête et les points sont effacés. Rien n'est ajouté à la Bibliothèque.")
         }
         .onAppear {
             guard trackName.isEmpty else { return }
