@@ -6,6 +6,9 @@ struct LibraryView: View {
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
     @EnvironmentObject private var settings: RideSettingsStore
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
+    /// Sortie en cours (`recordedPointsCount`) : changer de trace active demande confirmation (it29).
+    @EnvironmentObject private var rideSession: RideSessionManager
+    @State private var pendingActivation: TrackActivationRequest?
     @StateObject private var unsavedRides = UnsavedRideStore()
     @State private var isImporting = false
     @State private var renamingTrack: GPXTrack?
@@ -174,11 +177,8 @@ struct LibraryView: View {
                     isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
                     isActive: library.activeTrackID == track.id,
                     onToggleActive: {
-                        if library.activeTrackID == track.id {
-                            library.setDisplayed(track.id, false)
-                        } else {
-                            library.setActive(track.id)
-                        }
+                        let request: TrackActivationRequest = library.activeTrackID == track.id ? .deactivate(track) : .activate(track)
+                        pendingActivation = library.request(request, recordedPointsCount: rideSession.recordedPointsCount)
                     }
                 )
                 .contentShape(Rectangle())
@@ -211,6 +211,7 @@ struct LibraryView: View {
                 }
             }
         }
+        .trackActivationConfirmation($pendingActivation)
         .sheet(item: $trackToConfigure) { track in
             TrackSettingsView(track: track)
         }

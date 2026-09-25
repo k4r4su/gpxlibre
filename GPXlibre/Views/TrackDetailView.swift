@@ -5,6 +5,8 @@ struct TrackDetailView: View {
     @StateObject private var locationManager = LocationManager()
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var navigationState: AppNavigationState
+    @EnvironmentObject private var rideSession: RideSessionManager
+    @State private var pendingActivation: TrackActivationRequest?
     @EnvironmentObject private var settings: RideSettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var showPrecacheSheet = false
@@ -36,11 +38,12 @@ struct TrackDetailView: View {
                 }
             }
         }
+        .trackActivationConfirmation($pendingActivation)
         .sheet(isPresented: $showPrecacheSheet) {
             PrecacheConfirmationView(track: track) {
                 showPrecacheSheet = false
-                library.setActive(track.id)
-                navigationState.selectedTab = .ride
+                pendingActivation = library.request(.activate(track), recordedPointsCount: rideSession.recordedPointsCount)
+                if pendingActivation == nil { navigationState.selectedTab = .ride }
             }
         }
         .onAppear {

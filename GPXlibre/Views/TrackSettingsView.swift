@@ -10,6 +10,8 @@ struct TrackSettingsView: View {
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @EnvironmentObject private var settings: RideSettingsStore
     @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var rideSession: RideSessionManager
+    @State private var pendingActivation: TrackActivationRequest?
     @Environment(\.dismiss) private var dismiss
 
     @State private var localSettings = TrackRideSettings.default
@@ -22,11 +24,8 @@ struct TrackSettingsView: View {
                     // pour le même état que l'icône de la ligne Biblio — jamais un état
                     // parallèle, toujours library.setActive/setDisplayed.
                     Button {
-                        if library.activeTrackID == track.id {
-                            library.setDisplayed(track.id, false)
-                        } else {
-                            library.setActive(track.id)
-                        }
+                        let request: TrackActivationRequest = library.activeTrackID == track.id ? .deactivate(track) : .activate(track)
+                        pendingActivation = library.request(request, recordedPointsCount: rideSession.recordedPointsCount)
                     } label: {
                         Label(
                             library.activeTrackID == track.id ? "Trace active pour le Ride" : "Rendre active pour le Ride",
@@ -138,6 +137,7 @@ struct TrackSettingsView: View {
                 }
             }
             .navigationTitle("Paramétrer la trace")
+            .trackActivationConfirmation($pendingActivation)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
