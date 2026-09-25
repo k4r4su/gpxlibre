@@ -16,22 +16,24 @@ import SwiftUI
 /// laisserait sinon presque rien à la liste), disposition HORIZONTALE dédiée (pictogramme à
 /// gauche, distance à droite) plutôt que le portrait simplement compressé.
 struct RoadbookFocusedView: View {
-    let maneuvers: [RoadbookManeuver]
-    /// Repères visibles en ligne dédiée — intercalés dans la liste des étapes À VENIR, jamais
-    /// dans la carte hero (qui reste le prochain changement de direction).
-    let landmarkCheckpoints: [RoadbookLandmarkCheckpoint]
-    let currentIndex: Int?
+    /// Virages ET repères en ligne dédiée, dans l'ordre de la trace (`RoadbookEntry.merge`) —
+    /// it30 : le "prochain élément" mis en avant est le plus proche, QUEL QUE SOIT son type
+    /// (un stop à 200 m passe avant un virage à 300 m).
+    let entries: [RoadbookEntry]
+    /// Index du prochain élément dans `entries` (`RoadbookLiveProgress.nextEntry`).
+    let currentEntryIndex: Int?
     let distanceRemainingMeters: Double?
-    /// Position actuelle projetée sur la trace — distance "dans combien" des checkpoints.
+    /// Position actuelle projetée sur la trace — distance "dans combien" des éléments suivants.
     let currentCumulativeDistanceMeters: Double?
     let unit: DistanceUnit
     /// Distingue "pas encore de position GPS" de "trace terminée" (les deux se traduisent par
-    /// `currentIndex == nil`, mais méritent un message différent — jamais le même écran vide
-    /// muet pour deux situations différentes).
+    /// `currentEntryIndex == nil`, mais méritent un message différent).
     let hasLocationFix: Bool
-    /// Repères OSM à proximité (spec "roadbook-mode", it23quater) — voir `RoadBookTabView`,
-    /// clé absente = pas encore résolu, valeur `nil` = résolu sans résultat.
+    /// Repère affiché AVEC chaque virage (clé = `RoadbookManeuver.id`).
     let landmarks: [UUID: RoadbookLandmarkInfo?]
+    /// Hors trace (it30) : la carte principale le dit à la place du prochain élément, la liste
+    /// des éléments suivants reste affichée ; retour automatique à la normale sur la trace.
+    var offTrack = RoadbookOffTrackState()
 
     /// `.compact` = paysage sur iPhone (TARGETED_DEVICE_FAMILY "1", pas d'iPad à gérer) — signal
     /// natif SwiftUI, se met à jour automatiquement à la rotation, jamais besoin d'observer
@@ -39,7 +41,7 @@ struct RoadbookFocusedView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
-    private enum UpcomingStep: Identifiable {
+    enum UpcomingStep: Identifiable, Equatable {
         case maneuver(RoadbookManeuver, rank: Int, distanceFromNowMeters: Double)
         case landmark(RoadbookLandmarkCheckpoint, distanceFromNowMeters: Double)
 
@@ -57,23 +59,29 @@ struct RoadbookFocusedView: View {
         }
     }
 
-    /// TOUTES les étapes restantes (it25, point 1 — plus de `.prefix(2)`), manœuvres et
-    /// checkpoints de commune (it26 point 3) mêlés par distance — distance recalculée DEPUIS LA
-    /// POSITION ACTUELLE, une vraie distance "dans combien" plutôt qu'un simple report de
-    /// `partialDistanceMeters`.
-    private var upcoming: [UpcomingStep] {
-        guard let currentIndex, let distanceRemainingMeters,
-              maneuvers.indices.contains(currentIndex)
-        else { return [] }
-        let currentCumulative = maneuvers[currentIndex].cumulativeDistanceMeters
-        let upcomingManeuvers = maneuvers[(currentIndex + 1)...].enumerated().map { offset, maneuver in
-            UpcomingStep.maneuver(maneuver, rank: offset + 2, distanceFromNowMeters: maneuver.cumulativeDistanceMeters - currentCumulative + distanceRemainingMeters)
+    /// TOUS les éléments après le prochain, dans l'ordre de la trace (donc de distance croissante
+    /// depuis la position actuelle), virages et repères mêlés sans priorité de catégorie.
+    /// "+n" (affiché `rank - 1`) = n-ième virage APRÈS l'élément mis en avant : "+1" pour le
+    /// premier virage de la liste, que l'élément mis en avant soit un virage ou un repère.
+    static func upcomingSteps(entries: [RoadbookEntry], currentEntryIndex: Int?, distanceRemainingMeters: Double?, currentCumulativeDistanceMeters: Double?) -> [UpcomingStep] {
+        guard let currentEntryIndex, let distanceRemainingMeters, entries.indices.contains(currentEntryIndex) else { return [] }
+        let current = entries[currentEntryIndex]
+        let position = currentCumulativeDistanceMeters ?? (current.cumulativeDistanceMeters - distanceRemainingMeters)
+        var maneuverRank = 1
+        return entries[(currentEntryIndex + 1)...].map { entry in
+            let distance = max(entry.cumulativeDistanceMeters - position, 0)
+            switch entry {
+            case .maneuver(let maneuver, _):
+                maneuverRank += 1
+                return .maneuver(maneuver, rank: maneuverRank, distanceFromNowMeters: distance)
+            case .landmark(let landmark):
+                return .landmark(landmark, distanceFromNowMeters: distance)
+            }
         }
-        let position = currentCumulativeDistanceMeters ?? (currentCumulative - distanceRemainingMeters)
-        let upcomingLandmarks = landmarkCheckpoints
-            .filter { $0.cumulativeDistanceMeters > position }
-            .map { UpcomingStep.landmark($0, distanceFromNowMeters: $0.cumulativeDistanceMeters - position) }
-        return (upcomingManeuvers + upcomingLandmarks).sorted { $0.distanceFromNowMeters < $1.distanceFromNowMeters }
+    }
+
+    private var upcoming: [UpcomingStep] {
+        Self.upcomingSteps(entries: entries, currentEntryIndex: currentEntryIndex, distanceRemainingMeters: distanceRemainingMeters, currentCumulativeDistanceMeters: currentCumulativeDistanceMeters)
     }
 
     var body: some View {
@@ -111,12 +119,18 @@ struct RoadbookFocusedView: View {
 
     @ViewBuilder
     private var heroContent: some View {
-        if let currentIndex, let distanceRemainingMeters, maneuvers.indices.contains(currentIndex) {
-            let current = maneuvers[currentIndex]
-            if isLandscape {
-                RoadbookBigManeuverCardLandscape(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
-            } else {
-                RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+        if offTrack.isOffTrack {
+            RoadbookOffTrackCard(offTrack: offTrack, unit: unit, isLandscape: isLandscape)
+        } else if let currentEntryIndex, let distanceRemainingMeters, entries.indices.contains(currentEntryIndex) {
+            switch entries[currentEntryIndex] {
+            case .maneuver(let current, _):
+                if isLandscape {
+                    RoadbookBigManeuverCardLandscape(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+                } else {
+                    RoadbookBigManeuverCard(maneuver: current, distanceRemainingMeters: distanceRemainingMeters, unit: unit, landmark: landmarks[current.id] ?? nil)
+                }
+            case .landmark(let landmark):
+                RoadbookBigLandmarkCard(landmark: landmark, distanceRemainingMeters: distanceRemainingMeters, unit: unit, isLandscape: isLandscape)
             }
         } else if !hasLocationFix {
             RoadbookFocusStatusView(systemImage: "location.slash", message: "En attente d'une position GPS…")
@@ -130,6 +144,109 @@ struct RoadbookFocusedView: View {
             return min(CGFloat(RoadBookConstants.focusedHeroLandscapeHeight), availableHeight)
         }
         return max(availableHeight * RoadBookConstants.focusedHeroHeightFraction, RoadBookConstants.focusedHeroMinHeight)
+    }
+}
+
+extension RoadbookEntry {
+    var isManeuver: Bool {
+        if case .maneuver = self { return true }
+        return false
+    }
+}
+
+/// Prochain élément = un REPÈRE (it30, priorité par ordre d'arrivée) : même place et même
+/// hiérarchie que la carte d'un virage — pictogramme de la catégorie, distance en très grand,
+/// nom et côté. Portrait et paysage.
+private struct RoadbookBigLandmarkCard: View {
+    let landmark: RoadbookLandmarkCheckpoint
+    let distanceRemainingMeters: Double
+    let unit: DistanceUnit
+    let isLandscape: Bool
+
+    @EnvironmentObject private var navigationState: AppNavigationState
+
+    var body: some View {
+        Button {
+            navigationState.focusRideMap(on: landmark.coordinate)
+        } label: {
+            if isLandscape {
+                HStack(spacing: 24) {
+                    RoadbookLandmarkIcon(category: landmark.info.category, size: 90)
+                    labels(alignment: .leading)
+                    Spacer(minLength: 12)
+                    distanceText(size: 60)
+                }
+                .padding(.horizontal, 20)
+            } else {
+                VStack(spacing: 16) {
+                    RoadbookLandmarkIcon(category: landmark.info.category, size: 110)
+                    distanceText(size: 64)
+                    labels(alignment: .center)
+                }
+                .padding(.horizontal, 24)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Prochain repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceRemainingMeters))")
+    }
+
+    private func distanceText(size: CGFloat) -> some View {
+        Text(unit.displayString(fromMeters: distanceRemainingMeters))
+            .font(.system(size: size, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+    }
+
+    private func labels(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            Text(landmark.info.label)
+                .font(.title3.bold())
+                .multilineTextAlignment(alignment == .center ? .center : .leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+            Text(RoadbookLandmarkRowText.detail(landmark.info))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// "Hors trace" dans le Road Book (it30) — même terminologie et même seuil que la puce du Ride
+/// (`OffTrackDetector`), distance de reprise après le même délai.
+private struct RoadbookOffTrackCard: View {
+    let offTrack: RoadbookOffTrackState
+    let unit: DistanceUnit
+    let isLandscape: Bool
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let layout = isLandscape ? AnyLayout(HStackLayout(spacing: 24)) : AnyLayout(VStackLayout(spacing: 14))
+            layout {
+                Image(systemName: "location.slash.fill")
+                    .font(.system(size: isLandscape ? 64 : 84, weight: .bold))
+                    .foregroundStyle(.orange)
+                VStack(spacing: 6) {
+                    Text("Hors trace")
+                        .font(.system(size: isLandscape ? 40 : 48, weight: .heavy, design: .rounded))
+                    if offTrack.showsRejoinDistance(now: context.date), let rejoin = offTrack.rejoinDistanceMeters {
+                        Text("Trace à \(unit.displayString(fromMeters: rejoin))")
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Les directions reprennent au retour sur la trace.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.orange.opacity(0.10))
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 

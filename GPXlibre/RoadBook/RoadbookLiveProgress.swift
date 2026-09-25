@@ -25,24 +25,41 @@ enum RoadbookLiveProgress {
         maneuvers: [RoadbookManeuver],
         currentCumulativeDistanceMeters: Double
     ) -> (index: Int, distanceRemainingMeters: Double)? {
-        guard !maneuvers.isEmpty else { return nil }
+        next(positions: maneuvers.map(\.cumulativeDistanceMeters), currentCumulativeDistanceMeters: currentCumulativeDistanceMeters)
+    }
 
-        guard let reachedIndex = maneuvers.lastIndex(where: { $0.cumulativeDistanceMeters <= currentCumulativeDistanceMeters }) else {
-            // Rien atteint encore — la toute première manœuvre de la trace, countdown normal.
-            return (0, max(maneuvers[0].cumulativeDistanceMeters - currentCumulativeDistanceMeters, 0))
+    /// Prochain élément du Road Book, TOUS TYPES CONFONDUS (it30, "priorité par ordre
+    /// d'arrivée") — virage OU repère (stop, feux, entrée d'agglomération...) : seul l'ordre le
+    /// long de la trace compte, aucune catégorie n'a de priorité. Un stop à 200 m passe avant un
+    /// virage à 300 m. Même compte à rebours, même maintien et même exception "virages
+    /// enchaînés" que pour les manœuvres. `entries` : `RoadbookEntry.merge`, déjà dans l'ordre.
+    static func nextEntry(
+        entries: [RoadbookEntry],
+        currentCumulativeDistanceMeters: Double
+    ) -> (index: Int, distanceRemainingMeters: Double)? {
+        next(positions: entries.map(\.cumulativeDistanceMeters), currentCumulativeDistanceMeters: currentCumulativeDistanceMeters)
+    }
+
+    /// Positions (distances cumulées) croissantes.
+    private static func next(positions: [Double], currentCumulativeDistanceMeters: Double) -> (index: Int, distanceRemainingMeters: Double)? {
+        guard let first = positions.first else { return nil }
+
+        guard let reachedIndex = positions.lastIndex(where: { $0 <= currentCumulativeDistanceMeters }) else {
+            // Rien atteint encore — le tout premier élément de la trace, countdown normal.
+            return (0, max(first - currentCumulativeDistanceMeters, 0))
         }
 
-        let distancePastReached = currentCumulativeDistanceMeters - maneuvers[reachedIndex].cumulativeDistanceMeters
+        let distancePastReached = currentCumulativeDistanceMeters - positions[reachedIndex]
         let nextIndex = reachedIndex + 1
 
-        guard maneuvers.indices.contains(nextIndex) else {
+        guard positions.indices.contains(nextIndex) else {
             // Dernière manœuvre de la trace : maintenue affichée (figée à "0 m") pendant la
             // zone de grâce, puis `nil` (toutes les manœuvres sont passées) — comportement de
             // fin de trace inchangé au-delà de cette fenêtre.
             return distancePastReached < RoadBookConstants.liveManeuverHoldAfterMeters ? (reachedIndex, 0) : nil
         }
 
-        let gapToNext = maneuvers[nextIndex].cumulativeDistanceMeters - maneuvers[reachedIndex].cumulativeDistanceMeters
+        let gapToNext = positions[nextIndex] - positions[reachedIndex]
         // Virages enchaînés (demande explicite : "sauf si les virages s'enchaînent") — la
         // manœuvre suivante est déjà plus proche que la zone de maintien elle-même : basculer
         // tout de suite plutôt que de retarder une instruction déjà imminente.
@@ -50,7 +67,7 @@ enum RoadbookLiveProgress {
             return (reachedIndex, 0)
         }
 
-        let distance = maneuvers[nextIndex].cumulativeDistanceMeters - currentCumulativeDistanceMeters
+        let distance = positions[nextIndex] - currentCumulativeDistanceMeters
         return (nextIndex, max(distance, 0))
     }
 }

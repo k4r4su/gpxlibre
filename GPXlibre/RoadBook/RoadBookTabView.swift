@@ -96,11 +96,29 @@ struct RoadBookTabView: View {
         )
     }
 
-    /// `nil` tant que le mode Assisté GPS n'a pas de position exploitable — l'affichage retombe
-    /// alors silencieusement sur les distances fixes (repli honnête, jamais un crash).
-    private var liveProgress: (index: Int, distanceRemainingMeters: Double)? {
-        guard !maneuvers.isEmpty, let current = liveCumulativeDistanceMeters else { return nil }
-        return RoadbookLiveProgress.nextManeuver(maneuvers: maneuvers, currentCumulativeDistanceMeters: current)
+    /// Virages ET repères en ligne dédiée, dans l'ordre de la trace — la liste que TOUS les
+    /// affichages du Road Book parcourent (it30 : priorité par ordre d'arrivée).
+    private var entries: [RoadbookEntry] {
+        RoadbookEntry.merge(maneuvers: maneuvers, landmarks: landmarkSelection.standalone)
+    }
+
+    /// Prochain élément (virage OU repère, le plus proche) — `nil` tant que le mode Assisté GPS
+    /// n'a pas de position exploitable.
+    private var liveEntry: (index: Int, distanceRemainingMeters: Double)? {
+        guard let current = liveCumulativeDistanceMeters else { return nil }
+        return RoadbookLiveProgress.nextEntry(entries: entries, currentCumulativeDistanceMeters: current)
+    }
+
+    /// Hors trace (it30) : même règle que le Ride (`OffTrackDetector`), mis à jour à chaque
+    /// position en mode Assisté GPS.
+    @State private var offTrack = RoadbookOffTrackState()
+
+    private func updateOffTrack() {
+        guard settings.roadbookReadingMode == .gpsAssisted, let track = selectedTrack, let location = locationManager.currentLocation else {
+            offTrack.reset()
+            return
+        }
+        offTrack.update(location: location, points: track.points, cumulativeDistances: TrackProjector.cumulativeDistances(for: track.points))
     }
 
     /// Position actuelle projetée sur la trace (distance cumulée) — mode Assisté GPS uniquement.
@@ -196,7 +214,16 @@ struct RoadBookTabView: View {
             }
         }
         .onChange(of: settings.roadbookPaletteSetting) { _ in updateResolvedPalette() }
-        .onChange(of: locationManager.currentLocation?.coordinate.latitude) { _ in updateResolvedPalette() }
+        .onChange(of: locationManager.currentLocation?.coordinate.latitude) { _ in
+            updateResolvedPalette()
+            updateOffTrack()
+        }
+        .onChange(of: locationManager.currentLocation?.coordinate.longitude) { _ in updateOffTrack() }
+        .onChange(of: selectedTrack?.traversalKey) { _ in
+            offTrack.reset()
+            updateOffTrack()
+        }
+        .onChange(of: settings.roadbookReadingMode) { _ in updateOffTrack() }
         .onReceive(Timer.publish(every: RoadBookConstants.paletteReevaluationIntervalSeconds, on: .main, in: .common).autoconnect()) { _ in
             updateResolvedPalette()
         }
@@ -402,14 +429,14 @@ struct RoadBookTabView: View {
             // Mini-carte RETIRÉE (jalon it28, demande explicite) : la vue focus occupe tout
             // l'espace, portrait comme paysage — aucune réservation de place à droite du hero.
             RoadbookFocusedView(
-                maneuvers: maneuvers,
-                landmarkCheckpoints: landmarkSelection.standalone,
-                currentIndex: liveProgress?.index,
-                distanceRemainingMeters: liveProgress?.distanceRemainingMeters,
+                entries: entries,
+                currentEntryIndex: liveEntry?.index,
+                distanceRemainingMeters: liveEntry?.distanceRemainingMeters,
                 currentCumulativeDistanceMeters: liveCumulativeDistanceMeters,
                 unit: settings.roadbookPDFOptions.distanceUnit,
                 hasLocationFix: locationManager.currentLocation != nil,
-                landmarks: landmarks
+                landmarks: landmarks,
+                offTrack: offTrack
             )
         } else {
             RoadbookTableView(

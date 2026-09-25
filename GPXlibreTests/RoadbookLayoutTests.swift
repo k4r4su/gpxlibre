@@ -22,9 +22,11 @@ final class RoadbookLayoutTests: XCTestCase {
 
     private func hostedFocusedView(size: CGSize, sizeClass: UserInterfaceSizeClass) -> UIView {
         let view = RoadbookFocusedView(
-            maneuvers: [maneuver(500), maneuver(1000), maneuver(1500)],
-            landmarkCheckpoints: [RoadbookLandmarkCheckpoint(info: RoadbookLandmarkInfo(category: .church, label: "Église"), latitude: 45, longitude: 5, cumulativeDistanceMeters: 800)],
-            currentIndex: 0,
+            entries: RoadbookEntry.merge(
+                maneuvers: [maneuver(500), maneuver(1000), maneuver(1500)],
+                landmarks: [RoadbookLandmarkCheckpoint(info: RoadbookLandmarkInfo(category: .church, label: "Église"), latitude: 45, longitude: 5, cumulativeDistanceMeters: 800)]
+            ),
+            currentEntryIndex: 0,
             distanceRemainingMeters: 320,
             currentCumulativeDistanceMeters: 180,
             unit: .km,

@@ -792,8 +792,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         guard let projection else { return }
 
+        // Règle partagée avec le Road Book (it30) : `OffTrackDetector`.
+        let isOffTrack = OffTrackDetector.isOffTrack(wasOffTrack: isOffTrackPaused, distanceToTrackMeters: projection.distanceToTrackMeters)
         if isOffTrackPaused {
-            guard projection.distanceToTrackMeters <= RideConstants.horsTraceExitMeters else {
+            guard !isOffTrack else {
                 updateOffTrackResumeTarget(from: location, projection: projection)
                 return
             }
@@ -801,7 +803,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             offTrackResumeCoordinate = nil
             offTrackResumeDistanceMeters = nil
             offTrackPausedSinceDate = nil
-        } else if projection.distanceToTrackMeters > RideConstants.horsTraceEnterMeters {
+        } else if isOffTrack {
             isOffTrackPaused = true
             offTrackPausedSinceDate = location.timestamp
             updateOffTrackResumeTarget(from: location, projection: projection)
