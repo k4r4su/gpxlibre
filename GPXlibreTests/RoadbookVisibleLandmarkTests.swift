@@ -40,7 +40,7 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
     }
 
     private func select(_ candidates: [RoadbookLandmarkCandidate], track: GPXTrack? = nil, maneuvers: [RoadbookManeuver] = []) -> RoadbookLandmarkSelection {
-        RoadbookLandmarkSelector.select(RoadbookLandmarkData(candidates: candidates), points: (track ?? northTrack()).points, maneuvers: maneuvers, urbanEntryFallbackEnabled: false)
+        RoadbookLandmarkSelector.select(RoadbookLandmarkData(candidates: candidates), points: (track ?? northTrack()).points, maneuvers: maneuvers, cityEntryFallbackEnabled: false)
     }
 
     private func maneuver(atMeters meters: Double) -> RoadbookManeuver {
@@ -287,30 +287,18 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
     }
 
     func testTheQueryAsksOnlyForAllowedCategories() throws {
-        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: RoadBookConstants.landmarkDefaultEnabledCategories, includeUrbanWays: false))
+        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: RoadBookConstants.landmarkDefaultEnabledCategories))
 
         XCTAssertFalse(query.contains("boundary"), "plus aucune limite administrative")
-        XCTAssertFalse(query.contains(#"["place""#), "plus aucun lieu habité")
-        XCTAssertTrue(query.contains(#"["traffic_sign"~"city_limit|FR:EB10"]"#) || query.contains(#"["traffic_sign"~"FR:EB10|city_limit"]"#))
+        // Les localités (`place`) ne sont demandées que pour NOMMER les entrées calculées (it29),
+        // jamais comme repères en soi — voir `RoadbookCityEntryTests`.
+        XCTAssertTrue(query.contains(#"node["traffic_sign"~"city_limit|FR:EB10|DE:310",i]"#))
         XCTAssertTrue(query.contains("way(bn.onroad)"), "chaussées porteuses des éléments posés sur la route (sens, alignement)")
-        XCTAssertFalse(query.contains("maxspeed"), "repli zone urbaine désactivé par défaut")
+        XCTAssertFalse(query.contains("maxspeed"), "plus de repli par limitation de vitesse")
         XCTAssertFalse(query.contains(#""crossing""#), "plus jamais de passage piéton")
     }
 
-    // MARK: - Repli "entrée de localité" par limitation 50 km/h (désactivé par défaut)
-
-    func testTheUrbanEntryFallbackIsOffByDefaultAndOnlyAddsAnEntryWhenEnabled() {
-        XCTAssertFalse(RoadBookConstants.landmarkUrbanEntryFallbackEnabled)
-        let urbanWay = [place(along: 1000, lateral: 0), place(along: 2000, lateral: 0)].map(CLLocationCoordinate2DCodable.init)
-        let data = RoadbookLandmarkData(candidates: [], urbanWays: [urbanWay])
-        let points = northTrack().points
-
-        XCTAssertTrue(RoadbookLandmarkSelector.select(data, points: points, maneuvers: [], urbanEntryFallbackEnabled: false).standalone.isEmpty)
-        let enabled = RoadbookLandmarkSelector.select(data, points: points, maneuvers: [], urbanEntryFallbackEnabled: true).standalone
-        XCTAssertEqual(enabled.count, 1)
-        XCTAssertEqual(enabled.first?.info.label, "Entrée d'agglomération")
-        XCTAssertEqual(enabled.first?.cumulativeDistanceMeters ?? 0, 1000, accuracy: 25)
-    }
+    // Repli "Entrée de <localité>" (it29) : voir `RoadbookCityEntryTests`.
 
     // MARK: - Cache, lignes, PDF
 
@@ -375,7 +363,7 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
             points: northTrack().points,
             maneuvers: [],
             enabledCategories: RoadBookConstants.landmarkDefaultEnabledCategories,
-            urbanEntryFallbackEnabled: false
+            cityEntryFallbackEnabled: false
         )
         let byCategory = Dictionary(grouping: result.standalone, by: \.info.category)
 
@@ -424,14 +412,14 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
 
         XCTAssertTrue(data.candidates.isEmpty)
         XCTAssertFalse(RoadbookLandmarkCategory.allCases.contains { $0.rawValue.lowercased().contains("crossing") && $0 != .levelCrossing })
-        let everything = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: Set(RoadbookLandmarkCategory.allCases), includeUrbanWays: false))
+        let everything = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: Set(RoadbookLandmarkCategory.allCases)))
         XCTAssertFalse(everything.contains(#""crossing""#))
     }
 
     /// La requête ne contient QUE les catégories demandées.
     func testTheQueryIsBuiltWithTheActiveCategoriesOnly() throws {
         let points = northTrack().points
-        let signsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.stopSign, .fuel], includeUrbanWays: false))
+        let signsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.stopSign, .fuel]))
 
         XCTAssertTrue(signsOnly.contains(#"node["highway"="stop"](around:"#))
         XCTAssertTrue(signsOnly.contains(#"nwr["amenity"="fuel"](around:"#))
@@ -440,17 +428,17 @@ final class RoadbookVisibleLandmarkTests: XCTestCase {
         XCTAssertFalse(signsOnly.contains("charging_station"))
         XCTAssertTrue(signsOnly.contains("way(bn.onroad)"), "un stop a besoin de sa route porteuse")
 
-        let buildingsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.church], includeUrbanWays: false))
+        let buildingsOnly = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: points, categories: [.church]))
         XCTAssertTrue(buildingsOnly.contains("place_of_worship"))
         XCTAssertFalse(buildingsOnly.contains("highway\"=\"stop"))
         XCTAssertFalse(buildingsOnly.contains("way(bn.onroad)"), "rien de posé sur la chaussée : pas de routes porteuses")
 
-        XCTAssertNil(RoadbookLandmarkOverpassService.query(for: points, categories: [], includeUrbanWays: false), "aucune catégorie : aucune requête")
+        XCTAssertNil(RoadbookLandmarkOverpassService.query(for: points, categories: []), "aucune catégorie : aucune requête")
     }
 
     /// Radius per category : la requête interroge chaque catégorie à son propre rayon.
     func testEachCategoryIsQueriedAtItsOwnRadius() throws {
-        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: [.stopSign, .waterTower], includeUrbanWays: false))
+        let query = try XCTUnwrap(RoadbookLandmarkOverpassService.query(for: northTrack().points, categories: [.stopSign, .waterTower]))
         let spacing = RoadBookConstants.landmarkQuerySampleSpacingMeters
         let stopRadius = Int((spacing + (RoadBookConstants.landmarkVisibilityRadiusMeters[.stopSign] ?? 0)).rounded(.up))
         let towerRadius = Int((spacing + (RoadBookConstants.landmarkVisibilityRadiusMeters[.waterTower] ?? 0)).rounded(.up))

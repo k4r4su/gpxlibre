@@ -107,7 +107,7 @@ final class RoadbookStableRegressionTests: XCTestCase {
             points: track.points,
             maneuvers: maneuvers,
             enabledCategories: RoadBookConstants.landmarkDefaultEnabledCategories,
-            urbanEntryFallbackEnabled: RoadBookConstants.landmarkUrbanEntryFallbackEnabled
+            cityEntryFallbackEnabled: RoadBookConstants.landmarkCityEntryFallbackEnabled
         )
         return RoadbookEntry.merge(maneuvers: maneuvers, landmarks: selection.standalone).map { entry in
             // Distances arrondies à 10 m : le résultat attendu reste lisible et stable.

@@ -43,13 +43,16 @@ struct RoadbookLandmarkCandidate: Codable, Equatable {
 /// (complément), en désactiver une ne fait que filtrer (aucun réseau).
 struct RoadbookLandmarkData: Codable, Equatable {
     let candidates: [RoadbookLandmarkCandidate]
-    /// Routes limitées à 50 km/h / `FR:urban` — seulement si `landmarkUrbanEntryFallbackEnabled`.
-    let urbanWays: [[CLLocationCoordinate2DCodable]]
+    /// Repli "Entrée de <localité>" (it29) : zones bâties et localités nommées, téléchargées avec
+    /// la catégorie "Entrée d'agglomération".
+    let builtUpAreas: [RoadbookBuiltUpArea]
+    let places: [RoadbookPlace]
     let fetchedCategories: Set<RoadbookLandmarkCategory>
 
-    init(candidates: [RoadbookLandmarkCandidate], urbanWays: [[CLLocationCoordinate2DCodable]] = [], fetchedCategories: Set<RoadbookLandmarkCategory> = Set(RoadbookLandmarkCategory.allCases)) {
+    init(candidates: [RoadbookLandmarkCandidate], builtUpAreas: [RoadbookBuiltUpArea] = [], places: [RoadbookPlace] = [], fetchedCategories: Set<RoadbookLandmarkCategory> = Set(RoadbookLandmarkCategory.allCases)) {
         self.candidates = candidates
-        self.urbanWays = urbanWays
+        self.builtUpAreas = builtUpAreas
+        self.places = places
         self.fetchedCategories = fetchedCategories
     }
 
@@ -66,8 +69,58 @@ struct RoadbookLandmarkData: Codable, Equatable {
             }
             merged.append(candidate)
         }
-        return RoadbookLandmarkData(candidates: merged, urbanWays: urbanWays + other.urbanWays, fetchedCategories: fetchedCategories.union(categories))
+        return RoadbookLandmarkData(
+            candidates: merged,
+            builtUpAreas: Self.deduplicated(builtUpAreas + other.builtUpAreas, id: \.osmID),
+            places: Self.deduplicated(places + other.places, id: \.osmID),
+            fetchedCategories: fetchedCategories.union(categories)
+        )
     }
+
+    /// Un élément renvoyé par deux tronçons voisins n'est gardé qu'une fois (identifiant OSM).
+    private static func deduplicated<T>(_ items: [T], id: (T) -> String?) -> [T] {
+        var seen = Set<String>()
+        return items.filter { item in id(item).map { seen.insert($0).inserted } ?? true }
+    }
+}
+
+/// Zone bâtie traversée par la route (`landuse=residential`, ou polygone `place` qui porte alors
+/// directement le nom) — l'entrée dans cette zone est là où se dresse le panneau d'agglomération.
+struct RoadbookBuiltUpArea: Codable, Equatable {
+    let osmID: String?
+    /// Nom de la localité quand la zone est un polygone `place` ; `nil` pour une zone résidentielle.
+    let name: String?
+    /// Anneaux EXTÉRIEURS (les trous d'une zone résidentielle n'ont pas d'importance ici).
+    let rings: [[CLLocationCoordinate2DCodable]]
+
+    init(osmID: String? = nil, name: String? = nil, rings: [[CLLocationCoordinate2D]]) {
+        self.osmID = osmID
+        self.name = name
+        self.rings = rings.map { $0.map(CLLocationCoordinate2DCodable.init) }
+    }
+}
+
+/// Localité nommée (nœud `place`) : donne son nom à une zone bâtie.
+struct RoadbookPlace: Codable, Equatable {
+    enum Kind: String, Codable {
+        case city, town, village, suburb
+    }
+
+    let osmID: String?
+    let name: String
+    let kind: Kind
+    let latitude: Double
+    let longitude: Double
+
+    init(osmID: String? = nil, name: String, kind: Kind, coordinate: CLLocationCoordinate2D) {
+        self.osmID = osmID
+        self.name = name
+        self.kind = kind
+        latitude = coordinate.latitude
+        longitude = coordinate.longitude
+    }
+
+    var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }
 
 /// Repère affiché en LIGNE DÉDIÉE du Road Book, entre deux changements de direction — jamais un
@@ -107,7 +160,7 @@ enum RoadbookLandmarkSelector {
         points: [GPXPoint],
         maneuvers: [RoadbookManeuver],
         enabledCategories: Set<RoadbookLandmarkCategory> = Set(RoadbookLandmarkCategory.allCases),
-        urbanEntryFallbackEnabled: Bool = RoadBookConstants.landmarkUrbanEntryFallbackEnabled
+        cityEntryFallbackEnabled: Bool = RoadBookConstants.landmarkCityEntryFallbackEnabled
     ) -> RoadbookLandmarkSelection {
         let cumulative = TrackProjector.cumulativeDistances(for: points)
         guard points.count > 1, (cumulative.last ?? 0) > 0 else { return .empty }
@@ -115,8 +168,14 @@ enum RoadbookLandmarkSelector {
         var placements = data.candidates
             .filter { enabledCategories.contains($0.category) }
             .flatMap { visiblePlacements(of: $0, points: points, cumulative: cumulative) }
-        if urbanEntryFallbackEnabled, enabledCategories.contains(.citySign) {
-            placements += urbanEntries(data.urbanWays, mappedSigns: placements.filter { $0.info.category == .citySign }, points: points, cumulative: cumulative)
+        if cityEntryFallbackEnabled, enabledCategories.contains(.citySign) {
+            placements += RoadbookCityEntryDetector.entries(
+                areas: data.builtUpAreas,
+                places: data.places,
+                mappedSigns: placements.filter { $0.info.category == .citySign }.map { (cumulative: $0.cumulative, name: $0.info.label) },
+                points: points,
+                cumulative: cumulative
+            ).map { Placement(info: RoadbookLandmarkInfo(category: .citySign, label: $0.label), coordinate: $0.coordinate, cumulative: $0.cumulativeDistanceMeters, lateral: 0) }
         }
 
         let maneuverPositions = maneuvers.map(\.cumulativeDistanceMeters)
@@ -229,7 +288,8 @@ enum RoadbookLandmarkSelector {
     }
 
     /// Fusion des repères trop proches (le plus prioritaire reste), puis au plus
-    /// `landmarkMaxPerSegment` par tronçon entre deux changements de direction.
+    /// `landmarkMaxPerSegment` par tronçon entre deux changements de direction — les entrées
+    /// d'agglomération n'en sont jamais écartées.
     private static func densityLimited(_ placements: [Placement], maneuverPositions: [Double]) -> [Placement] {
         var merged: [Placement] = []
         for placement in placements.sorted(by: { $0.cumulative < $1.cumulative }) {
@@ -239,9 +299,15 @@ enum RoadbookLandmarkSelector {
                 merged.append(placement)
             }
         }
+        // Par tronçon : TOUTES les entrées d'agglomération (repère le plus important, deux villages
+        // peuvent se suivre sur une même ligne droite), puis les autres repères jusqu'à la limite.
         let segments = Dictionary(grouping: merged) { placement in maneuverPositions.filter { $0 < placement.cumulative }.count }
         return segments.values
-            .flatMap { $0.sorted(by: isStronger).prefix(RoadBookConstants.landmarkMaxPerSegment) }
+            .flatMap { segment -> [Placement] in
+                let entries = segment.filter { $0.info.category == .citySign }
+                let others = segment.filter { $0.info.category != .citySign }.sorted(by: isStronger)
+                return entries + others.prefix(max(RoadBookConstants.landmarkMaxPerSegment - entries.count, 0))
+            }
             .sorted { $0.cumulative < $1.cumulative }
     }
 
@@ -257,37 +323,6 @@ enum RoadbookLandmarkSelector {
             }
         }
         return kept
-    }
-
-    // MARK: - Repli zone urbaine (désactivé par défaut)
-
-    /// Entrée sur une route urbaine (50 km/h / `FR:urban`) après au moins
-    /// `landmarkUrbanEntryMinGapMeters` hors zone urbaine, et loin de tout panneau cartographié.
-    private static func urbanEntries(_ urbanWays: [[CLLocationCoordinate2DCodable]], mappedSigns: [Placement], points: [GPXPoint], cumulative: [Double]) -> [Placement] {
-        let ways = urbanWays.map { way in way.map { GPXPoint(latitude: $0.latitude, longitude: $0.longitude) } }.filter { $0.count > 1 }
-        guard !ways.isEmpty, let total = cumulative.last else { return [] }
-        let wayCumulatives = ways.map { TrackProjector.cumulativeDistances(for: $0) }
-
-        func isUrban(_ coordinate: CLLocationCoordinate2D) -> Bool {
-            zip(ways, wayCumulatives).contains { way, wayCumulative in
-                (TrackProjector.project(coordinate, onto: way, cumulativeDistances: wayCumulative)?.distanceToTrackMeters ?? .infinity) <= RoadBookConstants.landmarkUrbanWayMatchMeters
-            }
-        }
-
-        var entries: [Placement] = []
-        var lastUrbanMeters: Double?
-        var meters: Double = 0
-        while meters <= total {
-            if let coordinate = TrackProjector.interpolatedCoordinate(atCumulativeDistance: meters, points: points, cumulativeDistances: cumulative), isUrban(coordinate) {
-                let isEntry = lastUrbanMeters.map { meters - $0 >= RoadBookConstants.landmarkUrbanEntryMinGapMeters } ?? (meters > 0)
-                if isEntry, !mappedSigns.contains(where: { abs($0.cumulative - meters) < RoadBookConstants.landmarkUrbanEntryMinGapMeters }) {
-                    entries.append(Placement(info: RoadbookLandmarkInfo(category: .citySign, label: RoadbookLandmarkCategory.citySign.genericLabel), coordinate: coordinate, cumulative: meters, lateral: 0))
-                }
-                lastUrbanMeters = meters
-            }
-            meters += 20
-        }
-        return entries
     }
 }
 

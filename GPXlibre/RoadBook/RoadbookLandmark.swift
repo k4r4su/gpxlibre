@@ -67,7 +67,11 @@ enum RoadbookLandmarkCategory: String, Codable, Equatable, CaseIterable, Identif
         case .citySign:
             let values = RoadbookLandmark.citySignValues.joined(separator: "|")
             return Definition(group: .sign, genericLabel: "Entrée d'agglomération", emoji: "🏘️",
-                              overpassSelectors: ["node[\"traffic_sign\"~\"\(values)\"]", "node[\"traffic_sign:forward\"~\"\(values)\"]", "node[\"traffic_sign:backward\"~\"\(values)\"]"],
+                              overpassSelectors: [
+                                "node[\"traffic_sign\"~\"\(values)\",i]", "node[\"traffic_sign:forward\"~\"\(values)\",i]",
+                                "node[\"traffic_sign:backward\"~\"\(values)\",i]", "node[\"highway\"=\"city_limit\"]",
+                                "node[\"city_limit\"~\"^(begin|both)$\"]",
+                              ],
                               matches: RoadbookLandmark.isCityEntrySign)
         case .stopSign:
             return Definition(group: .sign, genericLabel: "Stop", emoji: "🛑", overpassSelectors: ["node[\"highway\"=\"stop\"]"], matches: { $0["highway"] == "stop" })
@@ -241,16 +245,23 @@ struct RoadbookLandmarkInfo: Codable, Equatable, Hashable {
 /// panneau de SORTIE d'agglomération). Aucun accès réseau ici, voir
 /// `RoadbookLandmarkOverpassService`.
 enum RoadbookLandmark {
-    static let citySignValues: Set<String> = ["city_limit", "FR:EB10"]
+    /// Valeurs de `traffic_sign` d'un panneau d'entrée d'agglomération (comparées sans casse, en
+    /// préfixe : "FR:EB10[Hundsbach]") — générique, français, allemand (région frontalière).
+    static let citySignValues: [String] = ["city_limit", "FR:EB10", "DE:310"]
     static let speedBumps: Set<String> = ["bump", "hump", "table", "cushion"]
 
     /// Panneau d'ENTRÉE d'agglomération (`traffic_sign` ou sa variante `:forward`/`:backward`) —
     /// jamais le panneau de sortie (`city_limit=end`).
+    /// Formes rencontrées (it29) : `traffic_sign[:forward|:backward]=city_limit|FR:EB10|DE:310`
+    /// (casse libre, valeurs multiples), `highway=city_limit` (hors norme mais utilisé), ou
+    /// `city_limit=begin|both` seul.
     static func isCityEntrySign(_ tags: [String: String]) -> Bool {
+        guard tags["city_limit"] != "end" else { return false }
         let signValues = [tags["traffic_sign"], tags["traffic_sign:forward"], tags["traffic_sign:backward"]]
             .compactMap { $0 }
-            .flatMap { $0.split(whereSeparator: { $0 == ";" || $0 == "," }).map { String($0).trimmingCharacters(in: .whitespaces) } }
-        return signValues.contains { value in citySignValues.contains { value.hasPrefix($0) } } && tags["city_limit"] != "end"
+            .flatMap { $0.split(whereSeparator: { $0 == ";" || $0 == "," }).map { String($0).trimmingCharacters(in: .whitespaces).lowercased() } }
+        let isSign = signValues.contains { value in citySignValues.contains { value.hasPrefix($0.lowercased()) } }
+        return isSign || tags["highway"] == "city_limit" || ["begin", "both"].contains(tags["city_limit"] ?? "")
     }
 
     /// Catégorie (première du catalogue qui reconnaît l'élément) + libellé affiché.

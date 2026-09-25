@@ -41,7 +41,7 @@ enum RoadBookConstants {
     /// Catégorie absente : jamais retenue.
     static let landmarkVisibilityRadiusMeters: [RoadbookLandmarkCategory: Double] = [
         // Panneaux
-        .citySign: 25, .stopSign: 20, .giveWaySign: 20, .trafficSignals: 25, .levelCrossing: 20,
+        .citySign: 30, .stopSign: 20, .giveWaySign: 20, .trafficSignals: 25, .levelCrossing: 20,
         // Infrastructure
         .speedBump: 12, .bridge: 8, .tunnel: 8,
         // Bâtiments et ouvrages
@@ -99,14 +99,36 @@ enum RoadBookConstants {
     /// autres instances publiques testées (private.coffee, kumi.systems) : plus lentes, autant de
     /// 504 — pas de bascule d'instance.
     static let landmarkRetryDelaysSeconds: [Double] = [5, 15, 30]
-    /// Repli "entrée de localité" quand AUCUN panneau n'est cartographié : passage sur une route
-    /// limitée à 50 km/h / `FR:urban`. DÉSACTIVÉ par défaut (ce n'est pas un repère visible en soi,
-    /// seulement un indice) — un panneau cartographié gagne toujours.
-    static let landmarkUrbanEntryFallbackEnabled = false
-    /// Repli ci-dessus : trace considérée "en zone urbaine" à moins de ça d'une route urbaine...
-    static let landmarkUrbanWayMatchMeters: Double = 12
-    /// ...après au moins ça hors zone urbaine, et jamais à moins de ça d'un panneau cartographié.
-    static let landmarkUrbanEntryMinGapMeters: Double = 300
+    /// Repli "Entrée de <localité>" (it29) — ACTIF par défaut. Diagnostic sur la trace de test
+    /// réelle (27 km, 11 villages traversés) : UN SEUL panneau `city_limit` cartographié dans OSM
+    /// (Hundsbach) ; les autres villages n'en ont aucun. Le repli place l'entrée là où la trace
+    /// entre dans la ZONE BÂTIE (`landuse=residential`, ou polygone `place` s'il existe) — là où se
+    /// dresse le vrai panneau : à Hundsbach, zone bâtie à 18,91 km, panneau OSM à 18,90 km — et la
+    /// nomme d'après le nœud `place` le plus proche. Un panneau cartographié gagne toujours.
+    static let landmarkCityEntryFallbackEnabled = true
+    /// Échantillonnage de la trace pour détecter l'entrée dans une zone bâtie.
+    static let landmarkCityEntrySampleMeters: Double = 10
+    /// Deux passages en zone bâtie séparés de moins de ça = une seule traversée (zones
+    /// résidentielles morcelées d'un même village).
+    static let landmarkCityEntryMergeGapMeters: Double = 300
+    /// Traversée plus courte que ça (après fusion) : ferme ou lotissement isolé, pas une entrée.
+    static let landmarkCityEntryMinRunMeters: Double = 150
+    /// Dans une zone bâtie, la localité (nœud `place` le plus proche) est réévaluée tous les N m :
+    /// villages mitoyens dont les zones bâties se touchent.
+    static let landmarkCityEntryNameCheckMeters: Double = 50
+    /// Un changement de localité à l'intérieur d'une zone bâtie doit tenir au moins ça (hystérésis).
+    static let landmarkCityEntryNameMinStretchMeters: Double = 100
+    /// Portée d'un nœud `place` : il nomme une zone bâtie jusqu'à cette distance du point d'entrée
+    /// — une ville a son nœud au centre, loin de ses bords. Un `suburb` n'est retenu que hors de
+    /// portée de toute ville (`town`/`city`) : on entre dans "Mulhouse", pas dans un quartier ;
+    /// mais dans "Oberdorf" (ancien village d'une commune nouvelle).
+    static let landmarkCityEntryPlaceReachMeters: [RoadbookPlace.Kind: Double] = [.city: 5000, .town: 3000, .village: 1500, .suburb: 1500]
+    /// Nœud `village` avec un `suburb` à moins de ça : siège d'une commune nouvelle (Illtal), écarté
+    /// au profit des anciens villages (`suburb`) dont les panneaux portent le nom.
+    static let landmarkCityEntryParentSeatMeters: Double = 500
+    /// Panneau cartographié à moins de ça d'une entrée calculée : le panneau seul est affiché.
+    static let landmarkCityEntrySignDedupMeters: Double = 400
+    /// La requête Overpass des nœuds `place` couvre ces portées (au-delà du pas d'échantillonnage).
 
     // MARK: - Export PDF
 
