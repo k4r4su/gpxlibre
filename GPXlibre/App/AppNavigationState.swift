@@ -38,6 +38,11 @@ final class AppNavigationState: ObservableObject {
         selectedTab = .ride
     }
 
+    /// Raccourci du Road Book vers la Bibliothèque (it29) : la trace active ne se change QUE là.
+    func showLibrary() {
+        selectedTab = .library
+    }
+
     /// Fin du mode "étape Road Book" (fix "roadbook-jump-to-map-sticky", it26 point 4) : tant
     /// que `roadBookFocusRequest` est non nil, la carte Ride reste sur l'étape (suivi GPS
     /// suspendu, losange violet affiché, voir `RideCameraFollowPolicy`) — SEUL "Me recentrer"

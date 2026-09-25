@@ -3,11 +3,11 @@ import CoreLocation
 
 /// Onglet Road Book (spec "roadbook-mode", it23, point 1 ; refonte UI/UX "roadbook-ui-redesign",
 /// it25) — lecture d'une trace en mode liste de directions pures, esprit roadbook papier de
-/// rallye. TOTALEMENT DÉCOUPLÉ de l'état de Ride actif : lit une trace en entrée (celle affichée
-/// dans Ride, ou une autre choisie ici depuis la Bibliothèque), ne pilote RIEN — jamais un accès
-/// à `RideSessionManager`, jamais une écriture dans `LibraryStore.activeTrackID`/
-/// `displayedTrackIDs` (invariant it10). La sélection de trace ici est un `@State` PUREMENT
-/// LOCAL à cet écran.
+/// rallye. Affiche TOUJOURS la trace active (`LibraryStore.activeTrackID`, source unique partagée
+/// avec Bibliothèque et Ride, it29) : aucune sélection de trace ici — le raccourci en haut à gauche
+/// affiche son nom en lecture seule et mène à la Bibliothèque, seul endroit où la changer. Ne pilote
+/// RIEN : jamais un accès à `RideSessionManager`, jamais une écriture dans `LibraryStore`
+/// (invariant it10).
 struct RoadBookTabView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var settings: RideSettingsStore
@@ -23,10 +23,9 @@ struct RoadBookTabView: View {
     /// "tout est déjà passé". Voir `selectedTrack` ci-dessous.
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @EnvironmentObject private var networkMonitor: NetworkMonitor
+    @EnvironmentObject private var navigationState: AppNavigationState
 
-    @State private var selectedTrackID: UUID?
     @State private var showExportOptions = false
-    @State private var showTrackPicker = false
     @StateObject private var locationManager = LocationManager()
     /// Repères VISIBLES (jalon it28) : téléchargement par tronçons avec progression, cache par
     /// trace, complément par catégorie, sélection pour le parcours affiché — best-effort, ne bloque
@@ -62,23 +61,11 @@ struct RoadBookTabView: View {
     /// palette du moment de l'ouverture.
     @State private var resolvedPalette: RoadbookPalette = .paper
 
-    /// Trace CANONIQUE (ordre d'origine du fichier GPX) — utilisée uniquement pour la sélection
-    /// (comparaison d'id dans le picker) ; jamais passée directement à l'extraction de
-    /// manœuvres/la projection GPS, voir `selectedTrack` ci-dessous.
-    private var rawSelectedTrack: GPXTrack? {
-        if let selectedTrackID, let track = library.tracks.first(where: { $0.id == selectedTrackID }) {
-            return track
-        }
-        return library.activeTrack ?? library.tracks.first
-    }
-
-    /// Trace dans le sens RÉELLEMENT affiché/parcouru (fix "roadbook-reversed-direction-broken")
-    /// — même patron que `RideView.rideContent`. Tout ce qui dépend de l'ordre des points est
-    /// mis en cache par `traversalKey` (trace ET sens), jamais par `id` seul. TOUJOURS utiliser
-    /// CETTE propriété (jamais `rawSelectedTrack`) pour tout calcul de distance cumulée/
-    /// manœuvre/projection GPS.
+    /// Trace ACTIVE dans le sens réellement parcouru (fix "roadbook-reversed-direction-broken" ;
+    /// source unique it29, voir `RoadbookTrackSource`). Tout ce qui dépend de l'ordre des points
+    /// est mis en cache par `traversalKey` (trace ET sens), jamais par `id` seul.
     private var selectedTrack: GPXTrack? {
-        rawSelectedTrack.map { $0.reordered(using: trackRideSettings.settings(for: $0.id)) }
+        RoadbookTrackSource.displayedTrack(library: library, trackRideSettings: trackRideSettings)
     }
 
     private var maneuvers: [RoadbookManeuver] {
@@ -136,23 +123,30 @@ struct RoadBookTabView: View {
                     // Fix "content-unavailable-view-ios17-only" : `ContentUnavailableView` est
                     // iOS 17+, incompatible avec la cible 16.0 du projet — état vide maison,
                     // même patron visuel que `LibraryView.emptyState`.
-                    RoadBookEmptyState(
-                        title: "Aucune trace",
-                        systemImage: "list.bullet.rectangle",
-                        message: "Importe ou charge une trace dans la Bibliothèque pour générer un Road Book."
-                    )
+                    VStack(spacing: 20) {
+                        RoadBookEmptyState(
+                            title: "Aucune trace active",
+                            systemImage: "list.bullet.rectangle",
+                            message: "Active une trace dans la Bibliothèque : le Road Book affiche toujours la trace active."
+                        )
+                        .frame(maxHeight: 320)
+                        Button {
+                            navigationState.showLibrary()
+                        } label: {
+                            Label("Ouvrir la Bibliothèque", systemImage: "books.vertical")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .navigationTitle("Road Book")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showTrackPicker = true
-                    } label: {
-                        Image(systemName: "map")
+                    // Raccourci vers la Bibliothèque (it29) : nom de la trace active en LECTURE
+                    // SEULE, jamais un sélecteur — changer de trace se fait dans la Bibliothèque.
+                    RoadbookLibraryShortcut(trackName: selectedTrack?.name) {
+                        navigationState.showLibrary()
                     }
-                    .disabled(library.tracks.isEmpty)
-                    .accessibilityLabel("Choisir une trace")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -163,9 +157,6 @@ struct RoadBookTabView: View {
                     .disabled(selectedTrack == nil)
                     .accessibilityLabel("Exporter en PDF")
                 }
-            }
-            .sheet(isPresented: $showTrackPicker) {
-                trackPickerSheet
             }
             .sheet(isPresented: $showExportOptions) {
                 if let track = selectedTrack {
@@ -434,43 +425,36 @@ struct RoadBookTabView: View {
 
     /// `.compact` = paysage sur iPhone (seul device family ciblé, `TARGETED_DEVICE_FAMILY "1"`).
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+}
 
-    private var trackPickerSheet: some View {
-        NavigationStack {
-            List {
-                ForEach(library.tracks) { track in
-                    trackPickerRow(track)
-                }
-            }
-            .navigationTitle("Choisir une trace")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { showTrackPicker = false }
-                }
-            }
-        }
+/// Trace affichée par le Road Book (it29) : la trace ACTIVE de la Bibliothèque, dans son sens de
+/// parcours — jamais une autre, jamais un repli sur "la première trace" : sans trace active, le
+/// Road Book invite à en choisir une dans la Bibliothèque. Seule source, pas d'état local.
+enum RoadbookTrackSource {
+    @MainActor
+    static func displayedTrack(library: LibraryStore, trackRideSettings: TrackRideSettingsStore) -> GPXTrack? {
+        library.activeTrack.map { $0.reordered(using: trackRideSettings.settings(for: $0.id)) }
     }
+}
 
-    /// Extrait en fonction séparée (piège Swift déjà rencontré ailleurs dans le projet, voir
-    /// Offline/CLAUDE.md : un type-checker peut échouer à résoudre une closure de ligne trop
-    /// dense mêlant `Button`/`HStack`/comparaison optionnelle, avec des erreurs qui pointent
-    /// à tort vers l'appel `List(...)` lui-même plutôt que la vraie ligne en cause).
-    @ViewBuilder
-    private func trackPickerRow(_ track: GPXTrack) -> some View {
-        let isSelected = track.id == selectedTrack?.id
-        Button {
-            selectedTrackID = track.id
-            showTrackPicker = false
-        } label: {
-            HStack {
-                Text(track.name)
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                }
+/// Raccourci en haut à gauche du Road Book : icône Bibliothèque + nom de la trace active, en
+/// lecture seule. Un tap mène à la Bibliothèque — aucune liste de traces sur place.
+struct RoadbookLibraryShortcut: View {
+    let trackName: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "books.vertical")
+                Text(trackName ?? "Bibliothèque")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 190, alignment: .leading)
             }
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(trackName.map { "Trace active : \($0). Ouvrir la Bibliothèque pour en changer" } ?? "Ouvrir la Bibliothèque")
     }
 }
 
