@@ -35,6 +35,7 @@
 		26635BA37D9C8B5C400CECCD /* TrackRideSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E521E4F8ADB9294C7F7FAF8 /* TrackRideSettings.swift */; };
 		272C29E47921F1289B633B34 /* AppNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954FDD2C15AEAEAAE528AA1F /* AppNavigationState.swift */; };
 		27EF69072C9BAD4EAC0B5CFE /* TileCoordinateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F549FFD3F072B961F48302 /* TileCoordinateTests.swift */; };
+		2802224AD330074362334D00 /* RoadbookDownloadMeterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5440F9E8F65B519D19DE09 /* RoadbookDownloadMeterTests.swift */; };
 		2AA1677B18237341C37E7F95 /* RoadbookPictogramGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E4B97578CB625AFBA17C21 /* RoadbookPictogramGeometry.swift */; };
 		2BE243F3AF3B4693A631C994 /* TrackMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7F88B11B9E6631C18FFBE /* TrackMapView.swift */; };
 		2C2EC5C62958DA3410C1903A /* TileSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6EBC7F4FD3F2F99ADBDB22 /* TileSource.swift */; };
@@ -215,6 +216,7 @@
 		E9A12DBCFAD4A61A250105ED /* SpeedLimitBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE5004947B91F2FF663AFE6 /* SpeedLimitBadgeView.swift */; };
 		EAD8881321E745038ACECD7F /* BlockedPathBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1AC2200EACFC3436860271A /* BlockedPathBannerView.swift */; };
 		EB1288DAC9D91775DCA72EEA /* DetourRoutingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD94492CCA8C53965DBDB36E /* DetourRoutingService.swift */; };
+		EB44357100FAB2DA99A504F2 /* RoadbookDownloadMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B10319E9D7F6F40764A6419 /* RoadbookDownloadMeter.swift */; };
 		EC5F93B6F80C2E8C67E5E5B1 /* MapColorFlavor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D451F965C7446B4D901B3747 /* MapColorFlavor.swift */; };
 		ED00B073B8DD9A6A9F9EC337 /* RoadbookManeuver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C442A5F9611DEB5E851A7BB5 /* RoadbookManeuver.swift */; };
 		ED55BFD5B863E12180F1C284 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 0B8E38CDE1439C5E2E06B33A /* MapLibre */; };
@@ -291,6 +293,7 @@
 		2A5FF516F7A9F9E965750826 /* ValhallaManeuverTypeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValhallaManeuverTypeTests.swift; sourceTree = "<group>"; };
 		2AD719D90D13BC46218E8AEF /* ValhallaSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValhallaSettingsView.swift; sourceTree = "<group>"; };
 		2AFA7B0D786B3BFE6F23FA76 /* RoadbookPaletteResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookPaletteResolverTests.swift; sourceTree = "<group>"; };
+		2B10319E9D7F6F40764A6419 /* RoadbookDownloadMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookDownloadMeter.swift; sourceTree = "<group>"; };
 		2DA9DEF33C434FDB168E1C34 /* TrackThumbnailGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackThumbnailGeometryTests.swift; sourceTree = "<group>"; };
 		2E6E91693E4BD31C90751CBC /* TileCacheURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCacheURLProtocol.swift; sourceTree = "<group>"; };
 		2F13789BB94D4A3014D8F943 /* GPXlibreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GPXlibreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -481,6 +484,7 @@
 		F8F549FFD3F072B961F48302 /* TileCoordinateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCoordinateTests.swift; sourceTree = "<group>"; };
 		F8FC7B3F636885FB97B34C08 /* NavDestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavDestinationSearchView.swift; sourceTree = "<group>"; };
 		F9AE0944F88D997067E031FA /* RoadbookMapMatchCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookMapMatchCache.swift; sourceTree = "<group>"; };
+		FB5440F9E8F65B519D19DE09 /* RoadbookDownloadMeterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadbookDownloadMeterTests.swift; sourceTree = "<group>"; };
 		FD94492CCA8C53965DBDB36E /* DetourRoutingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetourRoutingService.swift; sourceTree = "<group>"; };
 		FE1D70BEA3BF0F58D230A031 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		FEE1CC05064D82C3B5978F86 /* MapLoadWarningBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLoadWarningBannerView.swift; sourceTree = "<group>"; };
@@ -726,6 +730,7 @@
 				1467663B7C8913050F99EC9B /* RoadbookCityEntries.swift */,
 				51A5E81790843C96C4FC5E42 /* RoadBookConstants.swift */,
 				789B55C425130DCCA7B8B64C /* RoadbookDebugDump.swift */,
+				2B10319E9D7F6F40764A6419 /* RoadbookDownloadMeter.swift */,
 				4777E7545BD4AE4F63DC45D7 /* RoadbookExportOptionsView.swift */,
 				DAADDBDBF6310331486B1525 /* RoadbookExtractor.swift */,
 				AC350F708029ADEC756B9F78 /* RoadbookFocusedView.swift */,
@@ -781,6 +786,7 @@
 				8215A98B95CB8E1200CD0DA3 /* RideSessionManagerUnsavedRideTests.swift */,
 				E1A01A125E48A23405466B13 /* RoadbookCheckpointReliabilityTests.swift */,
 				70197C0B12B26858215FB6D4 /* RoadbookCityEntryTests.swift */,
+				FB5440F9E8F65B519D19DE09 /* RoadbookDownloadMeterTests.swift */,
 				E9325001021D82793B44F803 /* RoadbookExtractorTests.swift */,
 				7B7845E29E404A5D52E24239 /* RoadbookInflectionTests.swift */,
 				BAFC1A4EAB82BD010EA70104 /* RoadbookLandmarkLoaderTests.swift */,
@@ -1034,6 +1040,7 @@
 				45C6D009BF00915BA59950CE /* RideSessionManagerUnsavedRideTests.swift in Sources */,
 				03C3A69DE104E4AB44763823 /* RoadbookCheckpointReliabilityTests.swift in Sources */,
 				AB74169602F3AC04430C5CD5 /* RoadbookCityEntryTests.swift in Sources */,
+				2802224AD330074362334D00 /* RoadbookDownloadMeterTests.swift in Sources */,
 				D2961BEDFCB678A187EA4970 /* RoadbookExtractorTests.swift in Sources */,
 				EDB478D489FAEEB7825928CA /* RoadbookInflectionTests.swift in Sources */,
 				1EF1CEE1E1AF5DD720D53885 /* RoadbookLandmarkLoaderTests.swift in Sources */,
@@ -1168,6 +1175,7 @@
 				B3DEDE8A607F12449A3F18CD /* RoadbookAnalyzer.swift in Sources */,
 				1BA570247D061D105C03184D /* RoadbookCityEntries.swift in Sources */,
 				42D1137A1100335C0ADAC612 /* RoadbookDebugDump.swift in Sources */,
+				EB44357100FAB2DA99A504F2 /* RoadbookDownloadMeter.swift in Sources */,
 				E2B890BF023EE72EC96ED539 /* RoadbookExportOptionsView.swift in Sources */,
 				BDC0FFE0C29B0837719044EB /* RoadbookExtractor.swift in Sources */,
 				497A1BD6DAA682BF0126C003 /* RoadbookFocusedView.swift in Sources */,

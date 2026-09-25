@@ -32,8 +32,16 @@ final class RoadbookLandmarkLoaderTests: XCTestCase {
             waiters = []
         }
 
-        func fetch(_ points: [GPXPoint], _ categories: Set<RoadbookLandmarkCategory>) async -> RoadbookLandmarkData? {
+        /// Téléchargement lent simulé : octets envoyés par paquets espacés.
+        private var packetDelayNanoseconds: UInt64 = 0
+        func setSlow(packetDelaySeconds: Double) { packetDelayNanoseconds = UInt64(packetDelaySeconds * 1_000_000_000) }
+
+        func fetch(_ points: [GPXPoint], _ categories: Set<RoadbookLandmarkCategory>, onEvent: @escaping @Sendable (RoadbookFetchEvent) -> Void = { _ in }) async -> RoadbookLandmarkData? {
             requests.append(categories)
+            for _ in 0..<4 {
+                if packetDelayNanoseconds > 0 { try? await Task.sleep(nanoseconds: packetDelayNanoseconds) }
+                onEvent(.bytes(5_000))
+            }
             if let holdFromRequest, requests.count > holdFromRequest {
                 await withCheckedContinuation { waiters.append($0) }
             }
@@ -80,7 +88,7 @@ final class RoadbookLandmarkLoaderTests: XCTestCase {
     private func makeLoader(_ fake: FakeOverpass, online: @escaping () -> Bool = { true }) -> RoadbookLandmarkLoader {
         RoadbookLandmarkLoader(
             cache: RoadbookLandmarkDataCache(directoryOverride: cacheDirectory),
-            fetchChunk: { points, categories in await fake.fetch(points, categories) },
+            fetchChunk: { points, categories, onEvent in await fake.fetch(points, categories, onEvent: onEvent) },
             isOnline: online
         )
     }
@@ -324,5 +332,84 @@ final class RoadbookLandmarkLoaderTests: XCTestCase {
 
         store.resetRoadbookLandmarkCategoriesToDefaults()
         XCTAssertEqual(RideSettingsStore(defaults: defaults).roadbookLandmarkCategories, RoadBookConstants.landmarkDefaultEnabledCategories)
+    }
+
+    // MARK: - Progression enrichie (it29)
+
+    /// Téléchargement lent : bandeau affiché, quantité, débit et temps restant cohérents pendant
+    /// le téléchargement, Road Book (sélection) utilisable pendant ce temps.
+    func testSlowDownloadShowsQuantitySpeedAndRemainingTime() async throws {
+        let fake = FakeOverpass(candidates: [candidate(.church, "Église", at: 600, lateral: 15, id: 1)])
+        await fake.setSlow(packetDelaySeconds: 0.35)
+        let loader = makeLoader(fake)
+
+        loader.update(trackID: UUID(), traversalKey: "a", points: points(lengthMeters: 17_000), maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        XCTAssertFalse(loader.isBannerVisible, "pas de bandeau avant le délai d'affichage")
+
+        await waitUntil(loader.phase == .downloading(completedChunks: 1, totalChunks: 3))
+        XCTAssertTrue(loader.isBannerVisible, "chargement long : bandeau affiché")
+        await waitUntil((loader.stats?.secondsRemaining) != nil)
+        let stats = try XCTUnwrap(loader.stats)
+        XCTAssertGreaterThanOrEqual(stats.bytesReceived, 20_000, "au moins un tronçon reçu")
+        XCTAssertGreaterThan(stats.elementsReceived, 0)
+        XCTAssertNotNil(stats.bytesPerSecond)
+        XCTAssertEqual(try XCTUnwrap(stats.secondsRemaining), 2 * 4 * 0.35, accuracy: 2.5, "deux tronçons restants à ~1,4 s chacun")
+        // Sélection calculée hors du fil principal après chaque tronçon : elle arrive pendant que
+        // les tronçons suivants se téléchargent encore.
+        await waitUntil(self.labels(loader) == ["Église"])
+        XCTAssertNotEqual(loader.phase, .finished, "repères déjà utilisables pendant le téléchargement")
+
+        await loader.settle()
+        XCTAssertEqual(loader.phase, .finished)
+        XCTAssertNil(loader.stats, "plus de statistiques une fois terminé")
+    }
+
+    /// Téléchargement quasi instantané : le bandeau n'apparaît jamais (pas de clignotement).
+    func testAnInstantDownloadNeverFlashesTheBanner() async {
+        let fake = FakeOverpass(candidates: sample)
+        let loader = makeLoader(fake)
+        var everVisible = false
+        let observer = loader.$showsProgress.sink { if $0 { everVisible = true } }
+        defer { observer.cancel() }
+
+        loader.update(trackID: UUID(), traversalKey: "a", points: points(lengthMeters: 2000), maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        await loader.settle()
+        try? await Task.sleep(nanoseconds: UInt64((RoadBookConstants.landmarkProgressShowDelaySeconds + 0.3) * 1_000_000_000))
+
+        XCTAssertFalse(everVisible)
+        XCTAssertFalse(loader.isBannerVisible)
+        XCTAssertEqual(labels(loader), ["Église Saint-Blaise", "Total"])
+    }
+
+    /// Données en cache : aucun téléchargement, aucun bandeau, aucune statistique.
+    func testCachedDataShowsNoProgressAtAll() async {
+        let fake = FakeOverpass(candidates: sample)
+        let trackID = UUID()
+        let track = points(lengthMeters: 2000)
+        let first = makeLoader(fake)
+        first.update(trackID: trackID, traversalKey: "a", points: track, maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        await first.settle()
+
+        let cached = makeLoader(fake)
+        cached.update(trackID: trackID, traversalKey: "a", points: track, maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        await cached.settle()
+        XCTAssertFalse(cached.isBannerVisible)
+        XCTAssertNil(cached.stats)
+        XCTAssertEqual(cached.phase, .idle)
+    }
+
+    /// Échec et hors-ligne : visibles tout de suite, sans attendre le délai d'affichage.
+    func testFailureAndOfflineAreShownImmediately() async {
+        let failing = FakeOverpass(candidates: sample)
+        await failing.setFailing(true)
+        let loader = makeLoader(failing)
+        loader.update(trackID: UUID(), traversalKey: "a", points: points(lengthMeters: 2000), maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        await loader.settle()
+        XCTAssertEqual(loader.phase, .failed)
+        XCTAssertTrue(loader.isBannerVisible)
+
+        let offline = makeLoader(FakeOverpass(candidates: sample), online: { false })
+        offline.update(trackID: UUID(), traversalKey: "b", points: points(lengthMeters: 2000), maneuvers: [], enabled: RoadBookConstants.landmarkDefaultEnabledCategories)
+        XCTAssertTrue(offline.isBannerVisible)
     }
 }

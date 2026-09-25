@@ -90,6 +90,16 @@ enum RoadBookConstants {
     /// Téléchargement découpé en TRONÇONS de trace de cette longueur (une requête chacun) : c'est
     /// l'unité de la barre de progression, et les repères apparaissent au fur et à mesure.
     static let landmarkQueryChunkMeters: Double = 8000
+    /// Débit affiché = octets reçus sur cette fenêtre glissante (lissage).
+    static let landmarkProgressSpeedWindowSeconds: Double = 3
+    /// Pas de débit affiché avant ça (valeur non significative au démarrage).
+    static let landmarkProgressSpeedMinSeconds: Double = 1
+    /// Temps restant affiché seulement après ce nombre de tronçons terminés (estimation stable).
+    static let landmarkProgressMinChunksForEstimate = 1
+    /// Le bandeau n'apparaît qu'après ce délai : un chargement quasi instantané ne clignote pas.
+    static let landmarkProgressShowDelaySeconds: Double = 0.6
+    /// Rafraîchissement du débit et du temps restant pendant le téléchargement.
+    static let landmarkProgressRefreshSeconds: Double = 0.5
     /// Durée d'affichage de l'état "Terminé" avant que l'indicateur ne disparaisse.
     static let landmarkProgressDoneDisplaySeconds: Double = 2
     static let landmarkRequestTimeoutSeconds: Double = 90

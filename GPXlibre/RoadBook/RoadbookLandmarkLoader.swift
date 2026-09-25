@@ -37,15 +37,35 @@ enum RoadbookLandmarkLoadPhase: Equatable {
 /// sélection (projection de centaines de candidats) tourne hors du fil principal.
 @MainActor
 final class RoadbookLandmarkLoader: ObservableObject {
-    typealias ChunkFetcher = @Sendable (_ points: [GPXPoint], _ categories: Set<RoadbookLandmarkCategory>) async -> RoadbookLandmarkData?
+    /// `onEvent` : octets reçus et nouveaux essais, appelé hors du fil principal.
+    typealias ChunkFetcher = @Sendable (_ points: [GPXPoint], _ categories: Set<RoadbookLandmarkCategory>, _ onEvent: @escaping @Sendable (RoadbookFetchEvent) -> Void) async -> RoadbookLandmarkData?
 
     @Published private(set) var phase: RoadbookLandmarkLoadPhase = .idle
     @Published private(set) var selection: RoadbookLandmarkSelection = .empty
     /// Candidats connus pour la trace courante (cache + tronçons déjà reçus).
     @Published private(set) var data: RoadbookLandmarkData?
+    /// Quantité reçue, débit, temps restant du téléchargement en cours (it29) — `nil` hors
+    /// téléchargement.
+    @Published private(set) var stats: RoadbookLandmarkDownloadStats?
+    /// Le bandeau n'apparaît qu'au bout de `landmarkProgressShowDelaySeconds` : un chargement
+    /// quasi instantané ne clignote pas. Échec et hors-ligne : tout de suite.
+    @Published private(set) var showsProgress = false
+
+    /// Ce que la vue doit afficher.
+    var isBannerVisible: Bool {
+        switch phase {
+        case .idle: return false
+        case .failed, .offline: return true
+        case .downloading, .analyzing, .finished: return showsProgress
+        }
+    }
 
     private let cache: RoadbookLandmarkDataCache
     private let fetchChunk: ChunkFetcher
+    private let now: () -> Date
+    private var meter: RoadbookDownloadMeter?
+    private var refreshTask: Task<Void, Never>?
+    private var showTask: Task<Void, Never>?
     /// Réseau disponible ? Branché sur `NetworkMonitor` par `RoadBookTabView` à l'apparition.
     var isOnline: () -> Bool
 
@@ -76,14 +96,16 @@ final class RoadbookLandmarkLoader: ObservableObject {
 
     init(
         cache: RoadbookLandmarkDataCache? = nil,
-        fetchChunk: @escaping ChunkFetcher = { points, categories in
-            await RoadbookLandmarkOverpassService.shared.fetch(for: points, categories: categories)
+        fetchChunk: @escaping ChunkFetcher = { points, categories, onEvent in
+            await RoadbookLandmarkOverpassService.shared.fetch(for: points, categories: categories, onEvent: onEvent)
         },
-        isOnline: @escaping () -> Bool = { true }
+        isOnline: @escaping () -> Bool = { true },
+        now: @escaping () -> Date = Date.init
     ) {
         self.cache = cache ?? RoadbookLandmarkDataCache()
         self.fetchChunk = fetchChunk
         self.isOnline = isOnline
+        self.now = now
     }
 
     /// À appeler à chaque changement de trace/sens, de manœuvres ou de catégories activées.
@@ -92,6 +114,8 @@ final class RoadbookLandmarkLoader: ObservableObject {
             downloadTask?.cancel()
             downloadTask = nil
             hideTask?.cancel()
+            stopProgressTracking()
+            showsProgress = false
             failedCategories = nil
             partial = nil
             data = cache.data(for: trackID)
@@ -144,6 +168,7 @@ final class RoadbookLandmarkLoader: ObservableObject {
         }
         guard isOnline() else {
             phase = .offline(hasCachedData: !(data?.candidates.isEmpty ?? true))
+            showsProgress = true
             return
         }
         if let failedCategories, missing.isSubset(of: failedCategories) { return }
@@ -160,6 +185,7 @@ final class RoadbookLandmarkLoader: ObservableObject {
             completedChunks: resumed?.completedChunks ?? 0,
             received: resumed?.received ?? .empty
         )
+        startProgressTracking(remainingChunks: chunks[start.completedChunks...])
         phase = .downloading(completedChunks: start.completedChunks, totalChunks: chunks.count)
         downloadTask = Task { [weak self] in
             await self?.download(chunks: chunks, from: start)
@@ -172,16 +198,22 @@ final class RoadbookLandmarkLoader: ObservableObject {
         let base = start.base
         var received = start.received
         for index in start.completedChunks..<chunks.count {
-            let result = await fetchChunk(chunks[index], categories)
+            let result = await fetchChunk(chunks[index], categories) { [weak self] event in
+                Task { @MainActor in self?.record(event) }
+            }
             guard !Task.isCancelled, self.trackID == trackID else { return }
             guard let result else {
                 failedCategories = categories
                 partial = PartialDownload(trackID: trackID, categories: categories, totalChunks: chunks.count, base: base, completedChunks: index, received: received)
                 phase = isOnline() ? .failed : .offline(hasCachedData: !(data?.candidates.isEmpty ?? true))
+                stopProgressTracking()
+                showsProgress = true
                 downloadTask = nil
                 reselect()
                 return
             }
+            meter?.completeChunk(meters: Self.length(of: chunks[index]), elements: result.candidates.count + result.builtUpAreas.count + result.places.count, at: now())
+            publishStats()
             received = received.adding(result, markingFetched: [])
             // Au fur et à mesure : affichés, mais pas encore marqués "téléchargés".
             data = base.adding(received, markingFetched: [])
@@ -190,6 +222,7 @@ final class RoadbookLandmarkLoader: ObservableObject {
         }
 
         partial = nil
+        stopProgressTracking()
         let complete = base.adding(received, markingFetched: categories)
         cache.store(complete, for: trackID)
         data = complete
@@ -199,9 +232,65 @@ final class RoadbookLandmarkLoader: ObservableObject {
         guard self.trackID == trackID else { return }
         downloadTask = nil
         phase = .finished
+        showTask?.cancel()
         scheduleHide()
         // Une catégorie activée PENDANT le téléchargement : son complément maintenant.
         ensureDownloaded()
+    }
+
+    // MARK: - Progression enrichie (it29)
+
+    private func startProgressTracking(remainingChunks: ArraySlice<[GPXPoint]>) {
+        // Relance après un échec/hors-ligne déjà affiché : le bandeau reste visible (pas de clignotement).
+        let keepVisible: Bool = {
+            switch phase {
+            case .failed, .offline: return showsProgress
+            default: return false
+            }
+        }()
+        showsProgress = keepVisible
+        meter = RoadbookDownloadMeter(totalMeters: remainingChunks.reduce(0) { $0 + Self.length(of: $1) }, startedAt: now())
+        publishStats()
+        showTask?.cancel()
+        if !keepVisible {
+            showTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(RoadBookConstants.landmarkProgressShowDelaySeconds * 1_000_000_000))
+                guard !Task.isCancelled, let self, self.meter != nil else { return }
+                self.showsProgress = true
+            }
+        }
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(RoadBookConstants.landmarkProgressRefreshSeconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                self?.publishStats()
+            }
+        }
+    }
+
+    private func stopProgressTracking() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        showTask?.cancel()
+        meter = nil
+        stats = nil
+    }
+
+    private func record(_ event: RoadbookFetchEvent) {
+        switch event {
+        case .bytes(let bytes): meter?.record(bytes: bytes, at: now())
+        case .retrying(let seconds): meter?.recordRetry(after: seconds, at: now())
+        }
+        publishStats()
+    }
+
+    private func publishStats() {
+        stats = meter?.stats(at: now())
+    }
+
+    private static func length(of points: [GPXPoint]) -> Double {
+        TrackProjector.cumulativeDistances(for: points).last ?? 0
     }
 
     private func scheduleHide() {

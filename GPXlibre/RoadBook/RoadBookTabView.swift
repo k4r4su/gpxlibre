@@ -323,8 +323,8 @@ struct RoadBookTabView: View {
     /// quelque chose à dire ; les directions en dessous restent utilisables.
     @ViewBuilder
     private var landmarkProgress: some View {
-        if landmarkLoader.phase != .idle {
-            RoadbookLandmarkProgressView(phase: landmarkLoader.phase) { landmarkLoader.retry() }
+        if landmarkLoader.isBannerVisible {
+            RoadbookLandmarkProgressView(phase: landmarkLoader.phase, stats: landmarkLoader.stats) { landmarkLoader.retry() }
                 .transition(.opacity)
         }
     }

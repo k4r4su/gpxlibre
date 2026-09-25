@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Bandeau d'une ligne : état du chargement des repères (jalon it28). Barre déterministe pendant le
-/// téléchargement (tronçons de trace reçus), étape "Analyse…", "Terminé", échec avec "Réessayer",
-/// hors-ligne. Jamais bloquant : c'est un simple bandeau au-dessus des directions.
+/// Bandeau : état du chargement des repères (jalon it28). Barre déterministe pendant le
+/// téléchargement (tronçons de trace reçus — seule cible connue d'avance), étape "Analyse…",
+/// "Terminé", échec avec "Réessayer", hors-ligne. Depuis it29, une ligne de détail : éléments et
+/// quantité reçus, débit, temps restant quand il est stable. Jamais bloquant.
 struct RoadbookLandmarkProgressView: View {
     let phase: RoadbookLandmarkLoadPhase
+    var stats: RoadbookLandmarkDownloadStats?
     let onRetry: () -> Void
 
     var body: some View {
@@ -23,9 +25,16 @@ struct RoadbookLandmarkProgressView: View {
                         .controlSize(.small)
                 }
             }
-            if let progress = phase.progress {
+            if let progress = Self.determinateProgress(for: phase) {
                 ProgressView(value: progress)
                     .tint(.accentColor)
+            }
+            if let stats, let detail = Self.detail(for: stats) {
+                Text(detail)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 16)
@@ -49,6 +58,41 @@ struct RoadbookLandmarkProgressView: View {
         case .idle:
             EmptyView()
         }
+    }
+
+    /// Barre seulement quand la cible est connue ET découpée : un seul tronçon passerait de 0 à
+    /// 100 % d'un coup — pas de pourcentage fantaisiste, le détail (quantité, débit) suffit.
+    static func determinateProgress(for phase: RoadbookLandmarkLoadPhase) -> Double? {
+        guard case .downloading(_, let total) = phase, total > 1 else { return nil }
+        return phase.progress
+    }
+
+    /// "412 éléments · 86 Ko · 24 Ko/s · ~20 s restantes" — chaque partie seulement si connue ;
+    /// débit nul = le serveur calcule sa réponse ("attente du serveur").
+    static func detail(for stats: RoadbookLandmarkDownloadStats) -> String? {
+        var parts: [String] = []
+        if stats.elementsReceived > 0 { parts.append("\(stats.elementsReceived) élément\(stats.elementsReceived > 1 ? "s" : "")") }
+        if stats.bytesReceived > 0 { parts.append(byteString(stats.bytesReceived)) }
+        if let retry = stats.retryInSeconds {
+            parts.append(retry >= 1 ? "serveur saturé, nouvel essai dans \(Int(retry.rounded(.up))) s" : "serveur saturé, nouvel essai…")
+        } else if let speed = stats.bytesPerSecond {
+            parts.append(speed > 0 ? "\(byteString(Int(speed.rounded())))/s" : "attente du serveur")
+        }
+        if let remaining = stats.secondsRemaining { parts.append(remainingString(remaining)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    static func byteString(_ bytes: Int) -> String {
+        if bytes < 1024 { return "\(bytes) o" }
+        if bytes < 1024 * 1024 { return "\(Int((Double(bytes) / 1024).rounded())) Ko" }
+        return String(format: "%.1f Mo", Double(bytes) / 1024 / 1024).replacingOccurrences(of: ".", with: ",")
+    }
+
+    /// Arrondi à 5 s (puis à la minute) : un affichage qui ne tressaute pas.
+    static func remainingString(_ seconds: Double) -> String {
+        if seconds < 5 { return "presque fini" }
+        if seconds < 60 { return "~\(Int((seconds / 5).rounded(.up)) * 5) s restantes" }
+        return "~\(Int((seconds / 60).rounded(.up))) min restantes"
     }
 
     static func message(for phase: RoadbookLandmarkLoadPhase) -> String {

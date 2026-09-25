@@ -8,18 +8,26 @@ import CoreLocation
 ///
 /// Best-effort : `nil` en cas d'échec (réseau, Overpass saturé) — le Road Book s'affiche alors sans
 /// repères, ou avec le cache existant, jamais un blocage.
+/// Ce que le téléchargement d'un tronçon signale en cours de route (progression enrichie, it29).
+enum RoadbookFetchEvent: Sendable, Equatable {
+    /// Octets reçus depuis le dernier événement.
+    case bytes(Int)
+    /// Réponse refusée (504/429 intermittents de l'instance publique) : nouvel essai après cette pause.
+    case retrying(afterSeconds: Double)
+}
+
 actor RoadbookLandmarkOverpassService {
     static let shared = RoadbookLandmarkOverpassService()
 
     /// Candidats du tronçon pour `categories` seulement (tout élément reconnu dans une autre
     /// catégorie est écarté : il n'est pas marqué comme téléchargé).
-    /// `onBytes` : octets reçus au fil de l'eau (progression, vitesse) — appelé hors du fil
-    /// principal, par paquets.
+    /// `onEvent` : octets reçus au fil de l'eau (progression, débit) et nouveaux essais — appelé
+    /// hors du fil principal.
     func fetch(
         for points: [GPXPoint],
         categories: Set<RoadbookLandmarkCategory>,
         includeCityEntryAreas: Bool = RoadBookConstants.landmarkCityEntryFallbackEnabled,
-        onBytes: @escaping @Sendable (Int) -> Void = { _ in }
+        onEvent: @escaping @Sendable (RoadbookFetchEvent) -> Void = { _ in }
     ) async -> RoadbookLandmarkData? {
         guard let query = Self.query(for: points, categories: categories, includeCityEntryAreas: includeCityEntryAreas),
               let url = URL(string: RoadBookConstants.overpassBaseURLString),
@@ -34,7 +42,7 @@ actor RoadbookLandmarkOverpassService {
 
         let retryDelays = RoadBookConstants.landmarkRetryDelaysSeconds
         for attempt in 0...retryDelays.count {
-            if let data = await Self.download(request, onBytes: onBytes) {
+            if let data = await Self.download(request, onBytes: { onEvent(.bytes($0)) }) {
                 guard let parsed = Self.parse(data) else { return nil }
                 let withCityEntries = categories.contains(.citySign)
                 return RoadbookLandmarkData(
@@ -45,6 +53,7 @@ actor RoadbookLandmarkOverpassService {
                 )
             }
             guard retryDelays.indices.contains(attempt) else { break }
+            onEvent(.retrying(afterSeconds: retryDelays[attempt]))
             try? await Task.sleep(nanoseconds: UInt64(retryDelays[attempt] * 1_000_000_000))
             guard !Task.isCancelled else { return nil }
         }
