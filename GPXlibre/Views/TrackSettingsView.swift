@@ -10,7 +10,7 @@ struct TrackSettingsView: View {
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @EnvironmentObject private var settings: RideSettingsStore
     @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var rideSession: RideSessionManager
+    @EnvironmentObject private var rideRecorder: RideRecorder
     @State private var pendingActivation: TrackActivationRequest?
     @Environment(\.dismiss) private var dismiss
 
@@ -25,7 +25,7 @@ struct TrackSettingsView: View {
                     // parallèle, toujours library.setActive/setDisplayed.
                     Button {
                         let request: TrackActivationRequest = library.activeTrackID == track.id ? .deactivate(track) : .activate(track)
-                        pendingActivation = library.request(request, recordedPointsCount: rideSession.recordedPointsCount)
+                        pendingActivation = library.request(request, recordedPointsCount: rideRecorder.pointCount)
                     } label: {
                         Label(
                             library.activeTrackID == track.id ? "Trace active pour le Ride" : "Rendre active pour le Ride",

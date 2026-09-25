@@ -87,29 +87,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     @Published private(set) var percentComplete: Double?
     @Published private(set) var estimatedArrivalDate: Date?
 
-    // MARK: - Enregistrement automatique de la sortie (persiste across tab switches, voir start())
-    @Published private(set) var recordedPointsCount = 0
-    private(set) var recordedPoints: [GPXPoint] = []
-    private var recordingTrackID: UUID?
-    private var lastRecordedLocation: CLLocation?
-    private var lastRecordedDate: Date?
-    /// Spec "unsaved-ride-recovery" (it19) : identifie la session d'enregistrement en cours
-    /// pour le filet de secours (UnsavedRideStore) — généré au premier point enregistré,
-    /// remis à `nil` partout où `recordedPoints` repart de zéro (même cycle de vie).
-    private var recordingSessionID: UUID?
-    private var recordingSessionStartDate: Date?
-    /// `internal` plutôt que `private` uniquement pour la testabilité (même patron que
-    /// `handle(location:)` plus haut) — remplaçable par les tests avec un `directoryOverride`
-    /// dédié pour ne JAMAIS écrire dans le vrai `Documents/UnsavedRides` de l'app pendant un
-    /// test qui enregistrerait ≥ `unsavedRideCheckpointEveryNPoints` points (déclenchant
-    /// `checkpointUnsavedRideIfNeeded`, appelée à CHAQUE point enregistré).
-    var unsavedRideStore = UnsavedRideStore()
-    @Published private(set) var isRecordingPaused = false
+    // L'enregistrement de la sortie ne vit plus ici depuis it30 : voir `RideRecorder`
+    // (service applicatif, indépendant de l'onglet Ride et actif en arrière-plan).
 
     // MARK: - Map matching Valhalla / détection fine de virages (spec
     // "valhalla-map-matching-direction-change", it20)
 
-    /// `internal` uniquement pour la testabilité (même patron que `unsavedRideStore` ci-dessus) —
+    /// `internal` uniquement pour la testabilité —
     /// remplaçable par un provider factice pour vérifier le déclenchement/cache SANS jamais
     /// dépendre d'un vrai réseau Valhalla en test.
     var mapMatchingProvider: MapMatchingProvider = ValhallaMapMatchingProvider()
@@ -127,8 +111,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     private(set) var mapMatchedDirectionChangePoints: [MapMatchedManeuver] = []
 
     /// Guidage arrêté (spec "stop-guidance-semantics", it14, Bloc 3) — DISTINCT de
-    /// `isRecordingPaused` ci-dessus (jamais touché par Stop désormais, l'enregistrement
-    /// continue toujours en arrière-plan). Masque roadbook/bannières de guidage (voir RideView)
+    /// l'enregistrement de la sortie (`RideRecorder`, jamais touché par Stop : il continue). Masque roadbook/bannières de guidage (voir RideView)
     /// sans rien arrêter d'autre : trace, vitesse, carte restent affichées, on reste en vue
     /// Ride. Levé automatiquement par une nouvelle sélection de trace (start/switchMode) ou un
     /// recentrage manuel explicite (recenterCamera()), ou via l'icône "reprendre" discrète.
@@ -388,18 +371,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             percentComplete = 0
             estimatedArrivalDate = nil
 
-            // L'enregistrement de la sortie persiste tant que c'est la même trace (ne
-            // redémarre pas à chaque va-et-vient vers un autre onglet) ; seule une trace
-            // différente ou resetRecording() (après export) le réinitialise.
-            if recordingTrackID != track.id {
-                recordedPoints = []
-                recordedPointsCount = 0
-                recordingTrackID = track.id
-                lastRecordedLocation = nil
-                lastRecordedDate = nil
-                recordingSessionID = nil
-                recordingSessionStartDate = nil
-            }
         } else {
             trackCumulativeDistances = []
             checkpoints = []
@@ -441,16 +412,6 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
             resetBlockedPathState()
             distanceRemainingMeters = track.totalDistanceMeters
             percentComplete = 0
-
-            if recordingTrackID != track.id {
-                recordedPoints = []
-                recordedPointsCount = 0
-                recordingTrackID = track.id
-                lastRecordedLocation = nil
-                lastRecordedDate = nil
-                recordingSessionID = nil
-                recordingSessionStartDate = nil
-            }
         } else {
             trackCumulativeDistances = []
             checkpoints = []
@@ -736,115 +697,10 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         }
 
         updateGoToGuidance(from: location)
-        recordRideTrack(location: location)
 
         if track == nil {
             syncSharedBlockagesIfNeeded()
         }
-    }
-
-    /// Enregistre un point dès que l'un des deux seuils du preset actif est atteint (le plus
-    /// fréquent des deux) — tourne automatiquement pendant tout le Ride, aucune action requise.
-    /// Suspendu UNIQUEMENT par `isRecordingPaused` (bouton pause dédié) ; depuis it14, le Stop
-    /// de guidage (`stopGuidance()`) ne touche plus à l'enregistrement, voir sa doc. Seuils
-    /// pilotés par `settings.recordingDensityPreset` (spec "recording-density-setting", it19,
-    /// retour terrain "alléger le fichier GPX final") — `précis` reproduit exactement les 5 s/
-    /// 15 m d'avant ce réglage.
-    private func recordRideTrack(location: CLLocation) {
-        guard !isRecordingPaused else { return }
-        let preset = settings.recordingDensityPreset
-        let shouldRecord: Bool
-        if let lastDate = lastRecordedDate, let lastLocation = lastRecordedLocation {
-            let elapsed = location.timestamp.timeIntervalSince(lastDate)
-            let distance = location.distance(from: lastLocation)
-            shouldRecord = elapsed >= preset.minIntervalSeconds || distance >= preset.minDistanceMeters
-        } else {
-            shouldRecord = true
-        }
-        guard shouldRecord else { return }
-
-        lastRecordedDate = location.timestamp
-        lastRecordedLocation = location
-        recordedPoints.append(GPXPoint(
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude,
-            elevation: location.verticalAccuracy >= 0 ? location.altitude : nil,
-            time: location.timestamp
-        ))
-        recordedPointsCount = recordedPoints.count
-        checkpointUnsavedRideIfNeeded()
-    }
-
-    /// Spec "unsaved-ride-recovery" (it19, retour terrain : "quand on allume l'app, ça
-    /// enregistre direct, puis il faut manuellement l'enregistrer à la fin — créer une
-    /// catégorie Biblio 'non-enregistré' pour récupérer les traces oubliées") — réécrit un GPX
-    /// de secours toutes les `unsavedRideCheckpointEveryNPoints` points (pas à chaque point,
-    /// coût I/O) pendant tout enregistrement, avec ou sans trace suivie. `recordingSessionID`
-    /// généré au premier point d'une session, remis à `nil` partout où `recordedPoints` repart
-    /// de zéro (même cycle de vie, voir déclarations plus haut) — un GPX PAR session, jamais
-    /// mélangé aux vraies traces de `LibraryStore` tant qu'il n'est pas explicitement récupéré
-    /// depuis Biblio.
-    private func checkpointUnsavedRideIfNeeded() {
-        if recordingSessionID == nil {
-            recordingSessionID = UUID()
-            recordingSessionStartDate = recordedPoints.first?.time ?? Date()
-        }
-        guard let sessionID = recordingSessionID,
-              let startedAt = recordingSessionStartDate,
-              recordedPoints.count % RideConstants.unsavedRideCheckpointEveryNPoints == 0
-        else { return }
-
-        let data = GPXExporter.export(
-            trackName: "Sortie non enregistrée – \(Self.unsavedRideNameDateFormatter.string(from: startedAt))",
-            points: recordedPoints,
-            waypoints: [],
-            comment: nil
-        )
-        unsavedRideStore.checkpoint(
-            sessionID: sessionID,
-            startedAt: startedAt,
-            gpxData: data,
-            pointCount: recordedPoints.count,
-            maxRetained: settings.unsavedRideRetentionLimit
-        )
-    }
-
-    private static let unsavedRideNameDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "d MMM yyyy HH:mm"
-        return formatter
-    }()
-
-    /// À appeler après un export réussi (voir EndRideView) pour repartir d'un enregistrement vide.
-    func resetRecording() {
-        recordedPoints = []
-        recordedPointsCount = 0
-        recordingTrackID = nil
-        lastRecordedLocation = nil
-        lastRecordedDate = nil
-        isRecordingPaused = false
-        recordingSessionID = nil
-        recordingSessionStartDate = nil
-    }
-
-    /// Spec "unsaved-ride-recovery" (it19) — à appeler juste après un import réussi dans la
-    /// Bibliothèque (EndRideView.save()) : la sortie vient d'être proprement enregistrée, le
-    /// filet de secours de CETTE session n'a plus lieu d'être.
-    func discardUnsavedRideCheckpoint() {
-        guard let sessionID = recordingSessionID else { return }
-        unsavedRideStore.discard(sessionID: sessionID)
-    }
-
-    /// Distance totale de la portion enregistrée — sert à décider si un export est proposé
-    /// après un Stop (> 1 km, voir stopGuidance()).
-    var recordedDistanceMeters: Double {
-        guard recordedPoints.count > 1 else { return 0 }
-        var total: Double = 0
-        for i in 1..<recordedPoints.count {
-            total += RoadbookAnalyzer.distanceMeters(recordedPoints[i - 1].coordinate, recordedPoints[i].coordinate)
-        }
-        return total
     }
 
     private func updateRideStats(from location: CLLocation, projection: TrackProjector.Projection?, etaSpeedKmh: Double) {

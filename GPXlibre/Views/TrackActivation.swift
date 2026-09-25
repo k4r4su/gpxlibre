@@ -24,10 +24,9 @@ enum TrackActivationRequest: Identifiable, Equatable {
 }
 
 /// Règle PURE : quand faut-il demander confirmation ? Une sortie est EN COURS dès que des points
-/// sont enregistrés (`RideSessionManager.recordedPointsCount`, l'enregistrement survit aux
-/// changements d'onglet). Changer la trace active, ou la désactiver, pendant ce temps arrête le
-/// guidage sur la trace suivie et démarre un NOUVEL enregistrement (`RideSessionManager.start`
-/// repart de zéro pour une autre trace) : jamais silencieusement.
+/// sont enregistrés (`RideRecorder.pointCount`). Changer la trace active, ou la désactiver,
+/// pendant ce temps change le GUIDAGE en pleine sortie : jamais silencieusement. Depuis it30,
+/// l'enregistrement, lui, continue sans interruption (service indépendant de la trace suivie).
 enum TrackActivationPolicy {
     static func requiresConfirmation(_ request: TrackActivationRequest, activeTrackID: UUID?, recordedPointsCount: Int) -> Bool {
         guard recordedPointsCount > 0, let activeTrackID else { return false }
@@ -53,7 +52,7 @@ enum TrackActivationPolicy {
         case .activate(let track): action = "Passer à « \(track.name) » arrête le guidage sur \(current)"
         case .deactivate: action = "Désactiver \(current) arrête le guidage"
         }
-        return "Une sortie est en cours (\(recordedPointsCount) points enregistrés). \(action) et démarre un nouvel enregistrement. La sortie en cours reste dans Biblio > Sorties non enregistrées (sauvegarde de secours tous les \(RideConstants.unsavedRideCheckpointEveryNPoints) points) — ou enregistre-la d'abord depuis Ride."
+        return "Une sortie est en cours (\(recordedPointsCount) points enregistrés). \(action). L'enregistrement de la sortie, lui, continue."
     }
 }
 
@@ -62,7 +61,7 @@ enum TrackActivationPolicy {
 private struct TrackActivationConfirmation: ViewModifier {
     @Binding var pending: TrackActivationRequest?
     @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var session: RideSessionManager
+    @EnvironmentObject private var recorder: RideRecorder
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
@@ -77,7 +76,7 @@ private struct TrackActivationConfirmation: ViewModifier {
             }
             Button("Annuler", role: .cancel) { pending = nil }
         } message: { request in
-            Text(TrackActivationPolicy.confirmationMessage(for: request, activeTrackName: library.activeTrack?.name, recordedPointsCount: session.recordedPointsCount))
+            Text(TrackActivationPolicy.confirmationMessage(for: request, activeTrackName: library.activeTrack?.name, recordedPointsCount: recorder.pointCount))
         }
     }
 }

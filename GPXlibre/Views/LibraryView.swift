@@ -6,8 +6,8 @@ struct LibraryView: View {
     @EnvironmentObject private var downloadedRegions: DownloadedRegionStore
     @EnvironmentObject private var settings: RideSettingsStore
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
-    /// Sortie en cours (`recordedPointsCount`) : changer de trace active demande confirmation (it29).
-    @EnvironmentObject private var rideSession: RideSessionManager
+    /// Sortie en cours (`RideRecorder.pointCount`) : changer de trace active demande confirmation (it29).
+    @EnvironmentObject private var rideRecorder: RideRecorder
     @State private var pendingActivation: TrackActivationRequest?
     @StateObject private var unsavedRides = UnsavedRideStore()
     @State private var isImporting = false
@@ -178,7 +178,7 @@ struct LibraryView: View {
                     isActive: library.activeTrackID == track.id,
                     onToggleActive: {
                         let request: TrackActivationRequest = library.activeTrackID == track.id ? .deactivate(track) : .activate(track)
-                        pendingActivation = library.request(request, recordedPointsCount: rideSession.recordedPointsCount)
+                        pendingActivation = library.request(request, recordedPointsCount: rideRecorder.pointCount)
                     }
                 )
                 .contentShape(Rectangle())

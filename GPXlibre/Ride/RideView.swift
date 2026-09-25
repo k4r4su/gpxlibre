@@ -13,6 +13,8 @@ struct RideView: View {
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @EnvironmentObject private var vectorPackages: VectorPackageStore
     @EnvironmentObject private var networkMonitor: NetworkMonitor
+    /// Enregistrement de la sortie (it30) : service applicatif, jamais arrêté par cette vue.
+    @EnvironmentObject private var recorder: RideRecorder
     @State private var showDetourConfirmation = false
     @State private var dismissedSharedBlockageAlertID: String?
     @State private var showStatsPanel = false
@@ -515,6 +517,16 @@ struct RideView: View {
         }
     }
 
+    @State private var showRecordingDeniedAlert = false
+
+    private func toggleRecordingFromPanel() {
+        switch recorder.state {
+        case .recording: recorder.pause()
+        case .idle, .paused:
+            if recorder.start() == .denied { showRecordingDeniedAlert = true }
+        }
+    }
+
     /// Badge vitesse (fix "overlay-layout-grid", Bug 3) : ancré juste au-dessus de la tab bar,
     /// TOUJOURS du côté opposé à `bottomControlsColumn` (spec "controls-side-setting", it14) —
     /// zone totalement séparée de la colonne de contrôles, jamais mélangée.
@@ -531,14 +543,22 @@ struct RideView: View {
                         distanceRemainingMeters: session.distanceRemainingMeters,
                         percentComplete: session.percentComplete,
                         estimatedArrivalDate: session.estimatedArrivalDate,
-                        recordedPointsCount: session.recordedPointsCount,
+                        recordedPointsCount: recorder.pointCount,
+                        recordingState: recorder.state,
+                        recordingStatus: RideRecordingStatusText.text(state: recorder.state, authorization: recorder.authorizationStatus, wasRestored: recorder.wasRestoredAfterInterruption),
+                        onToggleRecording: toggleRecordingFromPanel,
                         onCollapse: { withAnimation { showStatsPanel = false } },
                         onEndRide: { showEndRideSheet = true }
                     )
                     .frame(width: 230)
                 } else {
-                    RideStatsBadge(currentSpeedKmh: session.rawSpeedKmh) {
-                        withAnimation { showStatsPanel = true }
+                    // Bouton d'enregistrement empilé AU-DESSUS du badge, même calque (it30) :
+                    // aucune nouvelle zone d'overlay, rien n'est déplacé.
+                    VStack(alignment: settings.controlsSide == .left ? .trailing : .leading, spacing: 8) {
+                        RideRecordingControl()
+                        RideStatsBadge(currentSpeedKmh: session.rawSpeedKmh) {
+                            withAnimation { showStatsPanel = true }
+                        }
                     }
                 }
             }
@@ -654,10 +674,11 @@ struct RideView: View {
             Text("La trace reste affichée et l'enregistrement continue — seuls le roadbook et les bannières de guidage se retirent.")
         }
         .rideToast(message: toastMessage)
+        .recordingDeniedAlert(isPresented: $showRecordingDeniedAlert)
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
                 originalTrackName: track?.name,
-                points: session.recordedPoints,
+                points: recorder.points,
                 waypoints: track.map { waypointStore.waypoints(near: $0) } ?? [],
                 onFinished: { showEndRideSheet = false }
             )

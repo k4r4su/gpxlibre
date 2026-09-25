@@ -40,6 +40,10 @@ struct RideStatsPanel: View {
     let percentComplete: Double?
     let estimatedArrivalDate: Date?
     let recordedPointsCount: Int
+    /// Enregistrement de la sortie (it30) : pause/reprise ici, état expliqué.
+    let recordingState: RideRecorder.State
+    let recordingStatus: String?
+    let onToggleRecording: () -> Void
     let onCollapse: () -> Void
     let onEndRide: () -> Void
 
@@ -84,15 +88,37 @@ struct RideStatsPanel: View {
                     stat("Durée restante", remainingDurationText(until: estimatedArrivalDate), unit: "")
                 }
             }
-            Button(action: onEndRide) {
-                Label("Terminer la sortie (\(recordedPointsCount) pts enregistrés)", systemImage: "flag.checkered")
+            if let recordingStatus {
+                Text(recordingStatus)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(action: onToggleRecording) {
+                Label(recordingToggleTitle, systemImage: recordingState == .recording ? "pause.circle" : "record.circle")
                     .font(.caption.bold())
             }
             .buttonStyle(.bordered)
-            .tint(.white)
+            .tint(recordingState == .recording ? .orange : .red)
+            if recordedPointsCount > 0 {
+                Button(action: onEndRide) {
+                    Label("Terminer la sortie (\(recordedPointsCount) pts enregistrés)", systemImage: "flag.checkered")
+                        .font(.caption.bold())
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+            }
         }
         .padding(16)
         .ridePanelStyle()
+    }
+
+    private var recordingToggleTitle: String {
+        switch recordingState {
+        case .idle: return "Démarrer l'enregistrement"
+        case .recording: return "Mettre en pause"
+        case .paused: return "Reprendre l'enregistrement"
+        }
     }
 
     private func stat(_ title: String, _ value: String, unit: String, emphasized: Bool = false) -> some View {

@@ -14,7 +14,7 @@ struct EndRideView: View {
     let onFinished: () -> Void
 
     @EnvironmentObject private var library: LibraryStore
-    @EnvironmentObject private var session: RideSessionManager
+    @EnvironmentObject private var recorder: RideRecorder
     @EnvironmentObject private var trackRideSettings: TrackRideSettingsStore
     @State private var trackName = ""
     @State private var comment = ""
@@ -112,11 +112,9 @@ struct EndRideView: View {
             trackRideSettings.setSettings(recordedSettings, for: newID)
             savedTrack = library.tracks.first { $0.id == newID }
         }
-        // Spec "unsaved-ride-recovery" (it19) : la sortie vient d'être proprement enregistrée,
-        // le filet de secours de CETTE session n'a plus lieu d'être — AVANT resetRecording()
-        // (qui efface l'identifiant de session dont discardUnsavedRideCheckpoint a besoin).
-        session.discardUnsavedRideCheckpoint()
-        session.resetRecording()
+        // La sortie est proprement enregistrée : fin de l'enregistrement (GPS arrière-plan coupé,
+        // journal et secours "Sorties non enregistrées" de cette session supprimés, it30).
+        recorder.finish()
         exportURL = url
     }
 }

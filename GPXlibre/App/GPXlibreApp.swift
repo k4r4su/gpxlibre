@@ -20,6 +20,9 @@ struct GPXlibreApp: App {
     @StateObject private var sharedBlockages: SharedBlockageSyncCoordinator
     @StateObject private var trackRideSettings = TrackRideSettingsStore()
     @StateObject private var vectorPackages = VectorPackageStore()
+    /// Enregistrement de la sortie (it30) : service applicatif, vit aussi longtemps que l'app,
+    /// jamais lié à un écran.
+    @StateObject private var rideRecorder: RideRecorder
 
     init() {
         MapLibreBootstrap.configure()
@@ -33,6 +36,19 @@ struct GPXlibreApp: App {
         _rideModeStore = StateObject(wrappedValue: modeStore)
         _sharedBlockages = StateObject(wrappedValue: blockagesCoordinator)
         _rideSession = StateObject(wrappedValue: RideSessionManager(settings: settingsStore, networkMonitor: monitor, modeStore: modeStore, sharedBlockages: blockagesCoordinator))
+        let recorder = RideRecorder(settings: settingsStore)
+        _rideRecorder = StateObject(wrappedValue: recorder)
+        #if DEBUG
+        // Validation sur iPhone réel sans pouvoir toucher l'écran (it30) : lancement via
+        // `devicectl device process launch ... -GPXlibreDebugStartRecording` (puis
+        // `-GPXlibreDebugFinishRecording` pour tout arrêter). Absent en Release.
+        if ProcessInfo.processInfo.arguments.contains("-GPXlibreDebugStartRecording"), recorder.state != .recording {
+            recorder.start()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-GPXlibreDebugFinishRecording") {
+            recorder.finish()
+        }
+        #endif
     }
 
     var body: some Scene {
@@ -52,6 +68,7 @@ struct GPXlibreApp: App {
                     .environmentObject(sharedBlockages)
                     .environmentObject(trackRideSettings)
                     .environmentObject(vectorPackages)
+                    .environmentObject(rideRecorder)
                     .onOpenURL { url in
                         library.importTrack(from: url)
                     }

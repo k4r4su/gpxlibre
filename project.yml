@@ -78,7 +78,12 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSLocationWhenInUseUsageDescription: "GPXlibre affiche votre position en temps réel sur la trace pendant le suivi."
+        NSLocationWhenInUseUsageDescription: "GPXlibre affiche votre position sur la trace et enregistre votre sortie quand vous le demandez, y compris écran verrouillé ou dans une autre app pendant l'enregistrement."
+        # It30 (fix "recording-survives-tabs-and-background") : enregistrement de la sortie en
+        # arrière-plan, seulement pendant un enregistrement démarré par l'utilisateur (indicateur
+        # bleu d'iOS). Voir `RideRecorder`/`CoreLocationRecordingSource`.
+        UIBackgroundModes:
+          - location
         NSMicrophoneUsageDescription: "GPXlibre utilise le micro pour enregistrer une courte note audio optionnelle sur un point d'intérêt."
         ITSAppUsesNonExemptEncryption: false
         LSSupportsOpeningDocumentsInPlace: true

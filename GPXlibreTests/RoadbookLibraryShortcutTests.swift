@@ -123,7 +123,9 @@ final class RoadbookLibraryShortcutTests: XCTestCase {
         XCTAssertFalse(TrackActivationPolicy.requiresConfirmation(.activate(first), activeTrackID: nil, recordedPointsCount: 42), "aucune trace suivie : rien à interrompre")
     }
 
-    func testTheConfirmationMessageNamesBothTracksAndTheRecoveryPath() throws {
+    /// Depuis it30, l'enregistrement est indépendant de la trace suivie : le message le dit (plus
+    /// de renvoi vers "Sorties non enregistrées", rien n'est perdu).
+    func testTheConfirmationMessageNamesBothTracksAndSaysRecordingContinues() throws {
         let library = makeLibrary()
         let second = try importTrack("Trace B", into: library)
         let message = TrackActivationPolicy.confirmationMessage(for: .activate(second), activeTrackName: "Trace A", recordedPointsCount: 42)
@@ -131,7 +133,7 @@ final class RoadbookLibraryShortcutTests: XCTestCase {
         XCTAssertTrue(message.contains("42 points"))
         XCTAssertTrue(message.contains("« Trace B »"))
         XCTAssertTrue(message.contains("« Trace A »"))
-        XCTAssertTrue(message.contains("Sorties non enregistrées"))
+        XCTAssertTrue(message.contains("L'enregistrement de la sortie, lui, continue"))
     }
 
     // MARK: - Import / partage : inchangé
