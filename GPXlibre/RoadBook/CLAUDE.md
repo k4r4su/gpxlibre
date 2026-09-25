@@ -618,3 +618,17 @@ en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerc
 - Traces réelles rejouées hors dépôt (données personnelles non versionnées) : les 11 localités
   de la trace de test sortent dans les deux sens.
 
+## Itération 30 — statut hors trace, priorité par ordre d'arrivée
+
+- **Hors trace** : `RoadbookOffTrackState` s'appuie sur `OffTrackDetector` (Ride/), la règle
+  unique de l'app que le Ride utilise aussi (hystérésis 30 m / 25 m). En mode Assisté GPS, la
+  carte principale affiche "Hors trace", puis "Trace à N m" après le même délai que la puce
+  Ride (30 s). La liste reste visible ; retour automatique à la normale sur la trace. Pas de
+  statut en mode classique (pas de position live).
+- **Ordre d'arrivée** : le "prochain élément" mis en avant est le plus proche, virage OU repère,
+  sans aucune priorité de catégorie (`RoadbookLiveProgress.nextEntry` sur `RoadbookEntry.merge`,
+  même maintien et même exception "virages enchaînés"). `RoadbookBigLandmarkCard` quand c'est un
+  repère. Liste suivante dans l'ordre de la trace ; "+n" = n-ième virage après l'élément mis en
+  avant. La règle de densité limite le NOMBRE de repères, jamais leur ordre. Table classique et
+  PDF étaient déjà dans l'ordre de la trace.
+

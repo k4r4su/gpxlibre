@@ -1,5 +1,36 @@
 # TODO
 
+## Itération 30 — enregistrement en arrière-plan, hors trace Road Book, ordre d'arrivée — v0.0.30
+
+Commits `recording-survives-tabs-and-background`, `roadbook-offtrack-status-and-arrival-order`,
+`end-ride-discard-without-saving`. Validé sur l'iPhone réel : 16 min en arrière-plan puis écran
+verrouillé, un point toutes les ~6 s sans trou ; points intacts après un arrêt forcé.
+
+Checklist manuelle (iPhone, trace "wahlbach-moulin-bas-test-gpx", sens inversé) :
+- [ ] À la PREMIÈRE ouverture de cette version : Ride affiche "Pause · 167 pts" (la sortie de
+      test de la validation, restaurée après l'arrêt forcé). Panneau Mesures → "Terminer la
+      sortie" → "Supprimer sans enregistrer" pour l'effacer.
+- [ ] Ride : "Enregistrer" au-dessus du badge vitesse ; rien ne s'enregistre avant ce tap.
+- [ ] Démarrer, puis passer 1 min sur chaque onglet (Road Book, Bibliothèque, Réglages) : le
+      compteur de points continue ; à la fin, la trace est continue.
+- [ ] ÉCRAN VERROUILLÉ : démarrer, verrouiller 5 min en roulant (ou en marchant), déverrouiller :
+      flèche bleue d'iOS en haut de l'écran pendant l'enregistrement, et points continus.
+- [ ] Autre app au premier plan 5 min (GPS, musique) : même vérification.
+- [ ] Pause : la flèche bleue disparaît, le compteur s'arrête ; Reprendre : il repart.
+- [ ] Terminer → Enregistrer : trace dans la Bibliothèque, flèche bleue disparue, le bouton
+      redevient "Enregistrer".
+- [ ] Réglages iOS > GPXlibre > Position "Jamais", puis "Enregistrer" : alerte "Localisation
+      refusée" avec "Ouvrir Réglages", pas de crash. Remettre "Lorsque l'app est active".
+- [ ] Road Book Assisté GPS, s'écarter de plus de 30 m de la trace : "Hors trace", puis "Trace à
+      N m" après 30 s ; revenir dessus : affichage normal.
+- [ ] Road Book : un stop ou une entrée d'agglomération AVANT un virage est l'élément mis en avant ;
+      le virage suit en "+1".
+
+Identifié, NON traité :
+- **Enregistrement démarré automatiquement avant it30** : il faut maintenant appuyer sur
+  "Enregistrer" (exigence de la fiche : aucune capture sans action explicite). Un oubli de ce
+  bouton = pas de trace ; à surveiller sur le terrain.
+
 ## Itération 29 — entrées d'agglomération, raccourci Bibliothèque, progression enrichie — v0.0.29
 
 Commits `roadbook-city-entries-reliable`, `library-track-change-during-ride-confirmation`,

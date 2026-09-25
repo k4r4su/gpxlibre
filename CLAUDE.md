@@ -163,7 +163,11 @@ GPXlibre/
                    le bouton "Point" (POI rapide Essence/Eau/Bivouac) a été supprimé pour de
                    vrai (chore "remove-poi"), ne pas le réintroduire à moitié
   Sync/           SharedBlockage* — base partagée anonyme des points bloqués signalés
-  Recording/      Enregistrement GPS pendant le Ride + export GPX ; RecordingConstants (it19,
+  Recording/      ⚠️ Depuis it30 : `RideRecorder` = SEUL propriétaire de l'enregistrement de la
+                   sortie (voir section "Enregistrement de la sortie" plus bas) ; le paragraphe
+                   ci-dessous (it19) décrit l'ancien emplacement dans RideSessionManager, les
+                   règles de densité et de secours restent valables.
+                   Enregistrement GPS pendant le Ride + export GPX ; RecordingConstants (it19,
                    spec "recording-density-setting") : seuils intervalle/distance PAR PRESET
                    (RecordingDensityPreset : précis/léger/très léger/ultra léger, Réglages >
                    Enregistrement de la sortie) plutôt que codés en dur — `précis` reproduit
@@ -410,9 +414,35 @@ Caméra stable. **Toute itération suivante doit rester verte sur cette base** :
 avant chaque livraison, sans test désactivé ni skip ajouté pour "faire passer". Le seul skip
 possible, `SharedBlockageLiveServerTests`, se lève en lançant `server/app.py` localement (copie
 hors dépôt : `python3 -m uvicorn app:app --port 8000`). Au jalon, le run était de 413 tests,
-0 échec, 0 skip ; à it29, 452 tests, 0 échec, 0 skip. Le résultat attendu de
+0 échec, 0 skip ; à it29, 452 tests, 0 échec, 0 skip ; à it30, 470 tests. Le résultat attendu de
 `RoadbookStableRegressionTests` n'a pas changé à it29. Le repli "Entrée de <localité>" (actif
 par défaut depuis it29) fait désormais partie du comportement validé : `RoadbookCityEntryTests`.
+
+## Enregistrement de la sortie (fix "recording-survives-tabs-and-background", it30)
+
+Perte de données corrigée : la capture vivait dans `RideSessionManager`, dont le GPS s'arrête
+dès qu'on quitte l'onglet Ride, et rien ne tournait en arrière-plan. Règles désormais :
+- **`RideRecorder`** (Recording/) est le SEUL propriétaire de l'enregistrement. C'est un service
+  applicatif créé par `GPXlibreApp`, jamais lié à une vue : ne JAMAIS remettre de capture dans un
+  `onAppear`/`onDisappear` ni dans `RideSessionManager` (dont le GPS de guidage s'arrête hors de
+  Ride, et c'est voulu).
+- **Démarrage, pause, reprise et fin UNIQUEMENT sur action de l'utilisateur** (bouton au-dessus
+  du badge vitesse, panneau Mesures, "Terminer la sortie"). Aucun démarrage automatique.
+- **Arrière-plan** : `UIBackgroundModes: location` (project.yml). Pendant l'enregistrement
+  seulement : `allowsBackgroundLocationUpdates`, `CLBackgroundActivitySession` (iOS 17+),
+  indicateur bleu, pas de pause automatique d'iOS. Tout est coupé en pause et à la fin.
+- **Autorisation** : "Lorsque l'app est active" SUFFIT (session démarrée au premier plan + mode
+  arrière-plan) ; "Toujours" n'est pas demandée, choix délibéré (elle n'apporterait rien, iOS
+  ne relance pas une app tuée pour du GPS standard). Refusée : rien ne démarre, alerte "Ouvrir
+  Réglages".
+- **Persistance** : chaque point est ajouté à `Documents/RideRecording/journal.jsonl`. Après un
+  arrêt de l'app, la sortie est restaurée EN PAUSE (jamais de reprise automatique).
+- L'enregistrement ne dépend plus de la trace suivie : changer de trace ne le remet plus à zéro.
+- Validé sur iPhone réel : 16 min en arrière-plan (puis écran verrouillé), un point toutes les
+  ~6 s sans aucun trou ; points intacts après un arrêt forcé de l'app. Méthode sans toucher
+  l'écran : build Debug lancé avec `-GPXlibreDebugStartRecording` (et
+  `-GPXlibreDebugFinishRecording`), app Réglages ouverte par-dessus via `devicectl device process
+  launch`, journal relu via `devicectl device copy from` (lecture seule).
 
 ## Écran de démarrage et numéro de version (spec "splash-screen", it22bis)
 
