@@ -237,7 +237,8 @@ GPXlibre/
                    détection), RoadbookPDFExporter (export PDF natif UIGraphicsPDFRenderer,
                    même source de données que l'écran). RoadbookVisibleLandmarks/
                    RoadbookLandmarkOverpassService/RoadbookLandmarkDataCache/
-                   RoadbookLandmarkLoader/RoadbookLandmarkProgressView (it27/it28 : repères
+                   RoadbookLandmarkLoader/RoadbookLandmarkProgressView/RoadbookCityEntries/
+                   RoadbookDownloadMeter (it27/it28/it29 : repères
                    VISIBLES uniquement, catalogue configurable par catégorie, téléchargement par
                    tronçons avec progression — voir RoadBook/CLAUDE.md et "Jalon stable"
                    ci-dessous). Plus de mini-carte depuis it28.
@@ -298,7 +299,14 @@ sous ce dossier) — 2D-only, fond vectoriel PMTiles, priorité MapSourceResolve
   pas de rendu multi-trace, décision de scope assumée (voir philosophie ci-dessus).
 - `RideSessionManager.stop()` purge explicitement (checkpoints, index, track, détour,
   resume) — ne jamais compter sur un futur `start()` pour nettoyer un état fantôme.
-- Ne JAMAIS réintroduire un `selectedTrackID` parallèle dans une vue ou un autre store.
+- Ne JAMAIS réintroduire un `selectedTrackID` parallèle dans une vue ou un autre store. Le Road
+  Book aussi lit `activeTrack` et rien d'autre depuis it29 (son ancien sélecteur local est
+  supprimé ; `RoadbookTrackSource`). La trace active ne se change QUE depuis la Bibliothèque.
+- Changer la trace active pendant une SORTIE EN COURS (`RideSessionManager.recordedPointsCount >
+  0`) n'est jamais silencieux (it29, `TrackActivationPolicy` + `.trackActivationConfirmation`,
+  Views/TrackActivation.swift). Tout nouveau point d'activation doit passer par
+  `LibraryStore.request(_:recordedPointsCount:)`. Raison : `start`/`switchMode` repartent d'un
+  enregistrement vide dès que la trace change.
 - Fix "orphaned-active-track-id" (it19, trouvé en instrumentant un tout autre bug terrain via
   NSLog/`simctl spawn log stream` — voir méthode dans l'historique de commit) :
   `activeTrackID`/`displayedTrackIDs` (UserDefaults) et `tracks` (fichier `index.json`) sont
@@ -402,7 +410,9 @@ Caméra stable. **Toute itération suivante doit rester verte sur cette base** :
 avant chaque livraison, sans test désactivé ni skip ajouté pour "faire passer". Le seul skip
 possible, `SharedBlockageLiveServerTests`, se lève en lançant `server/app.py` localement (copie
 hors dépôt : `python3 -m uvicorn app:app --port 8000`). Au jalon, le run était de 413 tests,
-0 échec, 0 skip.
+0 échec, 0 skip ; à it29, 452 tests, 0 échec, 0 skip. Le résultat attendu de
+`RoadbookStableRegressionTests` n'a pas changé à it29. Le repli "Entrée de <localité>" (actif
+par défaut depuis it29) fait désormais partie du comportement validé : `RoadbookCityEntryTests`.
 
 ## Écran de démarrage et numéro de version (spec "splash-screen", it22bis)
 

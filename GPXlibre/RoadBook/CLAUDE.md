@@ -118,11 +118,11 @@ Nouvel onglet, feature différenciante ("esprit roadbook papier de rallye, pas u
 GPS") — lecture d'une trace en liste de directions pures, sans carte principale.
 
 **Découplage total du Ride actif, non négociable** : ce module ne référence JAMAIS
-`RideSessionManager`, ne lit ni n'écrit `LibraryStore.activeTrackID`/`displayedTrackIDs`
-(invariant trace unique, it10) ni `GuidanceTarget` (it22). `RoadBookTabView.selectedTrackID`
-est un `@State` PUREMENT LOCAL à cet écran — choisir une trace ici n'affiche/ne pilote rien
-côté Ride, exactement l'inverse de `LibraryView`/`RideView` qui, eux, mutent
-`LibraryStore.activeTrackID` intentionnellement. `RoadbookExtractor`/`RoadbookLiveProgress`
+`RideSessionManager`, n'ÉCRIT jamais `LibraryStore.activeTrackID`/`displayedTrackIDs`
+(invariant trace unique, it10) ni `GuidanceTarget` (it22). ⚠️ Depuis it29 (décision
+propriétaire : une seule trace active dans l'app), il LIT la trace active, et elle seule
+(`RoadbookTrackSource`) : l'ancien `@State selectedTrackID` local et son sélecteur sont
+supprimés, remplacés par un raccourci vers la Bibliothèque (voir section it29). `RoadbookExtractor`/`RoadbookLiveProgress`
 (logique pure) n'ont même pas accès à ces objets — l'invariant est garanti par CONSTRUCTION,
 pas seulement par convention de code.
 
@@ -585,4 +585,36 @@ en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerc
 - **Garde-fou** : `RoadbookStableRegressionTests` (trace + réponse Overpass de référence,
   Road Book attendu ligne par ligne, sens A→B, B→A et route-aware). Voir "Jalon stable" dans le
   CLAUDE.md racine.
+
+## Itération 29 — entrées d'agglomération, raccourci Bibliothèque, progression enrichie
+
+- **Entrées d'agglomération** (fix "roadbook-city-entries-reliable"). Diagnostic sur la trace de
+  test réelle : un seul panneau `city_limit` cartographié pour 11 localités traversées (Hundsbach,
+  gardé). La cause est la couverture OSM, pas le filtre. Correctif : `RoadbookCityEntryDetector`
+  (pur, `RoadbookCityEntries.swift`) détecte l'entrée dans une zone bâtie (`landuse=residential`
+  ou polygone `place`) et la nomme d'après le nœud `place` le plus proche dans sa portée (ville
+  5 km, bourg 3 km, village/quartier 1,5 km). Ce repli est actif par défaut
+  (`landmarkCityEntryFallbackEnabled`) et remplace l'ancien repli "50 km/h". Règles :
+  - villages mitoyens (changement de localité dans une traversée, hystérésis 100 m) ;
+  - quartier écarté à portée d'une ville ;
+  - siège de commune nouvelle écarté au profit des anciens villages (Illtal → Oberdorf,
+    Grentzingen) ;
+  - le panneau cartographié prime (à moins de 400 m, ou même localité dans la même traversée) ;
+  - les entrées ne sont jamais écartées par la limite d'un repère par tronçon.
+  Cache v3 : le cache it28 marquait la catégorie comme téléchargée sans zones ni localités.
+- **Raccourci Bibliothèque** (refactor "roadbook-library-shortcut-single-active-track") :
+  `RoadbookTrackSource.displayedTrack` = `LibraryStore.activeTrack` dans son sens, sans repli sur
+  "la première trace". `RoadbookLibraryShortcut` affiche en haut à gauche le nom de la trace en
+  lecture seule ; un tap appelle `AppNavigationState.showLibrary()`. Changer de trace pendant
+  une sortie en cours demande confirmation : `TrackActivationPolicy`, Views/TrackActivation.swift,
+  voir le CLAUDE.md racine.
+- **Progression enrichie** (feat "roadbook-landmark-download-progress-details") :
+  `RoadbookDownloadMeter` (pur, horloge injectée) mesure octets, éléments, débit sur fenêtre de
+  3 s et temps restant, dérivé du rythme de traitement de la TRACE (Overpass passe l'essentiel
+  du temps à calculer : le débit en Ko/s ne dit rien de la durée).
+  `RoadbookFetchEvent.retrying` annonce les nouveaux essais. Le bandeau n'apparaît qu'après
+  0,6 s (`isBannerVisible`, pas de clignotement). Sans découpage (un seul tronçon), aucun
+  pourcentage n'est affiché.
+- Traces réelles rejouées hors dépôt (données personnelles non versionnées) : les 11 localités
+  de la trace de test sortent dans les deux sens.
 

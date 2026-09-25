@@ -1,5 +1,37 @@
 # TODO
 
+## Itération 29 — entrées d'agglomération, raccourci Bibliothèque, progression enrichie — v0.0.29
+
+Commits `roadbook-city-entries-reliable`, `library-track-change-during-ride-confirmation`,
+`roadbook-library-shortcut-single-active-track`, `roadbook-landmark-download-progress-details`.
+Checklist manuelle (trace "wahlbach-moulin-bas-test-gpx", sens inversé comme sur l'iPhone) :
+- [ ] Première ouverture après mise à jour : les repères sont retéléchargés (cache v3).
+- [ ] Entrées, dans l'ordre : Ligsdorf, Ferrette, Vieux-Ferrette, Riespach, Oberdorf,
+      Grentzingen, Willer, Hundsbach (panneau réel, nom seul), Tagsdorf, Heiwiller, Wahlbach.
+      Chaque "Entrée de X" tombe à l'entrée réelle du village, à ~100 m près.
+- [ ] En sens A→B : les mêmes localités dans l'ordre inverse, un seul repère pour Hundsbach.
+- [ ] Réglages > Repères > désactiver "Entrée d'agglomération" : toutes les entrées disparaissent.
+- [ ] Road Book : en haut à gauche, le nom de la trace active sans liste ; un tap ouvre la
+      Bibliothèque. Activer une autre trace dans la Bibliothèque : le Road Book l'affiche aussitôt.
+- [ ] Aucune trace active : "Aucune trace active" + "Ouvrir la Bibliothèque".
+- [ ] Sortie en cours (enregistrement démarré dans Ride), puis Bibliothèque → autre trace :
+      dialogue "Changer de trace pendant la sortie ?". "Annuler" ne change rien ; "Passer à
+      cette trace" change ; la sortie précédente est dans "Sorties non enregistrées".
+- [ ] Import par partage pendant une sortie : la trace importée n'est PAS activée.
+- [ ] Bandeau de chargement : éléments, Ko, débit ou "attente du serveur", temps restant après
+      le 1er tronçon, "serveur saturé, nouvel essai dans N s" si Overpass refuse. Rien ne
+      clignote à la réouverture d'une trace déjà chargée.
+
+Identifié, NON traité :
+- **Overpass public très limité** (504/429 fréquents constatés le 25/09) : 4 essais par tronçon
+  et reprise au tronçon ne suffisent pas toujours. Piste inchangée : Overpass auto-hébergé.
+- **Position estimée** : "Entrée de X" est placé au bord de la zone résidentielle cartographiée,
+  pas au panneau réel. Mesuré sur Hundsbach (seul panneau connu) : 10 m d'écart. Ailleurs, pas
+  vérifiable sans relevé terrain.
+- **Hundsbach en sens A→B** : le panneau OSM sans tag `direction` est accepté (règle de la fiche)
+  alors qu'il est au bout du village dans ce sens. Le repère est affiché à ~860 m après l'entrée
+  réelle. Corriger le tag `direction` dans OSM réglerait ce cas.
+
 ## Jalon stable it28 — repères = ce que le conducteur voit, catalogue, progression — v0.0.28
 
 Commits `roadbook-remove-minimap`, `roadbook-landmark-catalog-settings-progress`,
