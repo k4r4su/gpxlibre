@@ -17,6 +17,15 @@ struct LibraryView: View {
     /// Fiche complète (spec "biblio-track-fullsheet", it13) — tap sur une ligne, voir
     /// TrackFullSheetView.
     @State private var trackForFullSheet: GPXTrack?
+    /// Dossiers (it31) : création, renommage, suppression, déplacement d'une trace.
+    @State private var isCreatingFolder = false
+    @State private var folderNameText = ""
+    /// Trace à ranger dans le dossier qu'on est en train de créer ("Nouveau dossier…" depuis
+    /// "Déplacer vers").
+    @State private var trackAwaitingNewFolder: GPXTrack?
+    @State private var renamingFolder: TrackFolder?
+    @State private var folderToDelete: TrackFolder?
+    @State private var trackToMove: GPXTrack?
 
     private static let gpxType = UTType(filenameExtension: "gpx") ?? .xml
 
@@ -62,6 +71,12 @@ struct LibraryView: View {
                             library.loadSample()
                         } label: {
                             Label("Charger la trace d'exemple", systemImage: "wand.and.stars")
+                        }
+                        Divider()
+                        Button {
+                            startCreatingFolder(for: nil)
+                        } label: {
+                            Label("Nouveau dossier", systemImage: "folder.badge.plus")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -153,25 +168,172 @@ struct LibraryView: View {
                 }
             }
 
-            ForEach(library.tracks) { track in
-                // Fix "biblio-track-fullsheet" (it13, terrain : "Tap sur une ligne trace = fiche
-                // complète") — le tap n'ouvre plus TrackDetailView (carte + "Utiliser pour le
-                // Ride" avec précache) mais une fiche de gestion légère (nom/longueur/infos +
-                // Supprimer/Renommer/Paramètres). Décision de scope assumée : TrackDetailView
-                // reste intact mais n'a plus de point d'entrée depuis cette liste (voir
-                // TODO.md) — "Utiliser pour le Ride" reste accessible via le check-mark de
-                // ligne et via TrackSettingsView, "voir la trace" via l'aperçu dans Paramètres.
-                //
-                // Fix "biblio-checkmark-not-activating" (it19, bug terrain : "le check la
-                // première fois ne l'active pas réellement, il faut ouvrir la fiche pour que ça
-                // s'active") — root cause : un `Button` (le check-mark, dans TrackRow) imbriqué
-                // DANS un autre `Button` (toute la ligne, ci-dessous avant ce fix) est un
-                // anti-pattern SwiftUI connu dans une `List` : le tap sur le bouton interne est
-                // parfois "avalé" par le geste du bouton parent, qui ouvre la fiche au lieu
-                // d'activer. Remplacé par UN SEUL vrai bouton (le check-mark, dans TrackRow) +
-                // `.onTapGesture` sur le reste de la ligne : un `Button` enfant intercepte
-                // toujours son propre tap avant qu'un `.onTapGesture` du parent ne s'applique,
-                // contrairement à deux `Button` imbriqués — plus d'ambiguïté possible.
+            // Dossiers (it31) : sans aucun dossier, la liste reste plate comme avant ; sinon une
+            // section par dossier (ordre alphabétique) puis "Non classé", toujours présent.
+            if library.folders.isEmpty {
+                ForEach(library.tracks) { track in
+                    trackRow(track)
+                }
+            } else {
+                ForEach(library.sortedFolders) { folder in
+                    Section {
+                        folderContent(library.tracks(inFolder: folder.id))
+                    } header: {
+                        folderHeader(folder)
+                    }
+                }
+                Section {
+                    folderContent(library.tracks(inFolder: nil))
+                } header: {
+                    Text("Non classé")
+                }
+            }
+        }
+        .trackActivationConfirmation($pendingActivation)
+        .confirmationDialog(
+            "Déplacer vers",
+            isPresented: Binding(get: { trackToMove != nil }, set: { if !$0 { trackToMove = nil } }),
+            titleVisibility: .visible,
+            presenting: trackToMove
+        ) { track in
+            moveMenuItems(for: track)
+            Button("Annuler", role: .cancel) {}
+        } message: { track in
+            Text(track.name)
+        }
+        .alert("Nouveau dossier", isPresented: $isCreatingFolder) {
+            TextField("Nom du dossier", text: $folderNameText)
+            Button("Annuler", role: .cancel) { trackAwaitingNewFolder = nil }
+            Button("Créer") {
+                if let folder = library.createFolder(named: folderNameText), let track = trackAwaitingNewFolder {
+                    library.move(trackID: track.id, toFolder: folder.id)
+                }
+                trackAwaitingNewFolder = nil
+            }
+        } message: {
+            Text("Les dossiers servent à ranger les traces ; ils ne changent rien à la trace active.")
+        }
+        .alert(
+            "Renommer le dossier",
+            isPresented: Binding(get: { renamingFolder != nil }, set: { if !$0 { renamingFolder = nil } })
+        ) {
+            TextField("Nom du dossier", text: $folderNameText)
+            Button("Annuler", role: .cancel) { renamingFolder = nil }
+            Button("Enregistrer") {
+                if let folder = renamingFolder { library.renameFolder(folder.id, to: folderNameText) }
+                renamingFolder = nil
+            }
+        }
+        .confirmationDialog(
+            "Supprimer le dossier ?",
+            isPresented: Binding(get: { folderToDelete != nil }, set: { if !$0 { folderToDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: folderToDelete
+        ) { folder in
+            Button("Supprimer le dossier", role: .destructive) {
+                library.deleteFolder(folder.id)
+                folderToDelete = nil
+            }
+            Button("Annuler", role: .cancel) { folderToDelete = nil }
+        } message: { folder in
+            Text("« \(folder.name) » est supprimé. Ses \(library.tracks(inFolder: folder.id).count) traces ne sont pas supprimées : elles retournent dans « Non classé ».")
+        }
+        .sheet(item: $trackToConfigure) { track in
+            TrackSettingsView(track: track)
+        }
+        .sheet(item: $trackForFullSheet) { track in
+            TrackFullSheetView(
+                track: track,
+                isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
+                isActive: library.activeTrackID == track.id,
+                shareURL: library.exportURL(for: track) ?? library.fileURL(for: track),
+                onDelete: {
+                    library.delete(track)
+                    trackForFullSheet = nil
+                },
+                onRename: {
+                    renameText = track.name
+                    renamingTrack = track
+                    trackForFullSheet = nil
+                },
+                onConfigure: {
+                    trackForFullSheet = nil
+                    trackToConfigure = track
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func folderContent(_ tracks: [GPXTrack]) -> some View {
+        if tracks.isEmpty {
+            Text("Aucune trace dans ce dossier")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(tracks) { track in
+                trackRow(track)
+            }
+        }
+    }
+
+    private func folderHeader(_ folder: TrackFolder) -> some View {
+        HStack {
+            Label(folder.name, systemImage: "folder")
+            Spacer()
+            Menu {
+                Button {
+                    folderNameText = folder.name
+                    renamingFolder = folder
+                } label: {
+                    Label("Renommer le dossier", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    folderToDelete = folder
+                } label: {
+                    Label("Supprimer le dossier", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .imageScale(.large)
+            }
+            .accessibilityLabel("Actions du dossier \(folder.name)")
+        }
+    }
+
+    /// Destinations de "Déplacer vers" : tous les dossiers sauf le dossier actuel, "Non classé"
+    /// si la trace est rangée, et "Nouveau dossier…".
+    @ViewBuilder
+    private func moveMenuItems(for track: GPXTrack) -> some View {
+        let current = library.folderID(of: track.id)
+        ForEach(library.sortedFolders.filter { $0.id != current }) { folder in
+            Button {
+                library.move(trackID: track.id, toFolder: folder.id)
+            } label: {
+                Label(folder.name, systemImage: "folder")
+            }
+        }
+        if current != nil {
+            Button {
+                library.move(trackID: track.id, toFolder: nil)
+            } label: {
+                Label("Non classé", systemImage: "tray")
+            }
+        }
+        Button {
+            startCreatingFolder(for: track)
+        } label: {
+            Label("Nouveau dossier…", systemImage: "folder.badge.plus")
+        }
+    }
+
+    private func startCreatingFolder(for track: GPXTrack?) {
+        folderNameText = ""
+        trackAwaitingNewFolder = track
+        isCreatingFolder = true
+    }
+
+    private func trackRow(_ track: GPXTrack) -> some View {
                 TrackRow(
                     track: track,
                     isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
@@ -208,34 +370,21 @@ struct LibraryView: View {
                         Label("Paramétrer", systemImage: "slider.horizontal.3")
                     }
                     .tint(.blue)
+                    // Dossiers (it31).
+                    Button {
+                        trackToMove = track
+                    } label: {
+                        Label("Déplacer", systemImage: "folder")
+                    }
+                    .tint(.indigo)
+                }
+                .contextMenu {
+                Menu {
+                    moveMenuItems(for: track)
+                } label: {
+                    Label("Déplacer vers", systemImage: "folder")
                 }
             }
-        }
-        .trackActivationConfirmation($pendingActivation)
-        .sheet(item: $trackToConfigure) { track in
-            TrackSettingsView(track: track)
-        }
-        .sheet(item: $trackForFullSheet) { track in
-            TrackFullSheetView(
-                track: track,
-                isFullyOffline: downloadedRegions.isTrackFullyOffline(track.id, source: TileSource.active(for: settings.mapThemePreset)),
-                isActive: library.activeTrackID == track.id,
-                shareURL: library.exportURL(for: track) ?? library.fileURL(for: track),
-                onDelete: {
-                    library.delete(track)
-                    trackForFullSheet = nil
-                },
-                onRename: {
-                    renameText = track.name
-                    renamingTrack = track
-                    trackForFullSheet = nil
-                },
-                onConfigure: {
-                    trackForFullSheet = nil
-                    trackToConfigure = track
-                }
-            )
-        }
     }
 
     /// Ligne "Sortie non enregistrée" — "Récupérer" l'importe dans la Bibliothèque normale

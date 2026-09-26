@@ -18,6 +18,10 @@ final class LibraryStore: ObservableObject {
     @Published var lastError: String?
     @Published private(set) var activeTrackID: UUID?
     @Published private(set) var displayedTrackIDs: Set<UUID> = []
+    /// Dossiers de la Bibliothèque (it31) — purement organisationnels, voir LibraryFolders.swift.
+    /// Une trace sans entrée dans `folderAssignments` est "Non classé".
+    @Published var folders: [TrackFolder] = []
+    @Published var folderAssignments: [UUID: UUID] = [:]
 
     private static let activeTrackKey = "library.activeTrackID"
     private static let displayedTrackIDsKey = "library.displayedTrackIDs"
@@ -75,6 +79,10 @@ final class LibraryStore: ObservableObject {
         }
         return dir
     }
+
+    /// Dossier des traces (`Documents/Tracks`, ou l'override de test) — partagé avec
+    /// LibraryFolders.swift pour `folders.json`.
+    var tracksDirectoryURL: URL { tracksDirectory }
 
     private var indexFileURL: URL {
         tracksDirectory.appendingPathComponent("index.json")
@@ -141,6 +149,7 @@ final class LibraryStore: ObservableObject {
         loadIndex()
         loadActiveState()
         reconcileActiveStateWithTracks()
+        loadFolders()
     }
 
     /// Fix "orphaned-active-track-id" (it19, trouvé en instrumentant le cycle de vie Ride pour
@@ -213,6 +222,7 @@ final class LibraryStore: ObservableObject {
         if activeTrackID == track.id { activeTrackID = nil }
         saveIndex()
         persistActiveState()
+        forgetFolderAssignment(of: track.id)
     }
 
     @discardableResult
