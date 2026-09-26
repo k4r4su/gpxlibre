@@ -518,6 +518,16 @@ struct RideView: View {
     }
 
     @State private var showRecordingDeniedAlert = false
+    /// Proposition d'enregistrement au démarrage du suivi d'une trace (it31, point 2).
+    @State private var recordingPromptPolicy = RecordingPromptPolicy()
+    @State private var showRecordingPrompt = false
+
+    private func proposeRecordingIfNeeded(for trackID: UUID?) {
+        guard modeStore.mode == .trace else { return }
+        if recordingPromptPolicy.shouldPrompt(onStartOf: trackID, recorderState: recorder.state, recordedPointCount: recorder.pointCount) {
+            showRecordingPrompt = true
+        }
+    }
 
     private func toggleRecordingFromPanel() {
         switch recorder.state {
@@ -675,6 +685,16 @@ struct RideView: View {
         }
         .rideToast(message: toastMessage)
         .recordingDeniedAlert(isPresented: $showRecordingDeniedAlert)
+        .alert("Enregistrer cette sortie ?", isPresented: $showRecordingPrompt) {
+            // Recommandé : bouton par défaut (en gras) ; refuser reste un seul tap.
+            Button("Enregistrer") {
+                if recorder.start() == .denied { showRecordingDeniedAlert = true }
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Pas cette fois", role: .cancel) {}
+        } message: {
+            Text("Recommandé : ta trace est gardée même écran verrouillé, et récupérable si l'app se ferme par accident. Sans enregistrement, aucun point n'est conservé. Tu peux aussi démarrer plus tard avec le bouton Enregistrer.")
+        }
         .sheet(isPresented: $showEndRideSheet) {
             EndRideView(
                 originalTrackName: track?.name,
@@ -702,6 +722,8 @@ struct RideView: View {
             } else {
                 hasStartedRideSession = true
                 session.start(track: track)
+            proposeRecordingIfNeeded(for: track?.id)
+                proposeRecordingIfNeeded(for: track?.id)
             }
         }
         .onDisappear { session.stop() }
