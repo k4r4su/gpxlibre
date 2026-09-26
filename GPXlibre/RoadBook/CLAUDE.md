@@ -632,3 +632,12 @@ en roulant**. Jamais une limite de commune, un lieu-dit sans panneau, un commerc
   avant. La règle de densité limite le NOMBRE de repères, jamais leur ordre. Table classique et
   PDF étaient déjà dans l'ordre de la trace.
 
+
+## Traductions (it31)
+
+- Les libellés de repères restent stockés en CLÉ FRANÇAISE (`label` dans les caches et
+  `RoadbookLandmarkInfo`) : le cache ne dépend pas de la langue. Traduction à l'AFFICHAGE
+  seulement (`localizedLabel`, `displayLabel`, `localizedGenericLabel`, `L10n.dynamic`), y compris
+  dans le PDF. Tout nouveau libellé calculé à l'exécution doit rejoindre `L10n.dynamicKeys`
+  (sinon `LocalizationTests` et `scripts/l10n_check.py` ne le voient pas).
+- Les noms propres OSM (localités, routes) ne sont jamais traduits.

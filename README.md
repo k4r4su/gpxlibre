@@ -18,7 +18,8 @@ GPXlibre est une application iOS pour suivre une trace GPX en moto, à vélo ou 
 
 **Road Book**
 - Un onglet qui présente la trace comme un roadbook papier de rallye : liste des directions, ou mode « assisté GPS » avec le prochain virage en grand et la suite en dessous
-- Un checkpoint à l'entrée de chaque commune traversée, pour vérifier d'un coup d'œil qu'on est sur la bonne trace — dans les deux sens de parcours
+- Uniquement des repères visibles depuis la route : panneaux, ponts, églises, stations-service, entrées de village… choisis catégorie par catégorie dans les réglages
+- Le prochain élément affiché est toujours le plus proche, virage ou repère, et un indicateur « Hors trace » prend le relais si tu t'écartes
 - Un tap sur une étape montre l'endroit sur la carte, qui y reste jusqu'à « Me recentrer »
 - Export PDF à imprimer
 
@@ -34,21 +35,26 @@ GPXlibre est une application iOS pour suivre une trace GPX en moto, à vélo ou 
 - Un détour ou un guidage vers un point tapé sur la carte se dessine à côté de la trace, jamais à sa place
 
 **Enregistrer sa sortie**
-- L'app enregistre le trajet réellement parcouru en tâche de fond, indépendamment de la trace suivie
+- Au démarrage du suivi, l'app te propose d'enregistrer la sortie ; tu peux aussi démarrer, mettre en pause ou reprendre d'un bouton
+- L'enregistrement continue dans les autres onglets, écran verrouillé ou dans une autre app, et survit à une fermeture accidentelle
 - Export GPX en fin de sortie, sauvegardé automatiquement dans la bibliothèque avec une couleur ambre distinctive et un aperçu carte immédiat
 - Points d'intérêt signalables en un tap pendant le trajet
 
 **Bibliothèque**
-- Toutes les traces importées ou enregistrées, triées par date
+- Toutes les traces importées ou enregistrées, triées par date et rangées dans des dossiers si tu le souhaites
 - Aperçu cartographique par trace avec chevrons de direction et repères de départ/arrivée
 - Réglages indépendants par trace (sens, couleur, épaisseur, espacement des chevrons)
 - Partage et export GPX (une trace à la fois) via le partage système iOS standard
+
+**Langues et aide**
+- Français, anglais, allemand, espagnol et italien — automatique selon la langue du téléphone, ou au choix dans les réglages
+- Un tutoriel intégré, une page par onglet, consultable hors-ligne
 
 ## Comment ça s'utilise
 
 1. **Importer une trace** — depuis Fichiers, Mail, Safari ou directement dans l'app (onglet Bibliothèque)
 2. **La rendre active** — un tap sur la trace dans la Bibliothèque
-3. **Partir** — onglet Ride, la carte se centre et suit ta position
+3. **Partir** — onglet Ride, la carte se centre et suit ta position ; accepte l'enregistrement de la sortie si tu veux la garder
 4. **Suivre le roadbook** — la bannière latérale annonce les virages, les épingles sur la carte indiquent leur intensité
 5. **S'arrêter si besoin** — le bouton Pause coupe le guidage sans rien perdre ; un tap le relance
 6. **Terminer** — bouton « Terminer la sortie » dans le panneau de vitesse, la trace parcourue est enregistrée et exportable

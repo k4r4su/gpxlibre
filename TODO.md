@@ -1,5 +1,39 @@
 # TODO
 
+## Itération 31 — dossiers, proposition d'enregistrement, tutoriel, traductions — v0.0.31
+
+Commits `library-folders`, `ride-start-recording-prompt`, `in-app-tutorial`,
+`translations-fr-en-de-es-it`. Checklist manuelle (iPhone) :
+- [ ] Bibliothèque : « + » > Nouveau dossier ; glisser une trace à droite > Déplacer, et appui
+      long > Déplacer vers ; renommer un dossier (menu …) ; supprimer un dossier non vide : ses
+      traces reviennent dans « Non classé », la trace active reste active.
+- [ ] Premier lancement de cette version : toutes les traces existantes sont là, liste inchangée
+      tant qu'aucun dossier n'est créé.
+- [ ] Ride : au démarrage du suivi, « Enregistrer cette sortie ? ». « Enregistrer » → REC ;
+      « Pas cette fois » → rien n'est enregistré, le bouton Enregistrer reste disponible ; pas
+      de nouvelle proposition en revenant sur l'onglet Ride ; nouvelle proposition si tu actives
+      une autre trace.
+- [ ] Accepter, puis fermer l'app de force : à la réouverture, sortie en pause, récupérable.
+- [ ] Réglages > Tutoriel : 5 pages (Ride, Aller à, Road Book, Biblio, Réglages), contenu
+      conforme à ce que tu vois dans l'app.
+- [ ] Réglages > Langue : English, Deutsch, Español, Italiano puis Automatique — tous les écrans
+      (onglets, Road Book et repères, fiche trace, fin de sortie, Réglages et sous-écrans,
+      tutoriel, bandeau de chargement, badge Valhalla/OSRM) dans la langue choisie, sans reste
+      de français (hors noms de traces, noms propres OSM, noms de langues).
+- [ ] iPhone réglé successivement en EN / DE / ES / IT / FR puis en suédois, langue de l'app sur
+      « Automatique » : suit l'iPhone, et le suédois donne du français. (iOS propose aussi
+      Réglages iOS > GPXlibre > Langue : même effet.)
+- [ ] Guidage Valhalla « Aller à » > Itinéraire en anglais : instructions et voix en anglais.
+
+Identifié, NON traité :
+- **Overpass auto-hébergé** : l'URL de ton instance n'a pas été fournie ; l'app interroge
+  toujours overpass-api.de (`RoadBookConstants.overpassBaseURLString`).
+- **« Ramage scroll »** (lot bugfix Road Book cité par la fiche) : non identifié ; les autres
+  points de ce lot (agglomération, sélecteur en lecture seule, progression enrichie) sont faits
+  depuis it29.
+- **Traductions faites par Claude** : relecture par un locuteur natif souhaitable (termes moto,
+  longueur des libellés en allemand).
+
 ## Itération 30 — enregistrement en arrière-plan, hors trace Road Book, ordre d'arrivée — v0.0.30
 
 Commits `recording-survives-tabs-and-background`, `roadbook-offtrack-status-and-arrival-order`,

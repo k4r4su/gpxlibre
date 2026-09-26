@@ -35,7 +35,9 @@ GPXlibre/
                    préserve `id`, donc TOUT cache dérivé de l'ordre des points (map matching,
                    sélection des repères) est indexé par `traversalKey`, JAMAIS par `id` seul)
   Services/       GPXParser (XMLParser maison), LibraryStore (source de vérité des traces,
-                   voir section dédiée), LocationManager, NetworkMonitor
+                   voir section dédiée ; dossiers depuis it31, LibraryFolders.swift —
+                   `Tracks/folders.json`, "Non classé" virtuel, purement organisationnel),
+                   LocationManager, NetworkMonitor
   Ride/           Le cœur du produit — RideView (orchestrateur SwiftUI de l'onglet Ride),
                    RideSessionManager (state machine GPS/roadbook/détour/resume, @MainActor),
                    RideOverlayLayout (grille figée des zones d'overlay, SEULE source de
@@ -272,12 +274,18 @@ GPXlibre/
                    `.id(...)` sur TrackThumbnailView dans TrackSettingsView, contournement
                    standard, pas une correction de la logique d'état (qui était déjà correcte)
   Onboarding/     Écran d'accueil première ouverture
+  Tutorial/       Tutoriel intégré (it31) — TutorialContent (une page par onglet, contenu
+                   statique localisé) + TutorialView (Réglages > Tutoriel). Voir "Fin de chaque
+                   itération" : à tenir à jour.
 GPXlibreTests/    XCTest, @MainActor, @testable import GPXlibre — voir conventions plus bas
 server/           Backend FastAPI+SQLite pour SharedBlockage (Docker, `docker compose up`)
 docs/             Docs livrables pour le propriétaire (pas du pense-bête interne) :
                    tuile-sources.md (sources vectorielles évaluées), generation-tuiles-
                    regionales.md (manuel Planetiler/osmium à exécuter sur le NAS)
 ```
+
+Hors GPXlibre/ : `scripts/l10n_check.py` (it31) — vérification des traductions, voir
+"Traductions" plus bas.
 
 `project.yml` (xcodegen) est la source de vérité du projet Xcode. **Après tout ajout ou
 suppression de fichier Swift, lancer `xcodegen generate`** avant de builder — ne jamais
@@ -306,11 +314,14 @@ sous ce dossier) — 2D-only, fond vectoriel PMTiles, priorité MapSourceResolve
 - Ne JAMAIS réintroduire un `selectedTrackID` parallèle dans une vue ou un autre store. Le Road
   Book aussi lit `activeTrack` et rien d'autre depuis it29 (son ancien sélecteur local est
   supprimé ; `RoadbookTrackSource`). La trace active ne se change QUE depuis la Bibliothèque.
-- Changer la trace active pendant une SORTIE EN COURS (`RideSessionManager.recordedPointsCount >
-  0`) n'est jamais silencieux (it29, `TrackActivationPolicy` + `.trackActivationConfirmation`,
+- Changer la trace active pendant une SORTIE EN COURS (`RideRecorder.pointCount > 0` depuis
+  it30) n'est jamais silencieux (it29, `TrackActivationPolicy` + `.trackActivationConfirmation`,
   Views/TrackActivation.swift). Tout nouveau point d'activation doit passer par
-  `LibraryStore.request(_:recordedPointsCount:)`. Raison : `start`/`switchMode` repartent d'un
-  enregistrement vide dès que la trace change.
+  `LibraryStore.request(_:recordedPointsCount:)`. Depuis it30 l'enregistrement CONTINUE après le
+  changement de trace ; la confirmation évite surtout un changement accidentel en pleine sortie.
+- Proposition d'enregistrement (it31, `RecordingPromptPolicy`) : au démarrage du suivi d'une
+  trace (mode trace), une seule fois par trace et par lancement, seulement si rien n'est en
+  cours (état idle, 0 point). Refuser ne change rien ; le bouton Enregistrer reste le filet.
 - Fix "orphaned-active-track-id" (it19, trouvé en instrumentant un tout autre bug terrain via
   NSLog/`simctl spawn log stream` — voir méthode dans l'historique de commit) :
   `activeTrackID`/`displayedTrackIDs` (UserDefaults) et `tracks` (fichier `index.json`) sont
@@ -414,7 +425,7 @@ Caméra stable. **Toute itération suivante doit rester verte sur cette base** :
 avant chaque livraison, sans test désactivé ni skip ajouté pour "faire passer". Le seul skip
 possible, `SharedBlockageLiveServerTests`, se lève en lançant `server/app.py` localement (copie
 hors dépôt : `python3 -m uvicorn app:app --port 8000`). Au jalon, le run était de 413 tests,
-0 échec, 0 skip ; à it29, 452 tests, 0 échec, 0 skip ; à it30, 470 tests. Le résultat attendu de
+0 échec, 0 skip ; à it29, 452 tests, 0 échec, 0 skip ; à it30, 470 tests ; à it31, 491 tests, 0 échec, 0 skip. Le résultat attendu de
 `RoadbookStableRegressionTests` n'a pas changé à it29. Le repli "Entrée de <localité>" (actif
 par défaut depuis it29) fait désormais partie du comportement validé : `RoadbookCityEntryTests`.
 
@@ -443,6 +454,29 @@ dès qu'on quitte l'onglet Ride, et rien ne tournait en arrière-plan. Règles d
   l'écran : build Debug lancé avec `-GPXlibreDebugStartRecording` (et
   `-GPXlibreDebugFinishRecording`), app Réglages ouverte par-dessus via `devicectl device process
   launch`, journal relu via `devicectl device copy from` (lecture seule).
+
+## Traductions (it31) — FR (défaut) / EN / DE / ES / IT
+
+- Langue de développement `fr` : les CLÉS de traduction sont les textes français.
+  Traductions dans `GPXlibre/Resources/<en|de|es|it>.lproj/` (`Localizable.strings`,
+  `Recording.strings` pour "Enregistrer" au sens Record, `InfoPlist.strings`).
+- Langue : Réglages > Langue (`RideSettingsStore.appLanguage`, `AppLanguage`). Automatique = la
+  PREMIÈRE langue de l'appareil si supportée, sinon français. Appliquée en direct
+  (`AppLanguageBundle`, vue racine reconstruite).
+- **Règle pour tout nouveau texte d'interface** : littéral SwiftUI (`Text("…")`, `Button("…")`…)
+  OU `String(localized: "…", bundle: .appLanguage)`. Sans `bundle: .appLanguage`, un
+  `String(localized:)` ne suit PAS la langue choisie (constaté par test). Texte connu seulement à
+  l'exécution (libellé de repère stocké en clé française) : `L10n.dynamic`, clé ajoutée à
+  `L10n.dynamicKeys`. Puis ajouter la traduction dans les 4 `Localizable.strings` et lancer
+  `python3 scripts/l10n_check.py` (0 manquante attendu ; il signale aussi un `String(localized:)`
+  sans bundle). `LocalizationTests` vérifie mêmes clés et mêmes variables dans les 4 langues.
+- Dates : `AppLanguageBundle.locale` + `setLocalizedDateFormatFromTemplate`, jamais `fr_FR` en
+  dur. Services externes : `AppLanguageBundle.bcp47` (Valhalla, voix), `currentCode`
+  (Nominatim).
+- Tests : langue forcée en français sous XCTest (GPXlibreApp), indépendante de la machine.
+- Vérification visuelle : argument DEBUG `-GPXlibreDebugTab <ride|search|roadBook|library|
+  settings>` + `defaults write com.olivier.gpxlibre settings.appLanguage <code>` sur le
+  simulateur (et `AppleLanguages` pour simuler la langue de l'appareil).
 
 ## Écran de démarrage et numéro de version (spec "splash-screen", it22bis)
 
@@ -528,6 +562,14 @@ propriétaire, nouveau device/UDID de référence, nouveau pattern de test, etc.
 doit toujours refléter l'état RÉEL du dépôt, jamais un instantané figé d'une itération
 passée. Un fichier CLAUDE.md obsolète est pire qu'utile : il fait perdre du temps à la
 prochaine session à démêler ce qui a changé.
+
+**Mettre à jour le tutoriel intégré** (règle permanente du propriétaire, it31) :
+`GPXlibre/Tutorial/TutorialContent.swift` doit décrire l'app RÉELLE — à relire dès qu'un
+changement touche l'interface utilisateur, au même titre que CLAUDE.md/TODO.md. Un tutoriel qui
+décrit une fonctionnalité disparue ou modifiée est pire que pas de tutoriel. Tout texte ajouté
+ou modifié y est aussi traduit (voir "Traductions").
+
+**Vérifier les traductions** : `python3 scripts/l10n_check.py` → 0 manquante.
 
 **Mettre à jour `README.md`** (demande explicite du propriétaire, it17) si une nouvelle
 feature utilisateur clé a été ajoutée/changée — c'est la vitrine du dépôt sur GitHub, pas un
