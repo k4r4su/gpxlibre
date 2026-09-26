@@ -4,6 +4,9 @@ options:
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
+  # It31 : français = langue de développement (les clés de traduction SONT les textes français) ;
+  # traductions en/de/es/it dans GPXlibre/Resources/<langue>.lproj.
+  developmentLanguage: fr
 configs:
   Debug: debug
   Release: release
@@ -63,6 +66,8 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: GPXlibre
+        CFBundleDevelopmentRegion: fr
+        CFBundleLocalizations: [fr, en, de, es, it]
         # Fix "splash-version-still-1.0" (it23bis, retour terrain : "la version affichée sur le
         # splash c'est toujours 1.0") — root cause réelle : XcodeGen insère ses PROPRES valeurs
         # par défaut ("1.0"/"1", en dur) pour CFBundleShortVersionString/CFBundleVersion quand

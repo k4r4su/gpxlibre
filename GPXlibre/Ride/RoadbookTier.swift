@@ -108,15 +108,15 @@ enum RoadbookTier: Equatable {
 
     var label: String {
         switch self {
-        case .light: return "Virage léger"
-        case .marked: return "Virage prononcé"
-        case .hard: return "Virage fort"
-        case .veryHard: return "Virage très serré"
-        case .uTurn: return "Demi-tour"
-        case .lightDirectionChange: return "Changement de direction"
-        case .roundabout: return "Rond-point"
-        case .fork: return "Fourche"
-        case .merge: return "Fusion / bretelle"
+        case .light: return String(localized: "Virage léger", bundle: .appLanguage)
+        case .marked: return String(localized: "Virage prononcé", bundle: .appLanguage)
+        case .hard: return String(localized: "Virage fort", bundle: .appLanguage)
+        case .veryHard: return String(localized: "Virage très serré", bundle: .appLanguage)
+        case .uTurn: return String(localized: "Demi-tour", bundle: .appLanguage)
+        case .lightDirectionChange: return String(localized: "Changement de direction", bundle: .appLanguage)
+        case .roundabout: return String(localized: "Rond-point", bundle: .appLanguage)
+        case .fork: return String(localized: "Fourche", bundle: .appLanguage)
+        case .merge: return String(localized: "Fusion / bretelle", bundle: .appLanguage)
         }
     }
 }

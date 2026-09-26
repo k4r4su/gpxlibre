@@ -27,12 +27,12 @@ struct EndRideView: View {
     @State private var savedTrack: GPXTrack?
     @State private var confirmDiscard = false
 
-    private static let defaultNameDateFormatter: DateFormatter = {
+    private static var defaultNameDateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "d MMM yyyy"
+        formatter.locale = AppLanguageBundle.locale
+        formatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
         return formatter
-    }()
+    }
 
     var body: some View {
         NavigationStack {
@@ -106,7 +106,7 @@ struct EndRideView: View {
         }
         .onAppear {
             guard trackName.isEmpty else { return }
-            let base = originalTrackName ?? "Sortie"
+            let base = originalTrackName ?? String(localized: "Sortie", bundle: .appLanguage)
             trackName = "\(base) – \(Self.defaultNameDateFormatter.string(from: Date()))"
         }
     }

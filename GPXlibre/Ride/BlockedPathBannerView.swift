@@ -26,7 +26,7 @@ struct BlockedPathBannerView: View {
                 Image(systemName: "xmark")
                     .foregroundStyle(.white)
             }
-            .longPressTooltip("Ignorer l'alerte")
+            .longPressTooltip(String(localized: "Ignorer l'alerte", bundle: .appLanguage))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -94,8 +94,8 @@ struct DetourStatusView: View {
 
     private var modeLabel: String {
         switch detour.mode {
-        case .routed(let profile): return "Détour (\(profile.displayName)) actif"
-        case .direct: return "Rejoins ta trace — guidage direct"
+        case .routed(let profile): return String(localized: "Détour (\(profile.displayName)) actif", bundle: .appLanguage)
+        case .direct: return String(localized: "Rejoins ta trace — guidage direct", bundle: .appLanguage)
         }
     }
 

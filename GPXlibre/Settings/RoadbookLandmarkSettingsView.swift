@@ -23,7 +23,7 @@ struct RoadbookLandmarkSettingsView: View {
                     ForEach(group.categories) { category in
                         Toggle(isOn: binding(for: category)) {
                             Label {
-                                Text(category.genericLabel)
+                                Text(category.localizedGenericLabel)
                             } icon: {
                                 Text(category.emoji)
                             }

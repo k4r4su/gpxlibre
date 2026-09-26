@@ -694,7 +694,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
             loadWatchdog = Timer.scheduledTimer(withTimeInterval: MapEngineConstants.styleLoadTimeoutSeconds, repeats: false) { [weak self, weak mapView] _ in
                 guard let self, let mapView, !self.didFinishLoadingOnce else { return }
                 print("[MapLibre] Timeout : le style n'a pas fini de charger en \(MapEngineConstants.styleLoadTimeoutSeconds)s.")
-                self.onStatusChange?(.failed("Carte non chargée — vérifie ta connexion"))
+                self.onStatusChange?(.failed(String(localized: "Carte non chargée — vérifie ta connexion", bundle: .appLanguage)))
                 self.switchToFallbackStyle(on: mapView)
             }
         }
@@ -920,7 +920,7 @@ struct RideMapLibreView: UIViewRepresentable, MapProvider {
         /// toujours remontée à l'UI, jamais avalée silencieusement.
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
             print("[MapLibre] ERREUR de chargement du style : \(error.localizedDescription)")
-            onStatusChange?(.failed("Carte non chargée — vérifie ta connexion"))
+            onStatusChange?(.failed(String(localized: "Carte non chargée — vérifie ta connexion", bundle: .appLanguage)))
             switchToFallbackStyle(on: mapView)
         }
 
@@ -1115,7 +1115,7 @@ final class CheckpointMLNAnnotation: NSObject, MLNAnnotation {
 final class SharedBlockageMLNAnnotation: NSObject, MLNAnnotation {
     let blockage: SharedBlockage
     var coordinate: CLLocationCoordinate2D { blockage.coordinate.coordinate }
-    var title: String? { blockage.note ?? "Point bloqué signalé" }
+    var title: String? { blockage.note ?? String(localized: "Point bloqué signalé", bundle: .appLanguage) }
 
     init(blockage: SharedBlockage) {
         self.blockage = blockage
@@ -1136,7 +1136,7 @@ final class RollingWaypointMLNAnnotation: NSObject, MLNAnnotation {
 /// updateRoadBookFocus`, retire/repose plutôt que de muter cette instance).
 final class RoadBookFocusMLNAnnotation: NSObject, MLNAnnotation {
     let coordinate: CLLocationCoordinate2D
-    var title: String? = "Virage Road Book"
+    var title: String? = String(localized: "Virage Road Book", bundle: .appLanguage)
 
     init(coordinate: CLLocationCoordinate2D) {
         self.coordinate = coordinate

@@ -22,8 +22,8 @@ enum DetourProfile: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .route: return "Route"
-        case .offroad: return "Piste"
+        case .route: return String(localized: "Route", bundle: .appLanguage)
+        case .offroad: return String(localized: "Piste", bundle: .appLanguage)
         }
     }
 

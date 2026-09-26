@@ -71,38 +71,43 @@ struct RoadbookLandmarkProgressView: View {
     /// débit nul = le serveur calcule sa réponse ("attente du serveur").
     static func detail(for stats: RoadbookLandmarkDownloadStats) -> String? {
         var parts: [String] = []
-        if stats.elementsReceived > 0 { parts.append("\(stats.elementsReceived) élément\(stats.elementsReceived > 1 ? "s" : "")") }
+        if stats.elementsReceived == 1 {
+            parts.append(String(localized: "1 élément", bundle: .appLanguage))
+        } else if stats.elementsReceived > 1 {
+            parts.append(String(localized: "\(stats.elementsReceived) éléments", bundle: .appLanguage))
+        }
         if stats.bytesReceived > 0 { parts.append(byteString(stats.bytesReceived)) }
         if let retry = stats.retryInSeconds {
-            parts.append(retry >= 1 ? "serveur saturé, nouvel essai dans \(Int(retry.rounded(.up))) s" : "serveur saturé, nouvel essai…")
+            parts.append(retry >= 1 ? String(localized: "serveur saturé, nouvel essai dans \(Int(retry.rounded(.up))) s", bundle: .appLanguage) : String(localized: "serveur saturé, nouvel essai…", bundle: .appLanguage))
         } else if let speed = stats.bytesPerSecond {
-            parts.append(speed > 0 ? "\(byteString(Int(speed.rounded())))/s" : "attente du serveur")
+            parts.append(speed > 0 ? "\(byteString(Int(speed.rounded())))/s" : String(localized: "attente du serveur", bundle: .appLanguage))
         }
         if let remaining = stats.secondsRemaining { parts.append(remainingString(remaining)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     static func byteString(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) o" }
-        if bytes < 1024 * 1024 { return "\(Int((Double(bytes) / 1024).rounded())) Ko" }
-        return String(format: "%.1f Mo", Double(bytes) / 1024 / 1024).replacingOccurrences(of: ".", with: ",")
+        if bytes < 1024 { return String(localized: "\(bytes) o", bundle: .appLanguage) }
+        if bytes < 1024 * 1024 { return String(localized: "\(Int((Double(bytes) / 1024).rounded())) Ko", bundle: .appLanguage) }
+        return String(localized: "\(Double(bytes) / 1024 / 1024, specifier: "%.1f") Mo", bundle: .appLanguage)
+            .replacingOccurrences(of: ".", with: Locale.current.decimalSeparator ?? ",")
     }
 
     /// Arrondi à 5 s (puis à la minute) : un affichage qui ne tressaute pas.
     static func remainingString(_ seconds: Double) -> String {
-        if seconds < 5 { return "presque fini" }
-        if seconds < 60 { return "~\(Int((seconds / 5).rounded(.up)) * 5) s restantes" }
-        return "~\(Int((seconds / 60).rounded(.up))) min restantes"
+        if seconds < 5 { return String(localized: "presque fini", bundle: .appLanguage) }
+        if seconds < 60 { return String(localized: "~\(Int((seconds / 5).rounded(.up)) * 5) s restantes", bundle: .appLanguage) }
+        return String(localized: "~\(Int((seconds / 60).rounded(.up))) min restantes", bundle: .appLanguage)
     }
 
     static func message(for phase: RoadbookLandmarkLoadPhase) -> String {
         switch phase {
         case .idle: return ""
-        case .downloading(let completed, let total): return "Téléchargement des repères… \(completed)/\(total)"
-        case .analyzing: return "Analyse des repères…"
-        case .finished: return "Repères à jour"
-        case .failed: return "Repères indisponibles (serveur OSM)"
-        case .offline(let hasCachedData): return hasCachedData ? "Hors ligne — repères en cache" : "Hors ligne — repères indisponibles"
+        case .downloading(let completed, let total): return String(localized: "Téléchargement des repères… \(completed)/\(total)", bundle: .appLanguage)
+        case .analyzing: return String(localized: "Analyse des repères…", bundle: .appLanguage)
+        case .finished: return String(localized: "Repères à jour", bundle: .appLanguage)
+        case .failed: return String(localized: "Repères indisponibles (serveur OSM)", bundle: .appLanguage)
+        case .offline(let hasCachedData): return hasCachedData ? String(localized: "Hors ligne — repères en cache", bundle: .appLanguage) : String(localized: "Hors ligne — repères indisponibles", bundle: .appLanguage)
         }
     }
 }

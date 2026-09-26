@@ -185,21 +185,21 @@ final class LibraryStore: ObservableObject {
             let data = try Data(contentsOf: url)
             return try addTrack(named: url.deletingPathExtension().lastPathComponent, data: data)
         } catch {
-            lastError = "Import impossible : \(error.localizedDescription)"
+            lastError = String(localized: "Import impossible : \(error.localizedDescription)", bundle: .appLanguage)
             return nil
         }
     }
 
     func loadSample() {
         guard let sampleURL = Bundle.main.url(forResource: "sample-trail", withExtension: "gpx") else {
-            lastError = "Fichier d'exemple introuvable dans le bundle."
+            lastError = String(localized: "Fichier d'exemple introuvable dans le bundle.", bundle: .appLanguage)
             return
         }
         do {
             let data = try Data(contentsOf: sampleURL)
-            try addTrack(named: "Exemple – Col de la Croix", data: data)
+            try addTrack(named: String(localized: "Exemple – Col de la Croix", bundle: .appLanguage), data: data)
         } catch {
-            lastError = "Chargement de l'exemple impossible : \(error.localizedDescription)"
+            lastError = String(localized: "Chargement de l'exemple impossible : \(error.localizedDescription)", bundle: .appLanguage)
         }
     }
 

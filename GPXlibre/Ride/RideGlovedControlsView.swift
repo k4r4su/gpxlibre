@@ -14,7 +14,7 @@ struct RideGlovedZoomControls: View {
     }
 
     private func glovedButton(systemImage: String, label: String?, action: @escaping () -> Void) -> some View {
-        let explanation = systemImage == "plus" ? "Zoomer" : "Dézoomer"
+        let explanation = systemImage == "plus" ? String(localized: "Zoomer", bundle: .appLanguage) : String(localized: "Dézoomer", bundle: .appLanguage)
         return Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 22, weight: .bold))

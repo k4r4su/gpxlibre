@@ -1,0 +1,3 @@
+"NSLocationWhenInUseUsageDescription" = "GPXlibre muestra tu posición en la ruta y graba tu salida cuando lo pides, incluso con la pantalla bloqueada o en otra app durante la grabación.";
+"NSMicrophoneUsageDescription" = "GPXlibre usa el micrófono para grabar una breve nota de voz opcional sobre un punto de interés.";
+"Trace GPX" = "Ruta GPX";

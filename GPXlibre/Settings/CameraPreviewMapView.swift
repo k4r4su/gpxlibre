@@ -29,7 +29,7 @@ struct CameraPreviewMapView: UIViewRepresentable {
             let lon = base.longitude + sin(t * .pi * 1.6) * 0.006
             points.append(GPXPoint(latitude: lat, longitude: lon))
         }
-        return GPXTrack(id: UUID(), name: "Aperçu", fileName: "preview.gpx", importDate: Date(), points: points, waypoints: [])
+        return GPXTrack(id: UUID(), name: String(localized: "Aperçu", bundle: .appLanguage), fileName: "preview.gpx", importDate: Date(), points: points, waypoints: [])
     }()
 
     func makeUIView(context: Context) -> MKMapView {

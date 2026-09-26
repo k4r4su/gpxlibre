@@ -26,6 +26,16 @@ struct RoadBookFocusRequest: Equatable {
 @MainActor
 final class AppNavigationState: ObservableObject {
     @Published var selectedTab: AppTab = .ride
+
+    init() {
+        #if DEBUG
+        // Vérification visuelle sans pouvoir toucher l'écran (it31, balayage des traductions) :
+        // `simctl launch ... -GPXlibreDebugTab library` ouvre directement cet onglet. Absent en Release.
+        if let raw = UserDefaults.standard.string(forKey: "GPXlibreDebugTab"), let tab = AppTab(debugName: raw) {
+            selectedTab = tab
+        }
+        #endif
+    }
     @Published var roadBookFocusRequest: RoadBookFocusRequest?
 
     /// Point d'entrée UNIQUE pour "montre-moi ce point sur la carte Ride" (spec
@@ -51,3 +61,19 @@ final class AppNavigationState: ObservableObject {
         roadBookFocusRequest = nil
     }
 }
+
+#if DEBUG
+extension AppTab {
+    init?(debugName: String) {
+        switch debugName {
+        case "ride": self = .ride
+        case "search": self = .search
+        case "roadBook": self = .roadBook
+        case "library": self = .library
+        case "settings": self = .settings
+        default: return nil
+        }
+    }
+}
+#endif
+

@@ -12,9 +12,9 @@ enum ZoomPreset: String, CaseIterable, Identifiable {
     // affiché change — même patron que "Gants-épais" → "Épais" (it13).
     var displayName: String {
         switch self {
-        case .prudent: return "Conservateur"
-        case .normal: return "Équilibré"
-        case .rapide: return "Agressif"
+        case .prudent: return String(localized: "Conservateur", bundle: .appLanguage)
+        case .normal: return String(localized: "Équilibré", bundle: .appLanguage)
+        case .rapide: return String(localized: "Agressif", bundle: .appLanguage)
         }
     }
 

@@ -43,11 +43,11 @@ struct GPXTrack: Identifiable, Codable, Hashable {
     /// de création fichier), "Importée le" en repli pur sur `importDate`. Année omise si
     /// l'année en cours, pour rester sobre au quotidien.
     var displayDateLabel: String {
-        let prefix = contentDate != nil ? "Tracée le" : "Importée le"
+        let prefix = contentDate != nil ? String(localized: "Tracée le", bundle: .appLanguage) : String(localized: "Importée le", bundle: .appLanguage)
         let sameYear = Calendar.current.isDate(displayDate, equalTo: Date(), toGranularity: .year)
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
+        formatter.locale = AppLanguageBundle.locale
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "d MMM" : "d MMM yyyy")
         return "\(prefix) \(formatter.string(from: displayDate))"
     }
 

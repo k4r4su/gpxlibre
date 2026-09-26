@@ -46,11 +46,11 @@ enum TrackActivationPolicy {
     }
 
     static func confirmationMessage(for request: TrackActivationRequest, activeTrackName: String?, recordedPointsCount: Int) -> String {
-        let current = activeTrackName.map { "« \($0) »" } ?? "la trace active"
+        let current = activeTrackName.map { "« \($0) »" } ?? String(localized: "la trace active", bundle: .appLanguage)
         let action: String
         switch request {
-        case .activate(let track): action = "Passer à « \(track.name) » arrête le guidage sur \(current)"
-        case .deactivate: action = "Désactiver \(current) arrête le guidage"
+        case .activate(let track): action = String(localized: "Passer à « \(track.name) » arrête le guidage sur \(current)", bundle: .appLanguage)
+        case .deactivate: action = String(localized: "Désactiver \(current) arrête le guidage", bundle: .appLanguage)
         }
         return "Une sortie est en cours (\(recordedPointsCount) points enregistrés). \(action). L'enregistrement de la sortie, lui, continue."
     }

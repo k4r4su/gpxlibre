@@ -127,8 +127,8 @@ struct ValhallaSettingsView: View {
     private var routingActivityLabel: String {
         switch activityMonitor.lastEvent?.provider {
         case .valhalla: return "Valhalla"
-        case .osrm: return "OSRM (repli)"
-        case nil: return "Aucune requête récente"
+        case .osrm: return String(localized: "OSRM (repli)", bundle: .appLanguage)
+        case nil: return String(localized: "Aucune requête récente", bundle: .appLanguage)
         }
     }
 
@@ -160,7 +160,7 @@ struct ValhallaSettingsView: View {
             do {
                 let version = try await ValhallaRoutingService.checkStatus(configuration: configuration)
                 await MainActor.run {
-                    connectionTestResult = .success("Connecté (\(version))")
+                    connectionTestResult = .success(String(localized: "Connecté (\(version))", bundle: .appLanguage))
                     isTestingConnection = false
                 }
             } catch {

@@ -28,6 +28,15 @@ struct GPXlibreApp: App {
         MapLibreBootstrap.configure()
         TabBarAppearance.configure()
         let settingsStore = RideSettingsStore()
+        // It31 : langue appliquée AVANT toute vue (automatique = langue de l'appareil si
+        // supportée, sinon français).
+        AppLanguageBundle.apply(settingsStore.appLanguage.resolvedCode())
+        #if DEBUG
+        // Tests : textes attendus en français quelle que soit la langue de la machine de test.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            AppLanguageBundle.apply(AppLanguage.fallbackCode)
+        }
+        #endif
         let monitor = NetworkMonitor()
         let modeStore = RideModeStore()
         let blockagesCoordinator = SharedBlockageSyncCoordinator()
@@ -69,6 +78,10 @@ struct GPXlibreApp: App {
                     .environmentObject(trackRideSettings)
                     .environmentObject(vectorPackages)
                     .environmentObject(rideRecorder)
+                    // It31 : langue choisie (formats de date/nombre) ; la vue racine est
+                    // reconstruite quand elle change, pour que tous les textes suivent en direct.
+                    .environment(\.locale, Locale(identifier: settings.appLanguage.resolvedCode()))
+                    .id(settings.appLanguage.resolvedCode())
                     .onOpenURL { url in
                         library.importTrack(from: url)
                     }

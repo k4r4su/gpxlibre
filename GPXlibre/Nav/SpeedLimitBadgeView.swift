@@ -17,6 +17,8 @@ struct SpeedLimitBadgeView: View {
             .overlay(Circle().stroke(isOverLimit ? .red : .red.opacity(0.8), lineWidth: isOverLimit ? 6 : 5))
             .shadow(color: isOverLimit ? .red.opacity(0.8) : .clear, radius: 8)
             .animation(.easeInOut(duration: 0.2), value: isOverLimit)
-            .accessibilityLabel("Limite de vitesse \(speedLimitKmh) km/h\(isOverLimit ? ", dépassée" : "")")
+            .accessibilityLabel(isOverLimit
+                ? String(localized: "Limite de vitesse \(speedLimitKmh) km/h, dépassée", bundle: .appLanguage)
+                : String(localized: "Limite de vitesse \(speedLimitKmh) km/h", bundle: .appLanguage))
     }
 }

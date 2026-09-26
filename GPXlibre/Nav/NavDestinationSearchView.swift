@@ -26,8 +26,8 @@ struct NavDestinationSearchView: View {
             List {
                 Section {
                     HStack(spacing: 12) {
-                        favoriteButton(title: "Domicile", systemImage: "house.fill", favorite: favorites.home)
-                        favoriteButton(title: "Travail", systemImage: "briefcase.fill", favorite: favorites.work)
+                        favoriteButton(title: String(localized: "Domicile", bundle: .appLanguage), systemImage: "house.fill", favorite: favorites.home)
+                        favoriteButton(title: String(localized: "Travail", bundle: .appLanguage), systemImage: "briefcase.fill", favorite: favorites.work)
                     }
                     .padding(.vertical, 4)
                 }
@@ -152,7 +152,7 @@ struct NavDestinationSearchView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 results = []
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Recherche impossible."
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? String(localized: "Recherche impossible.", bundle: .appLanguage)
             }
             isSearching = false
         }

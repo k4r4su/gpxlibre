@@ -10,12 +10,12 @@ enum TraceWidthPreset: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .fine: return "Fine"
-        case .normale: return "Normale"
+        case .fine: return String(localized: "Fine", bundle: .appLanguage)
+        case .normale: return String(localized: "Normale", bundle: .appLanguage)
         // Renommé "Gants-épais" → "Épais" (fix "thick-label-live-thickness", it13, terrain :
         // libellé jugé confus). rawValue Codable inchangé ("gantsEpais") pour ne pas casser la
         // persistance existante (UserDefaults/JSON par trace) — seul le LABEL affiché change.
-        case .gantsEpais: return "Épais"
+        case .gantsEpais: return String(localized: "Épais", bundle: .appLanguage)
         }
     }
 
@@ -36,12 +36,12 @@ enum TraceColorPreset: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .orange: return "Orange"
-        case .rouge: return "Rouge"
-        case .cyan: return "Cyan"
-        case .jaune: return "Jaune"
-        case .magenta: return "Magenta"
-        case .vertLime: return "Vert-lime"
+        case .orange: return String(localized: "Orange", bundle: .appLanguage)
+        case .rouge: return String(localized: "Rouge", bundle: .appLanguage)
+        case .cyan: return String(localized: "Cyan", bundle: .appLanguage)
+        case .jaune: return String(localized: "Jaune", bundle: .appLanguage)
+        case .magenta: return String(localized: "Magenta", bundle: .appLanguage)
+        case .vertLime: return String(localized: "Vert-lime", bundle: .appLanguage)
         }
     }
 

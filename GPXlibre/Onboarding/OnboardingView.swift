@@ -16,8 +16,8 @@ struct OnboardingView: View {
     var body: some View {
         TabView(selection: $page) {
             OnboardingPage(
-                title: "Importe ta première trace",
-                message: "Depuis Mail, Fichiers ou Safari — ou choisis un fichier ici."
+                title: String(localized: "Importe ta première trace", bundle: .appLanguage),
+                message: String(localized: "Depuis Mail, Fichiers ou Safari — ou choisis un fichier ici.", bundle: .appLanguage)
             ) {
                 // Fix "icon-text-consistency" (it19, étude UX) : mêmes icônes que les actions
                 // identiques ailleurs dans l'app (menu "+"/état vide de la Bibliothèque).
@@ -31,8 +31,8 @@ struct OnboardingView: View {
             .tag(0)
 
             OnboardingPage(
-                title: "Une trace d'exemple est incluse",
-                message: "Teste l'app tout de suite, sans rien importer."
+                title: String(localized: "Une trace d'exemple est incluse", bundle: .appLanguage),
+                message: String(localized: "Teste l'app tout de suite, sans rien importer.", bundle: .appLanguage)
             ) {
                 Button {
                     library.loadSample()
@@ -45,8 +45,8 @@ struct OnboardingView: View {
             .tag(1)
 
             OnboardingPage(
-                title: "L'alerte checkpoint flashe 200 m avant les virages",
-                message: "Regarde autour de toi quand même : c'est toi qui pilotes."
+                title: String(localized: "L'alerte checkpoint flashe 200 m avant les virages", bundle: .appLanguage),
+                message: String(localized: "Regarde autour de toi quand même : c'est toi qui pilotes.", bundle: .appLanguage)
             ) {
                 Button {
                     finish()

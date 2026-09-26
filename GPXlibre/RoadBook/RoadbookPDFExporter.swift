@@ -135,7 +135,7 @@ enum RoadbookPDFExporter {
         ]
         (title as NSString).draw(at: CGPoint(x: margin, y: margin), withAttributes: titleAttributes)
 
-        let pageLabel = "Page \(pageIndex + 1)/\(totalPages)"
+        let pageLabel = String(localized: "Page \(pageIndex + 1)/\(totalPages)", bundle: .appLanguage)
         let pageAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 10),
             .foregroundColor: UIColor.darkGray,
@@ -156,7 +156,7 @@ enum RoadbookPDFExporter {
     }
 
     private static func drawEmptyMessage(contentRect: CGRect, fontSize: CGFloat) {
-        let text = "Aucune manœuvre détectée sur cette trace (pas de changement de direction au-dessus du seuil configuré)."
+        let text = String(localized: "Aucune manœuvre détectée sur cette trace (pas de changement de direction au-dessus du seuil configuré).", bundle: .appLanguage)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.italicSystemFont(ofSize: fontSize + 1),
             .foregroundColor: UIColor.darkGray,
@@ -170,10 +170,10 @@ enum RoadbookPDFExporter {
             .font: UIFont.boldSystemFont(ofSize: fontSize - 1),
             .foregroundColor: UIColor.darkGray,
         ]
-        draw("Partiel", in: layout.partial, attributes: attributes, alignment: .center)
-        if let cumulative = layout.cumulative { draw("Cumulé", in: cumulative, attributes: attributes, alignment: .center) }
-        draw(options.headingStyle == .pictogram ? "Cap" : "Degrés", in: layout.heading, attributes: attributes, alignment: .center)
-        if let note = layout.note { draw("Note", in: note, attributes: attributes, alignment: .center) }
+        draw(String(localized: "Partiel", bundle: .appLanguage), in: layout.partial, attributes: attributes, alignment: .center)
+        if let cumulative = layout.cumulative { draw(String(localized: "Cumulé", bundle: .appLanguage), in: cumulative, attributes: attributes, alignment: .center) }
+        draw(options.headingStyle == .pictogram ? "Cap" : String(localized: "Degrés", bundle: .appLanguage), in: layout.heading, attributes: attributes, alignment: .center)
+        if let note = layout.note { draw(String(localized: "Note", bundle: .appLanguage), in: note, attributes: attributes, alignment: .center) }
 
         let ruleY = layout.partial.maxY - 2
         let path = UIBezierPath()
@@ -271,7 +271,7 @@ enum RoadbookPDFExporter {
             draw(landmark.info.displayLabel, in: sign.insetBy(dx: 6, dy: 0), attributes: nameAttributes, alignment: .center)
         } else {
             let emojiAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: options.fontSize.points + 4)]
-            let text = [landmark.info.label, RoadbookLandmarkRowText.detail(landmark.info)].joined(separator: " · ")
+            let text = [landmark.info.localizedLabel, RoadbookLandmarkRowText.detail(landmark.info)].joined(separator: " · ")
             if let note = layout.note {
                 draw(landmark.info.category.emoji, in: layout.heading, attributes: emojiAttributes, alignment: .center)
                 draw(text, in: note.insetBy(dx: 4, dy: 0), attributes: attributes, alignment: .left)

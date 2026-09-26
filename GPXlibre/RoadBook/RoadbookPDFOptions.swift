@@ -4,20 +4,20 @@ import Foundation
 enum PDFOrientation: String, CaseIterable, Identifiable, Codable {
     case portrait, landscape
     var id: String { rawValue }
-    var label: String { self == .portrait ? "Portrait" : "Paysage" }
+    var label: String { self == .portrait ? String(localized: "Portrait", bundle: .appLanguage) : String(localized: "Paysage", bundle: .appLanguage) }
 }
 
 enum PDFDensity: String, CaseIterable, Identifiable, Codable {
     case compact, comfortable
     var id: String { rawValue }
-    var label: String { self == .compact ? "Compact" : "Confortable" }
+    var label: String { self == .compact ? String(localized: "Compact", bundle: .appLanguage) : String(localized: "Confortable", bundle: .appLanguage) }
     var rowHeightPoints: CGFloat { self == .compact ? RoadBookConstants.pdfRowHeightCompact : RoadBookConstants.pdfRowHeightComfortable }
 }
 
 enum PDFHeadingStyle: String, CaseIterable, Identifiable, Codable {
     case pictogram, degrees
     var id: String { rawValue }
-    var label: String { self == .pictogram ? "Pictogramme" : "Degrés" }
+    var label: String { self == .pictogram ? String(localized: "Pictogramme", bundle: .appLanguage) : String(localized: "Degrés", bundle: .appLanguage) }
 }
 
 enum PDFFontSize: String, CaseIterable, Identifiable, Codable {
@@ -25,9 +25,9 @@ enum PDFFontSize: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .small: return "Petite"
-        case .medium: return "Moyenne"
-        case .large: return "Grande"
+        case .small: return String(localized: "Petite", bundle: .appLanguage)
+        case .medium: return String(localized: "Moyenne", bundle: .appLanguage)
+        case .large: return String(localized: "Grande", bundle: .appLanguage)
         }
     }
     var points: CGFloat {

@@ -10,6 +10,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // It31 : langue de l'app — automatique (langue de l'appareil si supportée, sinon
+                // français) ou forcée. Appliquée tout de suite, sans relancer.
+                Section {
+                    Picker("Langue", selection: $settings.appLanguage) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.nativeName).tag(language)
+                        }
+                    }
+                } footer: {
+                    Text("Français, English, Deutsch, Español, Italiano. En automatique, une langue d'appareil non prise en charge affiche l'app en français.")
+                }
+
                 // Spec it14 (Blocs 1/6/7) : l'ancienne section "Zoom automatique" à plat
                 // déménage dans ce nouvel écran, avec Position point bleu et Zoom par défaut —
                 // les trois ont besoin d'un aperçu carte en direct, impossible à faire
@@ -41,7 +53,7 @@ struct SettingsView: View {
                                 Text("\(Int(value)) m").tag(value)
                             }
                         }
-                        .longPressTooltip("Deux virages détectés à moins de cette distance sont fusionnés en un seul — utile sur piste qui zigzague")
+                        .longPressTooltip(String(localized: "Deux virages détectés à moins de cette distance sont fusionnés en un seul — utile sur piste qui zigzague", bundle: .appLanguage))
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Fenêtre de mesure : \(Int(settings.roadbookWindowBeforeMeters)) m avant / \(Int(settings.roadbookWindowAfterMeters)) m après")
@@ -51,7 +63,7 @@ struct SettingsView: View {
                             Text("Après").font(.caption).foregroundStyle(.secondary)
                             Slider(value: $settings.roadbookWindowAfterMeters, in: NavigationConstants.roadbookWindowRange, step: 5)
                         }
-                        .longPressTooltip("Distance avant/après chaque point de la trace sur laquelle l'angle est mesuré (±40-80 m)")
+                        .longPressTooltip(String(localized: "Distance avant/après chaque point de la trace sur laquelle l'angle est mesuré (±40-80 m)", bundle: .appLanguage))
 
                         Toggle("Seuils personnalisés", isOn: Binding(
                             get: { settings.roadbookUseCustomThresholds },
@@ -61,10 +73,10 @@ struct SettingsView: View {
                             }
                         ))
                         if settings.roadbookUseCustomThresholds {
-                            roadbookThresholdStepper("Léger dès", value: $settings.roadbookLightThresholdDegrees)
-                            roadbookThresholdStepper("Prononcé dès", value: $settings.roadbookMarkedThresholdDegrees)
-                            roadbookThresholdStepper("Fort dès", value: $settings.roadbookHardThresholdDegrees)
-                            roadbookThresholdStepper("Très serré dès", value: $settings.roadbookVeryHardThresholdDegrees)
+                            roadbookThresholdStepper(String(localized: "Léger dès", bundle: .appLanguage), value: $settings.roadbookLightThresholdDegrees)
+                            roadbookThresholdStepper(String(localized: "Prononcé dès", bundle: .appLanguage), value: $settings.roadbookMarkedThresholdDegrees)
+                            roadbookThresholdStepper(String(localized: "Fort dès", bundle: .appLanguage), value: $settings.roadbookHardThresholdDegrees)
+                            roadbookThresholdStepper(String(localized: "Très serré dès", bundle: .appLanguage), value: $settings.roadbookVeryHardThresholdDegrees)
                         } else {
                             Text("Standard : léger 25° · prononcé 45° · fort 90° · très serré 135°. Pas de vrai changement de cap = pas de checkpoint. Demi-tour seulement si la trace repart sur la même route.")
                                 .font(.caption)
@@ -205,7 +217,7 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
-                        .longPressTooltip("Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté")
+                        .longPressTooltip(String(localized: "Colonne +/−/Stop/Bloqué et bannière roadbook, du côté choisi — le badge vitesse passe automatiquement de l'autre côté", bundle: .appLanguage))
                     }
 
                     // Spec "roadbook-ui-redesign" (it25, point 0) : palette PROPRE à l'écran Road
@@ -257,7 +269,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Partager mes signalements anonymement", isOn: $settings.shareBlockagesAnonymously)
-                        .longPressTooltip("Envoie uniquement un point GPS, une date et une note optionnelle — aucune donnée nominative, aucun compte")
+                        .longPressTooltip(String(localized: "Envoie uniquement un point GPS, une date et une note optionnelle — aucune donnée nominative, aucun compte", bundle: .appLanguage))
                 } header: {
                     Text("Communauté")
                 } footer: {

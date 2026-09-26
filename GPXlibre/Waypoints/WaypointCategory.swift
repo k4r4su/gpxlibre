@@ -10,13 +10,13 @@ enum WaypointCategory: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .essence: return "Essence"
-        case .eau: return "Eau"
-        case .bivouac: return "Bivouac"
-        case .vue: return "Point de vue"
-        case .danger: return "Danger"
-        case .bouchon: return "Bouchon"
-        case .attention: return "Attention"
+        case .essence: return String(localized: "Essence", bundle: .appLanguage)
+        case .eau: return String(localized: "Eau", bundle: .appLanguage)
+        case .bivouac: return String(localized: "Bivouac", bundle: .appLanguage)
+        case .vue: return String(localized: "Point de vue", bundle: .appLanguage)
+        case .danger: return String(localized: "Danger", bundle: .appLanguage)
+        case .bouchon: return String(localized: "Bouchon", bundle: .appLanguage)
+        case .attention: return String(localized: "Attention", bundle: .appLanguage)
         }
     }
 

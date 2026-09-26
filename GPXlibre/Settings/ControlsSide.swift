@@ -11,8 +11,8 @@ enum ControlsSide: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .left: return "Gauche"
-        case .right: return "Droite"
+        case .left: return String(localized: "Gauche", bundle: .appLanguage)
+        case .right: return String(localized: "Droite", bundle: .appLanguage)
         }
     }
 }

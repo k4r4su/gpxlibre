@@ -133,9 +133,9 @@ struct RoadbookFocusedView: View {
                 RoadbookBigLandmarkCard(landmark: landmark, distanceRemainingMeters: distanceRemainingMeters, unit: unit, isLandscape: isLandscape)
             }
         } else if !hasLocationFix {
-            RoadbookFocusStatusView(systemImage: "location.slash", message: "En attente d'une position GPS…")
+            RoadbookFocusStatusView(systemImage: "location.slash", message: String(localized: "En attente d'une position GPS…", bundle: .appLanguage))
         } else {
-            RoadbookFocusStatusView(systemImage: "checkered.flag", message: "Toutes les manœuvres de cette trace ont été passées.")
+            RoadbookFocusStatusView(systemImage: "checkered.flag", message: String(localized: "Toutes les manœuvres de cette trace ont été passées.", bundle: .appLanguage))
         }
     }
 
@@ -187,7 +187,7 @@ private struct RoadbookBigLandmarkCard: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Prochain repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceRemainingMeters))")
+        .accessibilityLabel(String(localized: "Prochain repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceRemainingMeters))", bundle: .appLanguage))
     }
 
     private func distanceText(size: CGFloat) -> some View {
@@ -200,7 +200,7 @@ private struct RoadbookBigLandmarkCard: View {
 
     private func labels(alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 4) {
-            Text(landmark.info.label)
+            Text(landmark.info.localizedLabel)
                 .font(.title3.bold())
                 .multilineTextAlignment(alignment == .center ? .center : .leading)
                 .lineLimit(2)
@@ -466,7 +466,7 @@ private struct RoadbookUpcomingLandmarkRow: View {
                 RoadbookLandmarkIcon(category: landmark.info.category, size: 22)
                     .frame(width: 60)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(landmark.info.label)
+                    Text(landmark.info.localizedLabel)
                         .font(.subheadline.bold())
                         .lineLimit(1)
                     Text(RoadbookLandmarkRowText.detail(landmark.info))
@@ -482,7 +482,7 @@ private struct RoadbookUpcomingLandmarkRow: View {
             .background(Color.accentColor.opacity(0.06))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceFromNowMeters))")
+        .accessibilityLabel(String(localized: "Repère : \(landmark.info.displayLabel), dans \(unit.displayString(fromMeters: distanceFromNowMeters))", bundle: .appLanguage))
     }
 }
 

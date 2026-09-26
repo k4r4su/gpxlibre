@@ -12,7 +12,7 @@ struct PrecacheEstimate {
 
     var formattedDuration: String {
         let minutes = Int((estimatedSeconds / 60).rounded(.up))
-        return minutes <= 1 ? "< 1 min" : "~\(minutes) min"
+        return minutes <= 1 ? String(localized: "< 1 min", bundle: .appLanguage) : String(localized: "~\(minutes) min", bundle: .appLanguage)
     }
 }
 

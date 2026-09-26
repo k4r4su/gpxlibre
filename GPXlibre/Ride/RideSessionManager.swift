@@ -1154,7 +1154,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
 
         guard let origin = currentLocation?.coordinate else { return }
         guard networkMonitor.isReachable else {
-            resumeRoutingError = "Réseau requis pour l'itinéraire — vol d'oiseau affiché"
+            resumeRoutingError = String(localized: "Réseau requis pour l'itinéraire — vol d'oiseau affiché", bundle: .appLanguage)
             return
         }
 
@@ -1176,7 +1176,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.isRequestingResume = false
-                    self.resumeRoutingError = "Réseau requis pour l'itinéraire — vol d'oiseau affiché"
+                    self.resumeRoutingError = String(localized: "Réseau requis pour l'itinéraire — vol d'oiseau affiché", bundle: .appLanguage)
                 }
             }
         }
@@ -1283,7 +1283,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
         goToRequestFailed = nil
 
         guard let origin = currentLocation?.coordinate else {
-            goToRequestFailed = "Position GPS indisponible pour l'instant."
+            goToRequestFailed = String(localized: "Position GPS indisponible pour l'instant.", bundle: .appLanguage)
             return
         }
 
@@ -1306,7 +1306,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                     self.isRequestingGoTo = false
                     // Honnête : si le réseau/OSRM échoue, on ne prétend pas avoir un
                     // itinéraire — fallback automatique en ligne directe.
-                    self.goToRequestFailed = (error as? LocalizedError)?.errorDescription ?? "Itinéraire impossible — guidage direct."
+                    self.goToRequestFailed = (error as? LocalizedError)?.errorDescription ?? String(localized: "Itinéraire impossible — guidage direct.", bundle: .appLanguage)
                     self.goToGuidance = GoToGuidance(coordinates: [origin, destination], profile: .offroad, destinationCoordinate: destination, destinationLabel: label)
                 }
             }
@@ -1407,13 +1407,13 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
     /// toggle en Réglages en cours de route) : erreur honnête plutôt qu'un guidage cassé.
     private func requestNavRoute() {
         guard let destination = navDestinationCoordinate, let origin = currentLocation?.coordinate else {
-            navRoutingError = "Position GPS indisponible pour l'instant."
+            navRoutingError = String(localized: "Position GPS indisponible pour l'instant.", bundle: .appLanguage)
             return
         }
         guard let configuration = currentValhallaConfiguration else {
             isRoutingInProgress = false
             isRecalculatingRoute = false
-            navRoutingError = "Le guidage classique nécessite Valhalla (Réglages > Avancé > Routage Valhalla)."
+            navRoutingError = String(localized: "Le guidage classique nécessite Valhalla (Réglages > Avancé > Routage Valhalla).", bundle: .appLanguage)
             return
         }
         navRoutingTask?.cancel()
@@ -1456,7 +1456,7 @@ final class RideSessionManager: NSObject, ObservableObject, CLLocationManagerDel
                 await MainActor.run {
                     self.isRoutingInProgress = false
                     self.isRecalculatingRoute = false
-                    self.navRoutingError = (error as? LocalizedError)?.errorDescription ?? "Calcul d'itinéraire impossible."
+                    self.navRoutingError = (error as? LocalizedError)?.errorDescription ?? String(localized: "Calcul d'itinéraire impossible.", bundle: .appLanguage)
                 }
             }
         }

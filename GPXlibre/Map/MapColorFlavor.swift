@@ -50,17 +50,17 @@ enum MapColorFlavor: String, CaseIterable, Codable, Equatable {
 
     var label: String {
         switch self {
-        case .standard: return "Standard"
-        case .hauteContraste: return "Contraste élevé"
-        case .terreux: return "Terreux"
+        case .standard: return String(localized: "Standard", bundle: .appLanguage)
+        case .hauteContraste: return String(localized: "Contraste élevé", bundle: .appLanguage)
+        case .terreux: return String(localized: "Terreux", bundle: .appLanguage)
         }
     }
 
     var description: String {
         switch self {
-        case .standard: return "Palette d'origine du style vectoriel, inchangée."
-        case .hauteContraste: return "Couleurs plus vives, plus de contraste — pensé pour la lisibilité au soleil, avec des gants."
-        case .terreux: return "Teintes plus chaudes et naturelles, esprit carte de randonnée."
+        case .standard: return String(localized: "Palette d'origine du style vectoriel, inchangée.", bundle: .appLanguage)
+        case .hauteContraste: return String(localized: "Couleurs plus vives, plus de contraste — pensé pour la lisibilité au soleil, avec des gants.", bundle: .appLanguage)
+        case .terreux: return String(localized: "Teintes plus chaudes et naturelles, esprit carte de randonnée.", bundle: .appLanguage)
         }
     }
 

@@ -41,7 +41,8 @@ enum ValhallaNavigationService {
             ],
             "costing": "auto",
             "units": "kilometers",
-            "language": "fr-FR",
+            // It31 : instructions dans la langue de l'app.
+            "language": AppLanguageBundle.bcp47,
         ]
 
         var request = URLRequest(url: url, timeoutInterval: RideConstants.valhallaRequestTimeoutSeconds)

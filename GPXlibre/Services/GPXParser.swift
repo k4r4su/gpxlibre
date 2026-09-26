@@ -6,8 +6,8 @@ enum GPXParserError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidXML: return "Le fichier n'est pas un GPX valide."
-        case .noTrackData: return "Aucune trace ou point trouvé dans ce fichier GPX."
+        case .invalidXML: return String(localized: "Le fichier n'est pas un GPX valide.", bundle: .appLanguage)
+        case .noTrackData: return String(localized: "Aucune trace ou point trouvé dans ce fichier GPX.", bundle: .appLanguage)
         }
     }
 }

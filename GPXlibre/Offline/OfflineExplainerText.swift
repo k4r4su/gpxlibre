@@ -8,7 +8,7 @@ import Foundation
 /// migrer). Contenu conforme aux conventions standard OSM de niveaux de zoom (z10 ≈ ville, z12
 /// ≈ rue, z14 ≈ bâtiment).
 enum OfflineExplainerText {
-    static let title = "Comprendre le zoom max"
+    static let title = String(localized: "Comprendre le zoom max", bundle: .appLanguage)
 
     static let body = """
     Le zoom max correspond au niveau de détail pré-téléchargé. En dessous de ce niveau, la carte reste parfaitement nette hors-ligne. Au-delà, l'app agrandit une tuile existante (moins nette). Plus le niveau est élevé, plus le téléchargement est volumineux.

@@ -18,9 +18,9 @@ enum RoadbookPaletteSetting: String, CaseIterable, Identifiable, Codable, Equata
 
     var label: String {
         switch self {
-        case .automatic: return "Automatique"
-        case .paper: return "Papier (clair)"
-        case .night: return "Sombre"
+        case .automatic: return String(localized: "Automatique", bundle: .appLanguage)
+        case .paper: return String(localized: "Papier (clair)", bundle: .appLanguage)
+        case .night: return String(localized: "Sombre", bundle: .appLanguage)
         }
     }
 

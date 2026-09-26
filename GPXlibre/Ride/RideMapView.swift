@@ -467,7 +467,7 @@ final class RollingWaypointAnnotation: NSObject, MKAnnotation {
 final class SharedBlockageAnnotation: NSObject, MKAnnotation {
     let blockage: SharedBlockage
     var coordinate: CLLocationCoordinate2D { blockage.coordinate.coordinate }
-    var title: String? { blockage.note ?? "Point bloqué signalé" }
+    var title: String? { blockage.note ?? String(localized: "Point bloqué signalé", bundle: .appLanguage) }
 
     init(blockage: SharedBlockage) {
         self.blockage = blockage

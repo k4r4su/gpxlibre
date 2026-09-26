@@ -19,10 +19,10 @@ enum MapThemePreset: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .standard: return "Standard"
-        case .hauteContraste: return "Contraste élevé"
-        case .terreux: return "Terreux"
-        case .relief: return "Relief"
+        case .standard: return String(localized: "Standard", bundle: .appLanguage)
+        case .hauteContraste: return String(localized: "Contraste élevé", bundle: .appLanguage)
+        case .terreux: return String(localized: "Terreux", bundle: .appLanguage)
+        case .relief: return String(localized: "Relief", bundle: .appLanguage)
         }
     }
 

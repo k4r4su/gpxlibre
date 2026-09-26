@@ -21,8 +21,8 @@ struct FavoriteAddressesView: View {
     var body: some View {
         List {
             Section {
-                row(title: "Domicile", systemImage: "house.fill", favorite: favorites.home, slot: .home)
-                row(title: "Travail", systemImage: "briefcase.fill", favorite: favorites.work, slot: .work)
+                row(title: String(localized: "Domicile", bundle: .appLanguage), systemImage: "house.fill", favorite: favorites.home, slot: .home)
+                row(title: String(localized: "Travail", bundle: .appLanguage), systemImage: "briefcase.fill", favorite: favorites.work, slot: .work)
             } footer: {
                 Text("Ces adresses alimentent les suggestions rapides de la recherche \"Aller à\" en Ride.")
             }
@@ -45,7 +45,7 @@ struct FavoriteAddressesView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .foregroundStyle(.primary)
-                    Text(favorite?.label ?? "Non défini — touche pour configurer")
+                    Text(favorite?.label ?? String(localized: "Non défini — touche pour configurer", bundle: .appLanguage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -76,7 +76,7 @@ private struct FavoriteAddressPickerView: View {
     @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
 
-    private var title: String { slot == .work ? "Travail" : "Domicile" }
+    private var title: String { slot == .work ? String(localized: "Travail", bundle: .appLanguage) : String(localized: "Domicile", bundle: .appLanguage) }
     private var existing: NavFavorite? { slot == .work ? favorites.work : favorites.home }
 
     var body: some View {
@@ -152,8 +152,8 @@ private struct FavoriteAddressPickerView: View {
 
     private func apply(coordinate: CLLocationCoordinate2D, label: String?) {
         switch slot {
-        case .home: favorites.setHome(coordinate, label: label ?? "Domicile")
-        case .work: favorites.setWork(coordinate, label: label ?? "Travail")
+        case .home: favorites.setHome(coordinate, label: label ?? String(localized: "Domicile", bundle: .appLanguage))
+        case .work: favorites.setWork(coordinate, label: label ?? String(localized: "Travail", bundle: .appLanguage))
         case .other: break
         }
         dismiss()
@@ -179,7 +179,7 @@ private struct FavoriteAddressPickerView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 results = []
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Recherche impossible."
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? String(localized: "Recherche impossible.", bundle: .appLanguage)
             }
             isSearching = false
         }

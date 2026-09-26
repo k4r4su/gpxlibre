@@ -294,7 +294,7 @@ struct RideView: View {
                     // Fix "manual-point-guidance-exclusivity"/"nav-guidance-stop-button" (it22) :
                     // "Revenir à la trace" si une trace reste chargée (réactive son guidage,
                     // annule la destination manuelle) — sinon simple arrêt du guidage riche.
-                    stopLabel: library.activeTrack != nil ? "Revenir à la trace" : "Arrêter le guidage",
+                    stopLabel: library.activeTrack != nil ? String(localized: "Revenir à la trace", bundle: .appLanguage) : "Arrêter le guidage",
                     onStop: {
                         if library.activeTrack != nil {
                             session.returnToTraceGuidance()
@@ -390,7 +390,7 @@ struct RideView: View {
                         .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .accessibilityLabel(is2DNorthUp ? "Revenir à la vue cap-en-haut" : "Vue nord-en-haut")
-                    .longPressTooltip(is2DNorthUp ? "Bascule en cap-en-haut : la carte tourne avec ta direction" : "Bascule en nord-en-haut : la carte reste fixe")
+                    .longPressTooltip(is2DNorthUp ? String(localized: "Bascule en cap-en-haut : la carte tourne avec ta direction", bundle: .appLanguage) : String(localized: "Bascule en nord-en-haut : la carte reste fixe", bundle: .appLanguage))
 
                     if let limit = session.currentSpeedLimitKmh {
                         SpeedLimitBadgeView(speedLimitKmh: limit, isOverLimit: session.isOverSpeedLimit)
@@ -518,13 +518,13 @@ struct RideView: View {
     }
 
     @State private var showRecordingDeniedAlert = false
-    /// Proposition d'enregistrement au démarrage du suivi d'une trace (it31, point 2).
-    @State private var recordingPromptPolicy = RecordingPromptPolicy()
+    /// Proposition d'enregistrement au démarrage du suivi d'une trace (it31, point 2) — mémoire
+    /// dans `RideRecorder.promptPolicy`.
     @State private var showRecordingPrompt = false
 
     private func proposeRecordingIfNeeded(for trackID: UUID?) {
         guard modeStore.mode == .trace else { return }
-        if recordingPromptPolicy.shouldPrompt(onStartOf: trackID, recorderState: recorder.state, recordedPointCount: recorder.pointCount) {
+        if recorder.promptPolicy.shouldPrompt(onStartOf: trackID, recorderState: recorder.state, recordedPointCount: recorder.pointCount) {
             showRecordingPrompt = true
         }
     }
@@ -687,7 +687,7 @@ struct RideView: View {
         .recordingDeniedAlert(isPresented: $showRecordingDeniedAlert)
         .alert("Enregistrer cette sortie ?", isPresented: $showRecordingPrompt) {
             // Recommandé : bouton par défaut (en gras) ; refuser reste un seul tap.
-            Button("Enregistrer") {
+            Button(String(localized: "Enregistrer", table: "Recording", bundle: .appLanguage)) {
                 if recorder.start() == .denied { showRecordingDeniedAlert = true }
             }
             .keyboardShortcut(.defaultAction)
@@ -807,7 +807,7 @@ struct RideView: View {
     /// inchangé) — seule la présentation diffère, l'état isGuidanceStopped reste identique.
     private func commitPause() {
         session.pauseGuidance()
-        toastMessage = "Guidage en pause"
+        toastMessage = String(localized: "Guidage en pause", bundle: .appLanguage)
     }
 
     /// Stop universel (spec "stop-guidance-semantics", it14, Bloc 3, sémantique confirmée) :
@@ -818,7 +818,7 @@ struct RideView: View {
     /// onEndRide), inchangé.
     private func commitStop() {
         session.stopGuidance()
-        toastMessage = "Guidage arrêté"
+        toastMessage = String(localized: "Guidage arrêté", bundle: .appLanguage)
     }
 
     /// Spec Bloc 5 : pill d'alerte si la trace chargée passe à moins de 300 m d'un point
@@ -866,7 +866,7 @@ struct RideView: View {
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
                     pendingGoToCoordinate = coordinate
-                    pendingGoToLabel = "Point sur la carte"
+                    pendingGoToLabel = String(localized: "Point sur la carte", bundle: .appLanguage)
                     showGoToActionSheet = true
                 },
                 onTrackTap: { coordinate, toleranceMeters in
@@ -916,7 +916,7 @@ struct RideView: View {
                 onStatusChange: { mapLoadStatus = $0 },
                 onLongPress: { coordinate in
                     pendingGoToCoordinate = coordinate
-                    pendingGoToLabel = "Point sur la carte"
+                    pendingGoToLabel = String(localized: "Point sur la carte", bundle: .appLanguage)
                     showGoToActionSheet = true
                 },
                 onTrackTap: { coordinate, toleranceMeters in

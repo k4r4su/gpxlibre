@@ -81,7 +81,7 @@ struct LibraryView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .longPressTooltip("Ajouter une trace")
+                    .longPressTooltip(String(localized: "Ajouter une trace", bundle: .appLanguage))
                 }
             }
             .fileImporter(
@@ -297,7 +297,7 @@ struct LibraryView: View {
                 Image(systemName: "ellipsis.circle")
                     .imageScale(.large)
             }
-            .accessibilityLabel("Actions du dossier \(folder.name)")
+            .accessibilityLabel(String(localized: "Actions du dossier \(folder.name)", bundle: .appLanguage))
         }
     }
 
@@ -427,13 +427,13 @@ struct LibraryView: View {
         unsavedRides.delete(ride)
     }
 
-    private static let unsavedRideDateFormatter: DateFormatter = {
+    private static var unsavedRideDateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.locale = AppLanguageBundle.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter
-    }()
+    }
 }
 
 private struct TrackRow: View {

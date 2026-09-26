@@ -36,6 +36,9 @@ final class RideRecorder: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var pointCount = 0
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
+    /// Proposition "Enregistrer cette sortie ?" déjà faite, par trace (it31) — ici plutôt que dans
+    /// `RideView` : elle survit à la reconstruction des vues (changement de langue).
+    var promptPolicy = RecordingPromptPolicy()
     /// Enregistrement retrouvé au lancement après un arrêt de l'app (kill système/utilisateur).
     @Published private(set) var wasRestoredAfterInterruption = false
 
@@ -201,7 +204,7 @@ final class RideRecorder: ObservableObject {
               points.count % RideConstants.unsavedRideCheckpointEveryNPoints == 0
         else { return }
         let data = GPXExporter.export(
-            trackName: "Sortie non enregistrée – \(Self.unsavedRideNameDateFormatter.string(from: startedAt))",
+            trackName: String(localized: "Sortie non enregistrée – \(Self.unsavedRideNameDateFormatter.string(from: startedAt))", bundle: .appLanguage),
             points: points,
             waypoints: [],
             comment: nil
@@ -209,12 +212,12 @@ final class RideRecorder: ObservableObject {
         unsavedRideStore.checkpoint(sessionID: sessionID, startedAt: startedAt, gpxData: data, pointCount: points.count, maxRetained: settings.unsavedRideRetentionLimit)
     }
 
-    private static let unsavedRideNameDateFormatter: DateFormatter = {
+    private static var unsavedRideNameDateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "d MMM yyyy HH:mm"
+        formatter.locale = AppLanguageBundle.locale
+        formatter.setLocalizedDateFormatFromTemplate("d MMM yyyy HH:mm")
         return formatter
-    }()
+    }
 }
 
 // MARK: - Source GPS

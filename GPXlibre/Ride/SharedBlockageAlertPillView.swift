@@ -30,7 +30,7 @@ struct SharedBlockageAlertPillView: View {
                 Image(systemName: "xmark")
                     .foregroundStyle(.white)
             }
-            .longPressTooltip("Masquer cette alerte")
+            .longPressTooltip(String(localized: "Masquer cette alerte", bundle: .appLanguage))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

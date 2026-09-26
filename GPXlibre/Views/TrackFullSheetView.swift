@@ -40,12 +40,12 @@ struct TrackFullSheetView: View {
                 HStack(spacing: 12) {
                     StatItem(title: "Distance", value: String(format: "%.1f km", track.totalDistanceKm))
                     Divider().frame(height: 32)
-                    StatItem(title: "Points", value: "\(track.pointCount)")
+                    StatItem(title: String(localized: "Points", bundle: .appLanguage), value: "\(track.pointCount)")
                     Divider().frame(height: 32)
-                    StatItem(title: "Dénivelé +", value: String(format: "%.0f m", track.elevationGainMeters))
+                    StatItem(title: String(localized: "Dénivelé +", bundle: .appLanguage), value: String(format: "%.0f m", track.elevationGainMeters))
                     if isFullyOffline {
                         Divider().frame(height: 32)
-                        StatItem(title: "Hors-ligne", value: "100%")
+                        StatItem(title: String(localized: "Hors-ligne", bundle: .appLanguage), value: "100%")
                     }
                 }
 
@@ -135,14 +135,14 @@ struct TrackFullSheetView: View {
     private func geekMetricsGrid(_ metrics: TrackMetrics) -> some View {
         let columns = [GridItem(.flexible()), GridItem(.flexible())]
         return LazyVGrid(columns: columns, spacing: 16) {
-            StatItem(title: "Durée totale", value: Self.durationText(metrics.durationSeconds))
-            StatItem(title: "Dont en mouvement", value: Self.durationText(metrics.movingDurationSeconds))
-            StatItem(title: "Vitesse moyenne", value: Self.speedText(metrics.averageSpeedKmh))
-            StatItem(title: "Moyenne en mouvement", value: Self.speedText(metrics.averageMovingSpeedKmh))
-            StatItem(title: "Vitesse max", value: Self.speedText(metrics.maxSpeedKmh))
-            StatItem(title: "Pente max", value: String(format: "%.0f %%", metrics.maxGradePercent))
-            StatItem(title: "Dénivelé −", value: String(format: "%.0f m", metrics.elevationLossMeters))
-            StatItem(title: "Altitude min/max", value: "\(Int(metrics.minElevationMeters.rounded()))–\(Int(metrics.maxElevationMeters.rounded())) m")
+            StatItem(title: String(localized: "Durée totale", bundle: .appLanguage), value: Self.durationText(metrics.durationSeconds))
+            StatItem(title: String(localized: "Dont en mouvement", bundle: .appLanguage), value: Self.durationText(metrics.movingDurationSeconds))
+            StatItem(title: String(localized: "Vitesse moyenne", bundle: .appLanguage), value: Self.speedText(metrics.averageSpeedKmh))
+            StatItem(title: String(localized: "Moyenne en mouvement", bundle: .appLanguage), value: Self.speedText(metrics.averageMovingSpeedKmh))
+            StatItem(title: String(localized: "Vitesse max", bundle: .appLanguage), value: Self.speedText(metrics.maxSpeedKmh))
+            StatItem(title: String(localized: "Pente max", bundle: .appLanguage), value: String(format: "%.0f %%", metrics.maxGradePercent))
+            StatItem(title: String(localized: "Dénivelé −", bundle: .appLanguage), value: String(format: "%.0f m", metrics.elevationLossMeters))
+            StatItem(title: String(localized: "Altitude min/max", bundle: .appLanguage), value: "\(Int(metrics.minElevationMeters.rounded()))–\(Int(metrics.maxElevationMeters.rounded())) m")
         }
     }
 

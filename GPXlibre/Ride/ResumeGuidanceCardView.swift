@@ -68,10 +68,10 @@ struct ResumeGuidanceCardView: View {
     private var infoText: String {
         var parts: [String] = []
         if let birdDistanceMeters {
-            parts.append("\(formattedDistance(birdDistanceMeters)) à vol d'oiseau")
+            parts.append(String(localized: "\(formattedDistance(birdDistanceMeters)) à vol d'oiseau", bundle: .appLanguage))
         }
         if guidance.isRouted, let routeDistanceMeters = guidance.routeDistanceMeters {
-            parts.append("\(formattedDistance(routeDistanceMeters)) par la route")
+            parts.append(String(localized: "\(formattedDistance(routeDistanceMeters)) par la route", bundle: .appLanguage))
         } else if let routingError {
             parts.append(routingError)
         } else if isRequesting {

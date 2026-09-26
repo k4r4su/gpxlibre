@@ -13,7 +13,7 @@ struct RoadbookCityEntry: Equatable {
 
     static func label(for name: String) -> String {
         let elides = name.first.map { "AEIOUYÂÀÉÈÊËÎÏÔÖÛÜŒaeiouyâàéèêëîïôöûüœ".contains($0) } ?? false
-        return elides ? "Entrée d’\(name)" : "Entrée de \(name)"
+        return elides ? String(localized: "Entrée d’\(name)", bundle: .appLanguage) : String(localized: "Entrée de \(name)", bundle: .appLanguage)
     }
 
     static func == (lhs: RoadbookCityEntry, rhs: RoadbookCityEntry) -> Bool {

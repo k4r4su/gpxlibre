@@ -17,15 +17,15 @@ enum RoadbookReadingMode: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .gpsAssisted: return "Assisté GPS"
-        case .classic: return "Roadbook classique"
+        case .gpsAssisted: return String(localized: "Assisté GPS", bundle: .appLanguage)
+        case .classic: return String(localized: "Roadbook classique", bundle: .appLanguage)
         }
     }
 
     var description: String {
         switch self {
-        case .gpsAssisted: return "La distance jusqu'à la prochaine manœuvre diminue avec ta position réelle."
-        case .classic: return "Distances fixes précalculées — suis avec ton propre compteur kilométrique, esprit rallye papier."
+        case .gpsAssisted: return String(localized: "La distance jusqu'à la prochaine manœuvre diminue avec ta position réelle.", bundle: .appLanguage)
+        case .classic: return String(localized: "Distances fixes précalculées — suis avec ton propre compteur kilométrique, esprit rallye papier.", bundle: .appLanguage)
         }
     }
 }

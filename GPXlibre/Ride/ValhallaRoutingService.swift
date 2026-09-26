@@ -19,16 +19,16 @@ enum ValhallaRoutingError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidEndpoint: return "URL du serveur Valhalla invalide."
+        case .invalidEndpoint: return String(localized: "URL du serveur Valhalla invalide.", bundle: .appLanguage)
         case .network(let error):
             // Retour terrain (it19) : "problème de timeout" signalé sans plus de détail —
             // localizedDescription seul ("Please try again") ne dit pas s'il s'agit d'un vrai
             // délai dépassé (-1001), d'un hôte injoignable (-1004), d'un TLS refusé (-1200),
             // etc. Domaine + code exposés pour un diagnostic immédiat sans Charles/Proxyman.
             let nsError = error as NSError
-            return "Valhalla injoignable : \(error.localizedDescription) (\(nsError.domain) \(nsError.code))"
-        case .server(let message): return "Erreur Valhalla : \(message)"
-        case .noRoute: return "Aucun itinéraire retourné par Valhalla."
+            return String(localized: "Valhalla injoignable : \(error.localizedDescription) (\(nsError.domain) \(nsError.code))", bundle: .appLanguage)
+        case .server(let message): return String(localized: "Erreur Valhalla : \(message)", bundle: .appLanguage)
+        case .noRoute: return String(localized: "Aucun itinéraire retourné par Valhalla.", bundle: .appLanguage)
         }
     }
 }
@@ -112,9 +112,9 @@ enum ValhallaRoutingService {
 
         let data = try await performRequest(request)
         guard let decoded = try? JSONDecoder().decode(ValhallaStatusResponse.self, from: data) else {
-            throw ValhallaRoutingError.server("réponse /status illisible")
+            throw ValhallaRoutingError.server(String(localized: "réponse /status illisible", bundle: .appLanguage))
         }
-        return decoded.version ?? "connecté"
+        return decoded.version ?? String(localized: "connecté", bundle: .appLanguage)
     }
 
     /// Plus `private` (spec "valhalla-map-matching-direction-change", it20) : réutilisées telles

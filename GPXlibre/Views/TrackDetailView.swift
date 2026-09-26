@@ -59,11 +59,11 @@ struct TrackDetailView: View {
         HStack {
             StatItem(title: "Distance", value: String(format: "%.1f km", track.totalDistanceKm))
             Divider().frame(height: 32)
-            StatItem(title: "Points", value: "\(track.pointCount)")
+            StatItem(title: String(localized: "Points", bundle: .appLanguage), value: "\(track.pointCount)")
             Divider().frame(height: 32)
-            StatItem(title: "Dénivelé +", value: String(format: "%.0f m", track.elevationGainMeters))
+            StatItem(title: String(localized: "Dénivelé +", bundle: .appLanguage), value: String(format: "%.0f m", track.elevationGainMeters))
             Divider().frame(height: 32)
-            StatItem(title: "GPS", value: locationManager.currentLocation == nil ? "—" : "Actif")
+            StatItem(title: "GPS", value: locationManager.currentLocation == nil ? "—" : String(localized: "Actif", bundle: .appLanguage))
         }
         .padding()
         .background(.bar)

@@ -37,7 +37,7 @@ struct GoToStatusPillView: View {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.white.opacity(0.8))
             }
-            .longPressTooltip("Annuler ce guidage")
+            .longPressTooltip(String(localized: "Annuler ce guidage", bundle: .appLanguage))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -48,7 +48,7 @@ struct GoToStatusPillView: View {
 
     private var distanceText: String {
         guard let distanceMeters else { return "—" }
-        return distanceMeters < 1000 ? "\(Int(distanceMeters.rounded())) m à vol d'oiseau" : String(format: "%.1f km à vol d'oiseau", distanceMeters / 1000)
+        return distanceMeters < 1000 ? String(localized: "\(Int(distanceMeters.rounded())) m à vol d'oiseau", bundle: .appLanguage) : String(format: "%.1f km à vol d'oiseau", distanceMeters / 1000)
     }
 
     /// Estimation simple (vitesse moyenne par profil, PAS un ETA OSRM réel — voir
@@ -56,6 +56,6 @@ struct GoToStatusPillView: View {
     private var routeSummaryText: String {
         let distance = guidance.routeDistanceMeters
         let distanceText = distance < 1000 ? "\(Int(distance.rounded())) m" : String(format: "%.1f km", distance / 1000)
-        return "Itinéraire ≈ \(distanceText) · ~\(max(Int(guidance.estimatedDurationMinutes.rounded()), 1)) min"
+        return String(localized: "Itinéraire ≈ \(distanceText) · ~\(max(Int(guidance.estimatedDurationMinutes.rounded()), 1)) min", bundle: .appLanguage)
     }
 }

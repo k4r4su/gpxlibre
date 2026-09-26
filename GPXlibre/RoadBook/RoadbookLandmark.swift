@@ -39,11 +39,11 @@ enum RoadbookLandmarkCategory: String, Codable, Equatable, CaseIterable, Identif
 
         var label: String {
             switch self {
-            case .sign: return "Panneaux"
-            case .infrastructure: return "Infrastructure"
-            case .building: return "Bâtiments"
-            case .service: return "Services"
-            case .other: return "Autres"
+            case .sign: return String(localized: "Panneaux", bundle: .appLanguage)
+            case .infrastructure: return String(localized: "Infrastructure", bundle: .appLanguage)
+            case .building: return String(localized: "Bâtiments", bundle: .appLanguage)
+            case .service: return String(localized: "Services", bundle: .appLanguage)
+            case .other: return String(localized: "Autres", bundle: .appLanguage)
             }
         }
 
@@ -175,7 +175,10 @@ enum RoadbookLandmarkCategory: String, Codable, Equatable, CaseIterable, Identif
     }
 
     var group: Group { definition.group }
+    /// Clé française stable (stockée dans les données de repères et le cache) — pour l'AFFICHAGE,
+    /// `localizedGenericLabel`.
     var genericLabel: String { definition.genericLabel }
+    var localizedGenericLabel: String { L10n.dynamic(genericLabel) }
     var emoji: String { definition.emoji }
     var isEnabledByDefault: Bool { RoadBookConstants.landmarkDefaultEnabledCategories.contains(self) }
 
@@ -205,7 +208,7 @@ enum RoadbookLandmarkCategory: String, Codable, Equatable, CaseIterable, Identif
 enum RoadbookLandmarkSide: String, Codable, Equatable {
     case left, right
 
-    var label: String { self == .left ? "à gauche" : "à droite" }
+    var label: String { self == .left ? String(localized: "à gauche", bundle: .appLanguage) : String(localized: "à droite", bundle: .appLanguage) }
 }
 
 /// Repère affiché (à côté d'un virage, ou en ligne dédiée) — catégorie (pictogramme), libellé
@@ -230,14 +233,18 @@ struct RoadbookLandmarkInfo: Codable, Equatable, Hashable {
         switch (side?.label, distance) {
         case let (side?, distance?): return "\(side), \(distance)"
         case let (side?, nil): return side
-        case let (nil, distance?): return "à \(distance)"
+        case let (nil, distance?): return String(localized: "à \(distance)", bundle: .appLanguage)
         case (nil, nil): return nil
         }
     }
 
+    /// Libellé traduit : les libellés génériques ("Pont", "Chapelle") sont des clés françaises,
+    /// un nom propre OSM reste tel quel.
+    var localizedLabel: String { L10n.dynamic(label) }
+
     /// "Église Saint-Martin à droite" — le côté seulement s'il est connu.
     var displayLabel: String {
-        sideDescription.map { "\(label) \($0)" } ?? label
+        sideDescription.map { "\(localizedLabel) \($0)" } ?? localizedLabel
     }
 }
 
@@ -245,6 +252,10 @@ struct RoadbookLandmarkInfo: Codable, Equatable, Hashable {
 /// panneau de SORTIE d'agglomération). Aucun accès réseau ici, voir
 /// `RoadbookLandmarkOverpassService`.
 enum RoadbookLandmark {
+    /// Libellés précis produits par `label(for:tags:)` en plus des libellés génériques (clés
+    /// françaises traduites à l'affichage, voir `L10n.dynamic`).
+    static let specificLabelKeys = ["Clocher", "Chapelle", "Lieu de culte", "Oratoire"]
+
     /// Valeurs de `traffic_sign` d'un panneau d'entrée d'agglomération (comparées sans casse, en
     /// préfixe : "FR:EB10[Hundsbach]") — générique, français, allemand (région frontalière).
     static let citySignValues: [String] = ["city_limit", "FR:EB10", "DE:310"]

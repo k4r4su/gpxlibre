@@ -62,8 +62,8 @@ enum GeocodingError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network: return "Recherche impossible — vérifie ta connexion."
-        case .noResults: return "Aucun lieu trouvé."
+        case .network: return String(localized: "Recherche impossible — vérifie ta connexion.", bundle: .appLanguage)
+        case .noResults: return String(localized: "Aucun lieu trouvé.", bundle: .appLanguage)
         }
     }
 }
@@ -103,6 +103,8 @@ actor NominatimGeocodingService {
         var queryItems = [
             URLQueryItem(name: "q", value: trimmed),
             URLQueryItem(name: "format", value: "json"),
+            // It31 : noms de lieux dans la langue de l'app.
+            URLQueryItem(name: "accept-language", value: AppLanguageBundle.currentCode),
             URLQueryItem(name: "limit", value: "\(NavConstants.nominatimResultLimit)"),
         ]
         if let featureType {

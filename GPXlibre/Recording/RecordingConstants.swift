@@ -30,15 +30,15 @@ enum RecordingDensityPreset: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .precis: return "Précis (défaut)"
-        case .leger: return "Léger"
-        case .tresLeger: return "Très léger"
-        case .ultraLeger: return "Ultra léger"
+        case .precis: return String(localized: "Précis (défaut)", bundle: .appLanguage)
+        case .leger: return String(localized: "Léger", bundle: .appLanguage)
+        case .tresLeger: return String(localized: "Très léger", bundle: .appLanguage)
+        case .ultraLeger: return String(localized: "Ultra léger", bundle: .appLanguage)
         }
     }
 
     var detail: String {
-        "Un point toutes les \(Int(minIntervalSeconds)) s ou \(Int(minDistanceMeters)) m"
+        String(localized: "Un point toutes les \(Int(minIntervalSeconds)) s ou \(Int(minDistanceMeters)) m", bundle: .appLanguage)
     }
 
     var minIntervalSeconds: Double {

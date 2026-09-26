@@ -28,7 +28,7 @@ struct RideStatsBadge: View {
             .clipShape(Circle())
             .shadow(color: .black.opacity(0.28), radius: 10, x: 0, y: 4)
         }
-        .accessibilityLabel("Vitesse \(settings.speedUnit.displayString(fromKmh: currentSpeedKmh)), toucher pour plus de mesures")
+        .accessibilityLabel(String(localized: "Vitesse \(settings.speedUnit.displayString(fromKmh: currentSpeedKmh)), toucher pour plus de mesures", bundle: .appLanguage))
     }
 }
 
@@ -66,17 +66,17 @@ struct RideStatsPanel: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                .longPressTooltip("Replier les mesures")
+                .longPressTooltip(String(localized: "Replier les mesures", bundle: .appLanguage))
             }
             HStack(spacing: 24) {
-                stat("Vitesse", "\(settings.speedUnit.roundedValue(fromKmh: currentSpeedKmh))", unit: settings.speedUnit.label, emphasized: true)
-                stat("Moyenne", "\(settings.speedUnit.roundedValue(fromKmh: averageSpeedKmh))", unit: settings.speedUnit.label)
-                stat("Max", "\(settings.speedUnit.roundedValue(fromKmh: maxSpeedKmh))", unit: settings.speedUnit.label)
+                stat(String(localized: "Vitesse", bundle: .appLanguage), "\(settings.speedUnit.roundedValue(fromKmh: currentSpeedKmh))", unit: settings.speedUnit.label, emphasized: true)
+                stat(String(localized: "Moyenne", bundle: .appLanguage), "\(settings.speedUnit.roundedValue(fromKmh: averageSpeedKmh))", unit: settings.speedUnit.label)
+                stat(String(localized: "Max", bundle: .appLanguage), "\(settings.speedUnit.roundedValue(fromKmh: maxSpeedKmh))", unit: settings.speedUnit.label)
             }
             HStack(spacing: 24) {
-                stat("Restant", distanceRemainingMeters.map(formattedDistance) ?? "—", unit: "")
-                stat("Parcouru", percentComplete.map { "\(Int($0.rounded()))" } ?? "—", unit: percentComplete != nil ? "%" : "")
-                stat("Arrivée", estimatedArrivalDate.map(Self.timeFormatter.string) ?? "—", unit: "")
+                stat(String(localized: "Restant", bundle: .appLanguage), distanceRemainingMeters.map(formattedDistance) ?? "—", unit: "")
+                stat(String(localized: "Parcouru", bundle: .appLanguage), percentComplete.map { "\(Int($0.rounded()))" } ?? "—", unit: percentComplete != nil ? "%" : "")
+                stat(String(localized: "Arrivée", bundle: .appLanguage), estimatedArrivalDate.map(Self.timeFormatter.string) ?? "—", unit: "")
             }
             // Spec "nav-classic-rebuild" (it21) : "barre d'état... ETA, distance restante,
             // durée restante" — les trois premiers stats ci-dessus sont partagés Trace/Nav
@@ -85,7 +85,7 @@ struct RideStatsPanel: View {
             // et profite aux deux modes de la même façon, pas seulement au Mode Nav.
             if let estimatedArrivalDate {
                 HStack(spacing: 24) {
-                    stat("Durée restante", remainingDurationText(until: estimatedArrivalDate), unit: "")
+                    stat(String(localized: "Durée restante", bundle: .appLanguage), remainingDurationText(until: estimatedArrivalDate), unit: "")
                 }
             }
             if let recordingStatus {
@@ -115,9 +115,9 @@ struct RideStatsPanel: View {
 
     private var recordingToggleTitle: String {
         switch recordingState {
-        case .idle: return "Démarrer l'enregistrement"
-        case .recording: return "Mettre en pause"
-        case .paused: return "Reprendre l'enregistrement"
+        case .idle: return String(localized: "Démarrer l'enregistrement", bundle: .appLanguage)
+        case .recording: return String(localized: "Mettre en pause", bundle: .appLanguage)
+        case .paused: return String(localized: "Reprendre l'enregistrement", bundle: .appLanguage)
         }
     }
 

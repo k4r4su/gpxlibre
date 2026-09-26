@@ -15,10 +15,10 @@ enum TurnDirection {
 
     var label: String {
         switch self {
-        case .left: return "Gauche"
-        case .right: return "Droite"
-        case .straight: return "Tout droit"
-        case .uTurn: return "Demi-tour"
+        case .left: return String(localized: "Gauche", bundle: .appLanguage)
+        case .right: return String(localized: "Droite", bundle: .appLanguage)
+        case .straight: return String(localized: "Tout droit", bundle: .appLanguage)
+        case .uTurn: return String(localized: "Demi-tour", bundle: .appLanguage)
         }
     }
 }

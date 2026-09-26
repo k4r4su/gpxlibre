@@ -48,6 +48,7 @@ final class RideSettingsStore: ObservableObject {
         static let roadbookPDFOptions = "settings.roadbookPDFOptionsJSON"
         static let roadbookPaletteSetting = "settings.roadbookPaletteSetting"
         static let roadbookLandmarkCategories = "settings.roadbookLandmarkCategories"
+        static let appLanguage = "settings.appLanguage"
     }
 
     private let defaults: UserDefaults
@@ -193,6 +194,14 @@ final class RideSettingsStore: ObservableObject {
     /// catalogue, est ignorée). Défaut : `RoadBookConstants.landmarkDefaultEnabledCategories`.
     @Published var roadbookLandmarkCategories: Set<RoadbookLandmarkCategory> {
         didSet { defaults.set(roadbookLandmarkCategories.map(\.rawValue).sorted(), forKey: Keys.roadbookLandmarkCategories) }
+    }
+
+    /// Langue de l'app (it31) — `.automatic` par défaut. Appliquée en direct, voir `AppLanguageBundle`.
+    @Published var appLanguage: AppLanguage {
+        didSet {
+            defaults.set(appLanguage.rawValue, forKey: Keys.appLanguage)
+            AppLanguageBundle.apply(appLanguage.resolvedCode())
+        }
     }
 
     func resetRoadbookLandmarkCategoriesToDefaults() {
@@ -406,6 +415,7 @@ final class RideSettingsStore: ObservableObject {
             roadbookPDFOptions = RoadbookPDFOptions()
         }
 
+        appLanguage = defaults.string(forKey: Keys.appLanguage).flatMap(AppLanguage.init(rawValue:)) ?? .automatic
         if let rawCategories = defaults.stringArray(forKey: Keys.roadbookLandmarkCategories) {
             roadbookLandmarkCategories = Set(rawCategories.compactMap(RoadbookLandmarkCategory.init(rawValue:)))
         } else {

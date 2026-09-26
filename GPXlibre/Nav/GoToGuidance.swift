@@ -11,13 +11,13 @@ enum GoToProfile: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .route: return "Itinéraire"
+        case .route: return String(localized: "Itinéraire", bundle: .appLanguage)
         // Renommé "Vol d'oiseau" → "Piste" (spec "offroad-routing-preference", it13) : ce
         // profil ne trace plus une ligne droite, voir RideSessionManager.startGoTo — le
         // libellé doit refléter le routing hors-route réel (même terme que
         // DetourProfile.offroad.displayName, pour rester cohérent dans toute l'app).
-        case .offroad: return "Piste"
-        case .mixed: return "Mixte"
+        case .offroad: return String(localized: "Piste", bundle: .appLanguage)
+        case .mixed: return String(localized: "Mixte", bundle: .appLanguage)
         }
     }
 

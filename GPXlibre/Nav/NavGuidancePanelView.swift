@@ -80,7 +80,7 @@ struct NavGuidancePanelView: View {
             // Zone DROITE (en retrait) : texte, plus petit, nom de rue sur SA PROPRE ligne en
             // dessous — jamais à la suite de l'instruction sur la même ligne.
             VStack(alignment: .leading, spacing: 3) {
-                Text(maneuver?.instruction ?? "Vers \(destinationLabel)")
+                Text(maneuver?.instruction ?? String(localized: "Vers \(destinationLabel)", bundle: .appLanguage))
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(2)

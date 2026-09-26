@@ -10,7 +10,7 @@ final class NavVoiceAnnouncer {
     func announce(_ text: String, volume: Float = 1.0) {
         guard !text.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "fr-FR")
+        utterance.voice = AVSpeechSynthesisVoice(language: AppLanguageBundle.bcp47)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.volume = volume
         synthesizer.speak(utterance)

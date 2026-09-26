@@ -143,9 +143,9 @@ struct RoadBookTabView: View {
                     // même patron visuel que `LibraryView.emptyState`.
                     VStack(spacing: 20) {
                         RoadBookEmptyState(
-                            title: "Aucune trace active",
+                            title: String(localized: "Aucune trace active", bundle: .appLanguage),
                             systemImage: "list.bullet.rectangle",
-                            message: "Active une trace dans la Bibliothèque : le Road Book affiche toujours la trace active."
+                            message: String(localized: "Active une trace dans la Bibliothèque : le Road Book affiche toujours la trace active.", bundle: .appLanguage)
                         )
                         .frame(maxHeight: 320)
                         Button {
@@ -382,7 +382,7 @@ struct RoadBookTabView: View {
     private var landscapeModeColumn: some View {
         VStack(spacing: 12) {
             landscapeModeButton(.gpsAssisted, systemImage: "location.fill", shortLabel: "GPS")
-            landscapeModeButton(.classic, systemImage: "list.bullet", shortLabel: "Liste")
+            landscapeModeButton(.classic, systemImage: "list.bullet", shortLabel: String(localized: "Liste", bundle: .appLanguage))
             RoutingServiceBadge()
                 .fixedSize()
             Spacer(minLength: 0)
@@ -415,9 +415,9 @@ struct RoadBookTabView: View {
     private func mainArea(track: GPXTrack) -> some View {
         if maneuvers.isEmpty {
             RoadBookEmptyState(
-                title: "Aucune manœuvre détectée",
+                title: String(localized: "Aucune manœuvre détectée", bundle: .appLanguage),
                 systemImage: "arrow.up",
-                message: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace."
+                message: String(localized: "Aucun changement de direction au-dessus du seuil configuré (Réglages > Roadbook) sur cette trace.", bundle: .appLanguage)
             )
         } else if settings.roadbookReadingMode == .gpsAssisted {
             // Fix "roadbook-focused-next-turn" (it23ter, retour terrain : "il faudrait
@@ -481,7 +481,7 @@ struct RoadbookLibraryShortcut: View {
                     .frame(maxWidth: 190, alignment: .leading)
             }
         }
-        .accessibilityLabel(trackName.map { "Trace active : \($0). Ouvrir la Bibliothèque pour en changer" } ?? "Ouvrir la Bibliothèque")
+        .accessibilityLabel(trackName.map { String(localized: "Trace active : \($0). Ouvrir la Bibliothèque pour en changer", bundle: .appLanguage) } ?? "Ouvrir la Bibliothèque")
     }
 }
 
@@ -503,7 +503,7 @@ private struct RoutingServiceBadge: View {
         .foregroundStyle(color)
         .fixedSize()
         .longPressTooltip(tooltip)
-        .accessibilityLabel("Service de routage : \(label)")
+        .accessibilityLabel(String(localized: "Service de routage : \(label)", bundle: .appLanguage))
     }
 
     private var label: String {
@@ -524,9 +524,9 @@ private struct RoutingServiceBadge: View {
 
     private var tooltip: String {
         switch monitor.lastEvent?.provider {
-        case .valhalla: return "Détection route-aware active via Valhalla"
-        case .osrm: return "Repli OSRM — la précision route-aware (rond-points/fourches) n'est pas garantie"
-        case nil: return "Aucune requête de routage récente"
+        case .valhalla: return String(localized: "Détection route-aware active via Valhalla", bundle: .appLanguage)
+        case .osrm: return String(localized: "Repli OSRM — la précision route-aware (rond-points/fourches) n'est pas garantie", bundle: .appLanguage)
+        case nil: return String(localized: "Aucune requête de routage récente", bundle: .appLanguage)
         }
     }
 }
@@ -623,11 +623,11 @@ private struct RoadbookTableView: View {
 
     private func headerRow(distanceWidth: CGFloat, headingWidth: CGFloat, infoWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            columnHeader("Distances", width: distanceWidth)
+            columnHeader(String(localized: "Distances", bundle: .appLanguage), width: distanceWidth)
             verticalRule
-            columnHeader("Cap", width: headingWidth)
+            columnHeader(String(localized: "Cap", bundle: .appLanguage), width: headingWidth)
             verticalRule
-            columnHeader("Info", width: infoWidth)
+            columnHeader(String(localized: "Info", bundle: .appLanguage), width: infoWidth)
         }
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.04))
@@ -891,7 +891,7 @@ private struct RoadbookLandmarkTableRow: View {
                     .frame(width: headingColumnWidth)
                 Rectangle().fill(ruleColor).frame(width: 1)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(landmark.info.label)
+                    Text(landmark.info.localizedLabel)
                         .font(.headline)
                         .lineLimit(2)
                     Text(RoadbookLandmarkRowText.detail(landmark.info))
@@ -905,7 +905,7 @@ private struct RoadbookLandmarkTableRow: View {
             .background(Color.accentColor.opacity(0.06))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Repère : \(landmark.info.displayLabel), \(unit.displayString(fromMeters: landmark.cumulativeDistanceMeters))")
+        .accessibilityLabel(String(localized: "Repère : \(landmark.info.displayLabel), \(unit.displayString(fromMeters: landmark.cumulativeDistanceMeters))", bundle: .appLanguage))
     }
 }
 
@@ -913,8 +913,8 @@ private struct RoadbookLandmarkTableRow: View {
 /// générique) et côté — "Entrée d'agglomération · à droite".
 enum RoadbookLandmarkRowText {
     static func detail(_ info: RoadbookLandmarkInfo) -> String {
-        let category = info.label == info.category.genericLabel ? nil : info.category.genericLabel
-        return [category, info.sideDescription].compactMap { $0 }.joined(separator: " · ").ifEmpty(info.category.genericLabel)
+        let category = info.label == info.category.genericLabel ? nil : info.category.localizedGenericLabel
+        return [category, info.sideDescription].compactMap { $0 }.joined(separator: " · ").ifEmpty(info.category.localizedGenericLabel)
     }
 }
 

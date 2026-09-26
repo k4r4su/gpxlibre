@@ -51,17 +51,19 @@ struct RideRecordingControl: View {
 
     static func label(state: RideRecorder.State, pointCount: Int) -> String {
         switch state {
-        case .idle: return "Enregistrer"
-        case .recording: return "REC · \(pointCount) pts"
-        case .paused: return "Pause · \(pointCount) pts"
+        // Table "Recording" : ici "Enregistrer" = enregistrer la sortie (Record), pas "sauvegarder"
+        // (Save) comme dans "Terminer la sortie" ou un renommage — même mot français, deux sens.
+        case .idle: return String(localized: "Enregistrer", table: "Recording", bundle: .appLanguage)
+        case .recording: return String(localized: "REC · \(pointCount) pts", bundle: .appLanguage)
+        case .paused: return String(localized: "Pause · \(pointCount) pts", bundle: .appLanguage)
         }
     }
 
     static func accessibilityLabel(state: RideRecorder.State, pointCount: Int) -> String {
         switch state {
-        case .idle: return "Démarrer l'enregistrement de la sortie"
-        case .recording: return "Enregistrement en cours, \(pointCount) points. Toucher pour mettre en pause"
-        case .paused: return "Enregistrement en pause, \(pointCount) points. Toucher pour reprendre"
+        case .idle: return String(localized: "Démarrer l'enregistrement de la sortie", bundle: .appLanguage)
+        case .recording: return String(localized: "Enregistrement en cours, \(pointCount) points. Toucher pour mettre en pause", bundle: .appLanguage)
+        case .paused: return String(localized: "Enregistrement en pause, \(pointCount) points. Toucher pour reprendre", bundle: .appLanguage)
         }
     }
 }
@@ -71,16 +73,16 @@ enum RideRecordingStatusText {
     static func text(state: RideRecorder.State, authorization: CLAuthorizationStatus, wasRestored: Bool) -> String? {
         switch authorization {
         case .denied, .restricted:
-            return "Localisation refusée : aucun enregistrement possible. Autorise GPXlibre dans Réglages > Confidentialité > Service de localisation."
+            return String(localized: "Localisation refusée : aucun enregistrement possible. Autorise GPXlibre dans Réglages > Confidentialité > Service de localisation.", bundle: .appLanguage)
         default:
             break
         }
         if wasRestored, state == .paused {
-            return "Sortie retrouvée après l'arrêt de l'app : en pause. Reprends ou termine-la."
+            return String(localized: "Sortie retrouvée après l'arrêt de l'app : en pause. Reprends ou termine-la.", bundle: .appLanguage)
         }
         switch state {
-        case .recording: return "L'enregistrement continue dans les autres onglets, écran verrouillé ou dans une autre app (flèche bleue d'iOS en haut de l'écran)."
-        case .paused: return "Enregistrement en pause : aucun point n'est capté."
+        case .recording: return String(localized: "L'enregistrement continue dans les autres onglets, écran verrouillé ou dans une autre app (flèche bleue d'iOS en haut de l'écran).", bundle: .appLanguage)
+        case .paused: return String(localized: "Enregistrement en pause : aucun point n'est capté.", bundle: .appLanguage)
         case .idle: return nil
         }
     }
