@@ -288,6 +288,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    // It31 : tutoriel intégré, une page par onglet (contenu embarqué, hors-ligne).
+                    NavigationLink {
+                        TutorialView()
+                    } label: {
+                        Label("Tutoriel", systemImage: "book.pages")
+                    }
                     Button {
                         showOnboarding = true
                     } label: {

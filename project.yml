@@ -52,6 +52,7 @@ targets:
         excludes:
           - CLAUDE.md
       - path: GPXlibre/Onboarding
+      - path: GPXlibre/Tutorial
       - path: GPXlibre/Sync
       - path: GPXlibre/Resources
         buildPhase: resources
